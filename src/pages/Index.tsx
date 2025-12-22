@@ -1,13 +1,35 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { Helmet } from "react-helmet-async";
+import Navbar from "@/components/Navbar";
+import HeroSection from "@/components/HeroSection";
+import ServicesSection from "@/components/ServicesSection";
+import AboutSection from "@/components/AboutSection";
+import ContactSection from "@/components/ContactSection";
+import Footer from "@/components/Footer";
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
+    <>
+      <Helmet>
+        <title>SecureTech - Segurança Eletrônica Inteligente | Câmeras, Alarmes e Monitoramento</title>
+        <meta
+          name="description"
+          content="SecureTech oferece soluções completas em segurança eletrônica: câmeras de vigilância, alarmes monitorados, controle de acesso e monitoramento 24h. Solicite seu orçamento grátis!"
+        />
+        <meta
+          name="keywords"
+          content="segurança eletrônica, câmeras de vigilância, CFTV, alarmes, controle de acesso, monitoramento 24h, segurança residencial, segurança empresarial"
+        />
+      </Helmet>
+
+      <main className="min-h-screen bg-background">
+        <Navbar />
+        <HeroSection />
+        <ServicesSection />
+        <AboutSection />
+        <ContactSection />
+        <Footer />
+      </main>
+    </>
   );
 };
 
