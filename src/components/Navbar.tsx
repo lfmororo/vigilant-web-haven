@@ -12,6 +12,10 @@ const Navbar = () => {
     { label: "Contato", href: "#contato" },
   ];
 
+  const handleClientAreaClick = () => {
+    window.location.href = "/auth";
+  };
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
       <div className="container mx-auto px-4">
@@ -39,8 +43,11 @@ const Navbar = () => {
             ))}
           </div>
 
-          {/* CTA Button */}
-          <div className="hidden md:block">
+          {/* CTA Buttons */}
+          <div className="hidden md:flex items-center gap-3">
+            <Button variant="outline" onClick={handleClientAreaClick}>
+              Área do Cliente
+            </Button>
             <Button variant="default" size="lg">
               Solicitar Orçamento
             </Button>
@@ -69,6 +76,9 @@ const Navbar = () => {
                   {link.label}
                 </a>
               ))}
+              <Button variant="outline" className="mt-2" onClick={handleClientAreaClick}>
+                Área do Cliente
+              </Button>
               <Button variant="default" className="mt-2">
                 Solicitar Orçamento
               </Button>
