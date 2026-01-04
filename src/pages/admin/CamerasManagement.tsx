@@ -34,6 +34,7 @@ interface CameraData {
   serial_number: string | null;
   device_username: string | null;
   device_password: string | null;
+  channel: number;
   embed_url: string | null;
   location: string | null;
   is_active: boolean;
@@ -45,6 +46,7 @@ const cameraSchema = z.object({
   serial_number: z.string().min(1, "Número de série é obrigatório"),
   device_username: z.string().min(1, "Usuário é obrigatório"),
   device_password: z.string().min(1, "Senha é obrigatória"),
+  channel: z.number().min(1, "Canal deve ser no mínimo 1").max(64, "Canal deve ser no máximo 64"),
   description: z.string().optional(),
   location: z.string().optional(),
 });
@@ -64,6 +66,7 @@ const CamerasManagement = () => {
     serial_number: "",
     device_username: "",
     device_password: "",
+    channel: 1,
     location: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -99,6 +102,7 @@ const CamerasManagement = () => {
       serial_number: "",
       device_username: "",
       device_password: "",
+      channel: 1,
       location: "",
     });
     setEditingCamera(null);
@@ -114,6 +118,7 @@ const CamerasManagement = () => {
         serial_number: camera.serial_number || "",
         device_username: camera.device_username || "",
         device_password: camera.device_password || "",
+        channel: camera.channel || 1,
         location: camera.location || "",
       });
     } else {
@@ -148,6 +153,7 @@ const CamerasManagement = () => {
             serial_number: formData.serial_number,
             device_username: formData.device_username,
             device_password: formData.device_password,
+            channel: formData.channel,
             location: formData.location || null,
           })
           .eq("id", editingCamera.id);
@@ -165,6 +171,7 @@ const CamerasManagement = () => {
           serial_number: formData.serial_number,
           device_username: formData.device_username,
           device_password: formData.device_password,
+          channel: formData.channel,
           location: formData.location || null,
           created_by: user?.id,
         });
@@ -283,20 +290,39 @@ const CamerasManagement = () => {
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="serial_number">Número de Série do Dispositivo</Label>
-                  <Input
-                    id="serial_number"
-                    value={formData.serial_number}
-                    onChange={(e) =>
-                      setFormData({ ...formData, serial_number: e.target.value })
-                    }
-                    placeholder="Ex: ABC123456789"
-                    className={errors.serial_number ? "border-destructive" : ""}
-                  />
-                  {errors.serial_number && (
-                    <p className="text-sm text-destructive">{errors.serial_number}</p>
-                  )}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="col-span-2 space-y-2">
+                    <Label htmlFor="serial_number">Número de Série do Dispositivo</Label>
+                    <Input
+                      id="serial_number"
+                      value={formData.serial_number}
+                      onChange={(e) =>
+                        setFormData({ ...formData, serial_number: e.target.value })
+                      }
+                      placeholder="Ex: ABC123456789"
+                      className={errors.serial_number ? "border-destructive" : ""}
+                    />
+                    {errors.serial_number && (
+                      <p className="text-sm text-destructive">{errors.serial_number}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="channel">Canal</Label>
+                    <Input
+                      id="channel"
+                      type="number"
+                      min={1}
+                      max={64}
+                      value={formData.channel}
+                      onChange={(e) =>
+                        setFormData({ ...formData, channel: parseInt(e.target.value) || 1 })
+                      }
+                      className={errors.channel ? "border-destructive" : ""}
+                    />
+                    {errors.channel && (
+                      <p className="text-sm text-destructive">{errors.channel}</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
