@@ -11,9 +11,13 @@ interface CameraData {
   id: string;
   name: string;
   description: string | null;
-  embed_url: string;
+  embed_url: string | null;
   location: string | null;
   is_active: boolean;
+  serial_number: string | null;
+  device_username: string | null;
+  device_password: string | null;
+  channel: number;
 }
 
 const Dashboard = () => {
@@ -109,9 +113,14 @@ const Dashboard = () => {
                     <div className="p-2 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
                       <Video className="w-5 h-5 text-primary" />
                     </div>
-                    <span className="text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-400">
-                      Online
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
+                        CH {camera.channel}
+                      </span>
+                      <span className="text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-400">
+                        Online
+                      </span>
+                    </div>
                   </div>
                   <CardTitle className="text-lg mt-3">{camera.name}</CardTitle>
                   {camera.description && (
@@ -119,12 +128,20 @@ const Dashboard = () => {
                   )}
                 </CardHeader>
                 <CardContent>
-                  {camera.location && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <MapPin className="w-4 h-4" />
-                      {camera.location}
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    {camera.serial_number && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Camera className="w-4 h-4" />
+                        <span className="font-mono text-xs">{camera.serial_number}</span>
+                      </div>
+                    )}
+                    {camera.location && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <MapPin className="w-4 h-4" />
+                        {camera.location}
+                      </div>
+                    )}
+                  </div>
                   <div className="mt-4 aspect-video bg-muted rounded-lg flex items-center justify-center">
                     <p className="text-sm text-muted-foreground">
                       Clique para visualizar
@@ -146,21 +163,47 @@ const Dashboard = () => {
               {selectedCamera?.name}
             </DialogTitle>
           </DialogHeader>
-          <div className="aspect-video bg-muted rounded-lg overflow-hidden">
-            {selectedCamera && (
-              <iframe
-                src={selectedCamera.embed_url}
-                className="w-full h-full"
-                allowFullScreen
-                allow="autoplay; encrypted-media"
-              />
-            )}
-          </div>
-          {selectedCamera?.location && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <MapPin className="w-4 h-4" />
-              {selectedCamera.location}
-            </div>
+          {selectedCamera && (
+            <>
+              <div className="aspect-video bg-muted rounded-lg overflow-hidden">
+                {selectedCamera.embed_url ? (
+                  <iframe
+                    src={selectedCamera.embed_url}
+                    className="w-full h-full"
+                    allowFullScreen
+                    allow="autoplay; encrypted-media"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-6">
+                    <Video className="w-16 h-16 text-muted-foreground/50" />
+                    <div className="text-center">
+                      <p className="text-muted-foreground mb-2">Stream não configurado</p>
+                      <p className="text-xs text-muted-foreground/70">
+                        Dispositivo: {selectedCamera.serial_number || "N/A"} | Canal: {selectedCamera.channel}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                {selectedCamera.serial_number && (
+                  <div className="flex items-center gap-2">
+                    <Camera className="w-4 h-4" />
+                    <span className="font-mono text-xs">{selectedCamera.serial_number}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Video className="w-4 h-4" />
+                  <span>Canal {selectedCamera.channel}</span>
+                </div>
+                {selectedCamera.location && (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4" />
+                    {selectedCamera.location}
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
