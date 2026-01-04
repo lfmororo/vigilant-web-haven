@@ -20,6 +20,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          device_ip: string | null
           device_password: string | null
           device_username: string | null
           embed_url: string | null
@@ -35,6 +36,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          device_ip?: string | null
           device_password?: string | null
           device_username?: string | null
           embed_url?: string | null
@@ -50,6 +52,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          device_ip?: string | null
           device_password?: string | null
           device_username?: string | null
           embed_url?: string | null

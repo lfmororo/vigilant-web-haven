@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.get-camera-stream]
 verify_jwt = true
+
+[functions.test-camera-connection]
+verify_jwt = true
