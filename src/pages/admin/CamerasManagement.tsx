@@ -31,9 +31,10 @@ interface CameraData {
   id: string;
   name: string;
   description: string | null;
-  embed_url: string;
-  intelbras_username: string | null;
-  intelbras_password: string | null;
+  serial_number: string | null;
+  device_username: string | null;
+  device_password: string | null;
+  embed_url: string | null;
   location: string | null;
   is_active: boolean;
   created_at: string;
@@ -41,11 +42,11 @@ interface CameraData {
 
 const cameraSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-  embed_url: z.string().url("URL inválida"),
+  serial_number: z.string().min(1, "Número de série é obrigatório"),
+  device_username: z.string().min(1, "Usuário é obrigatório"),
+  device_password: z.string().min(1, "Senha é obrigatória"),
   description: z.string().optional(),
   location: z.string().optional(),
-  intelbras_username: z.string().optional(),
-  intelbras_password: z.string().optional(),
 });
 
 const CamerasManagement = () => {
@@ -60,9 +61,9 @@ const CamerasManagement = () => {
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    embed_url: "",
-    intelbras_username: "",
-    intelbras_password: "",
+    serial_number: "",
+    device_username: "",
+    device_password: "",
     location: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -95,9 +96,9 @@ const CamerasManagement = () => {
     setFormData({
       name: "",
       description: "",
-      embed_url: "",
-      intelbras_username: "",
-      intelbras_password: "",
+      serial_number: "",
+      device_username: "",
+      device_password: "",
       location: "",
     });
     setEditingCamera(null);
@@ -110,9 +111,9 @@ const CamerasManagement = () => {
       setFormData({
         name: camera.name,
         description: camera.description || "",
-        embed_url: camera.embed_url,
-        intelbras_username: camera.intelbras_username || "",
-        intelbras_password: camera.intelbras_password || "",
+        serial_number: camera.serial_number || "",
+        device_username: camera.device_username || "",
+        device_password: camera.device_password || "",
         location: camera.location || "",
       });
     } else {
@@ -144,9 +145,9 @@ const CamerasManagement = () => {
           .update({
             name: formData.name,
             description: formData.description || null,
-            embed_url: formData.embed_url,
-            intelbras_username: formData.intelbras_username || null,
-            intelbras_password: formData.intelbras_password || null,
+            serial_number: formData.serial_number,
+            device_username: formData.device_username,
+            device_password: formData.device_password,
             location: formData.location || null,
           })
           .eq("id", editingCamera.id);
@@ -161,9 +162,9 @@ const CamerasManagement = () => {
         const { error } = await supabase.from("cameras").insert({
           name: formData.name,
           description: formData.description || null,
-          embed_url: formData.embed_url,
-          intelbras_username: formData.intelbras_username || null,
-          intelbras_password: formData.intelbras_password || null,
+          serial_number: formData.serial_number,
+          device_username: formData.device_username,
+          device_password: formData.device_password,
           location: formData.location || null,
           created_by: user?.id,
         });
@@ -283,19 +284,61 @@ const CamerasManagement = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="embed_url">URL do iFrame (Intelbras Cloud)</Label>
+                  <Label htmlFor="serial_number">Número de Série do Dispositivo</Label>
                   <Input
-                    id="embed_url"
-                    value={formData.embed_url}
+                    id="serial_number"
+                    value={formData.serial_number}
                     onChange={(e) =>
-                      setFormData({ ...formData, embed_url: e.target.value })
+                      setFormData({ ...formData, serial_number: e.target.value })
                     }
-                    placeholder="https://..."
-                    className={errors.embed_url ? "border-destructive" : ""}
+                    placeholder="Ex: ABC123456789"
+                    className={errors.serial_number ? "border-destructive" : ""}
                   />
-                  {errors.embed_url && (
-                    <p className="text-sm text-destructive">{errors.embed_url}</p>
+                  {errors.serial_number && (
+                    <p className="text-sm text-destructive">{errors.serial_number}</p>
                   )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="device_username">Usuário do Dispositivo</Label>
+                    <Input
+                      id="device_username"
+                      value={formData.device_username}
+                      onChange={(e) =>
+                        setFormData({ ...formData, device_username: e.target.value })
+                      }
+                      placeholder="admin"
+                      className={errors.device_username ? "border-destructive" : ""}
+                    />
+                    {errors.device_username && (
+                      <p className="text-sm text-destructive">{errors.device_username}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="device_password">Senha do Dispositivo</Label>
+                    <div className="relative">
+                      <Input
+                        id="device_password"
+                        type={showPassword ? "text" : "password"}
+                        value={formData.device_password}
+                        onChange={(e) =>
+                          setFormData({ ...formData, device_password: e.target.value })
+                        }
+                        className={`pr-10 ${errors.device_password ? "border-destructive" : ""}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {errors.device_password && (
+                      <p className="text-sm text-destructive">{errors.device_password}</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -321,40 +364,6 @@ const CamerasManagement = () => {
                     }
                     placeholder="Ex: Portaria, Estacionamento"
                   />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="intelbras_username">Usuário Intelbras</Label>
-                    <Input
-                      id="intelbras_username"
-                      value={formData.intelbras_username}
-                      onChange={(e) =>
-                        setFormData({ ...formData, intelbras_username: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="intelbras_password">Senha Intelbras</Label>
-                    <div className="relative">
-                      <Input
-                        id="intelbras_password"
-                        type={showPassword ? "text" : "password"}
-                        value={formData.intelbras_password}
-                        onChange={(e) =>
-                          setFormData({ ...formData, intelbras_password: e.target.value })
-                        }
-                        className="pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
                 </div>
 
                 <Button type="submit" className="w-full" disabled={isSubmitting}>
@@ -392,9 +401,9 @@ const CamerasManagement = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
+                    <TableHead>Serial</TableHead>
                     <TableHead>Localização</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Criada em</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -402,6 +411,7 @@ const CamerasManagement = () => {
                   {cameras.map((camera) => (
                     <TableRow key={camera.id}>
                       <TableCell className="font-medium">{camera.name}</TableCell>
+                      <TableCell className="font-mono text-xs">{camera.serial_number || "-"}</TableCell>
                       <TableCell>{camera.location || "-"}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -413,9 +423,6 @@ const CamerasManagement = () => {
                             {camera.is_active ? "Ativa" : "Inativa"}
                           </span>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(camera.created_at).toLocaleDateString("pt-BR")}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
