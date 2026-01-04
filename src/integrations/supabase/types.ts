@@ -19,39 +19,42 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
-          embed_url: string
+          device_password: string | null
+          device_username: string | null
+          embed_url: string | null
           id: string
-          intelbras_password: string | null
-          intelbras_username: string | null
           is_active: boolean
           location: string | null
           name: string
+          serial_number: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
           created_by?: string | null
           description?: string | null
-          embed_url: string
+          device_password?: string | null
+          device_username?: string | null
+          embed_url?: string | null
           id?: string
-          intelbras_password?: string | null
-          intelbras_username?: string | null
           is_active?: boolean
           location?: string | null
           name: string
+          serial_number?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
           created_by?: string | null
           description?: string | null
-          embed_url?: string
+          device_password?: string | null
+          device_username?: string | null
+          embed_url?: string | null
           id?: string
-          intelbras_password?: string | null
-          intelbras_username?: string | null
           is_active?: boolean
           location?: string | null
           name?: string
+          serial_number?: string | null
           updated_at?: string
         }
         Relationships: []
