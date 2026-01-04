@@ -4,9 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Shield, LogOut, Camera, MapPin, Loader2, Video } from "lucide-react";
+import { Shield, LogOut, Camera, MapPin, Loader2, Video, Copy, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
+import VideoPlayer from "@/components/VideoPlayer";
 interface CameraData {
   id: string;
   name: string;
@@ -20,12 +20,20 @@ interface CameraData {
   channel: number;
 }
 
+interface StreamInfo {
+  rtsp_url: string;
+  rtsp_url_alt: string;
+  camera_name: string;
+}
+
 const Dashboard = () => {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   const [cameras, setCameras] = useState<CameraData[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCamera, setSelectedCamera] = useState<CameraData | null>(null);
+  const [streamInfo, setStreamInfo] = useState<StreamInfo | null>(null);
+  const [loadingStream, setLoadingStream] = useState(false);
 
   useEffect(() => {
     fetchCameras();
@@ -50,6 +58,67 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchStreamInfo = async (camera: CameraData) => {
+    setLoadingStream(true);
+    setStreamInfo(null);
+    
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      
+      if (!token) {
+        throw new Error("Não autenticado");
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-camera-stream`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ camera_id: camera.id }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao obter stream');
+      }
+
+      const data = await response.json();
+      setStreamInfo(data);
+    } catch (error: any) {
+      console.error('Error fetching stream:', error);
+      toast({
+        variant: "destructive",
+        title: "Erro ao obter informações do stream",
+        description: error.message,
+      });
+    } finally {
+      setLoadingStream(false);
+    }
+  };
+
+  const handleCameraSelect = (camera: CameraData) => {
+    setSelectedCamera(camera);
+    fetchStreamInfo(camera);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedCamera(null);
+    setStreamInfo(null);
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({
+      title: "Copiado!",
+      description: "URL copiada para a área de transferência",
+    });
   };
 
   const handleSignOut = async () => {
@@ -106,7 +175,7 @@ const Dashboard = () => {
               <Card
                 key={camera.id}
                 className="cursor-pointer hover:border-primary/50 transition-colors group"
-                onClick={() => setSelectedCamera(camera)}
+                onClick={() => handleCameraSelect(camera)}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
@@ -155,7 +224,7 @@ const Dashboard = () => {
       </main>
 
       {/* Camera Viewer Modal */}
-      <Dialog open={!!selectedCamera} onOpenChange={() => setSelectedCamera(null)}>
+      <Dialog open={!!selectedCamera} onOpenChange={handleCloseModal}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -165,8 +234,13 @@ const Dashboard = () => {
           </DialogHeader>
           {selectedCamera && (
             <>
-              <div className="aspect-video bg-muted rounded-lg overflow-hidden">
-                {selectedCamera.embed_url ? (
+              <div className="aspect-video bg-black rounded-lg overflow-hidden">
+                {loadingStream ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+                    <Loader2 className="w-10 h-10 animate-spin text-primary" />
+                    <p className="text-sm text-muted-foreground">Obtendo informações do stream...</p>
+                  </div>
+                ) : selectedCamera.embed_url ? (
                   <iframe
                     src={selectedCamera.embed_url}
                     className="w-full h-full"
@@ -174,17 +248,18 @@ const Dashboard = () => {
                     allow="autoplay; encrypted-media"
                   />
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-6">
-                    <Video className="w-16 h-16 text-muted-foreground/50" />
-                    <div className="text-center">
-                      <p className="text-muted-foreground mb-2">Stream não configurado</p>
-                      <p className="text-xs text-muted-foreground/70">
-                        Dispositivo: {selectedCamera.serial_number || "N/A"} | Canal: {selectedCamera.channel}
-                      </p>
-                    </div>
-                  </div>
+                  <VideoPlayer
+                    hlsUrl={null}
+                    rtspUrl={streamInfo?.rtsp_url}
+                    cameraName={selectedCamera.name}
+                    serialNumber={selectedCamera.serial_number}
+                    channel={selectedCamera.channel}
+                    className="w-full h-full"
+                  />
                 )}
               </div>
+              
+              {/* Camera Info */}
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                 {selectedCamera.serial_number && (
                   <div className="flex items-center gap-2">
@@ -203,6 +278,46 @@ const Dashboard = () => {
                   </div>
                 )}
               </div>
+
+              {/* RTSP URLs */}
+              {streamInfo && (
+                <div className="space-y-3 pt-2 border-t border-border">
+                  <p className="text-sm text-muted-foreground">
+                    Para visualizar em player externo (VLC, go2rtc):
+                  </p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 text-xs bg-muted p-2 rounded font-mono break-all">
+                        {streamInfo.rtsp_url.replace(/:[^:@]+@/, ':****@')}
+                      </code>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="shrink-0"
+                        onClick={() => copyToClipboard(streamInfo.rtsp_url)}
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      URL alternativa:
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 text-xs bg-muted p-2 rounded font-mono break-all">
+                        {streamInfo.rtsp_url_alt.replace(/:[^:@]+@/, ':****@')}
+                      </code>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="shrink-0"
+                        onClick={() => copyToClipboard(streamInfo.rtsp_url_alt)}
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </DialogContent>
