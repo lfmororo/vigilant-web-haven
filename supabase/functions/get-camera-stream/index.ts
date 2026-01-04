@@ -51,7 +51,7 @@ serve(async (req) => {
     // Fetch camera data - RLS ensures user can only access assigned cameras
     const { data: camera, error } = await supabase
       .from('cameras')
-      .select('id, name, serial_number, device_username, device_password, channel, is_active')
+      .select('id, name, serial_number, device_ip, device_username, device_password, channel, is_active')
       .eq('id', camera_id)
       .maybeSingle();
 
@@ -71,9 +71,20 @@ serve(async (req) => {
       });
     }
 
-    if (!camera.serial_number || !camera.device_username || !camera.device_password) {
+    if (!camera.device_username || !camera.device_password) {
       console.log('Camera missing required credentials');
       return new Response(JSON.stringify({ error: 'Câmera sem credenciais configuradas' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Determine host: prefer device_ip over serial_number
+    const host = camera.device_ip || camera.serial_number;
+    
+    if (!host) {
+      console.log('Camera missing IP or serial number');
+      return new Response(JSON.stringify({ error: 'Câmera sem IP ou número de série configurado' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -85,10 +96,10 @@ serve(async (req) => {
 
     // Generate RTSP URL in Intelbras format
     // Format: rtsp://user:pass@host:554/cam/realmonitor?channel=X&subtype=Y
-    const rtspUrl = `rtsp://${encodeURIComponent(camera.device_username)}:${encodeURIComponent(camera.device_password)}@${camera.serial_number}:554/cam/realmonitor?channel=${channel}&subtype=${subtype}`;
+    const rtspUrl = `rtsp://${encodeURIComponent(camera.device_username)}:${encodeURIComponent(camera.device_password)}@${host}:554/cam/realmonitor?channel=${channel}&subtype=${subtype}`;
 
     // Also generate alternative formats for different player compatibility
-    const rtspUrlAlt = `rtsp://${encodeURIComponent(camera.device_username)}:${encodeURIComponent(camera.device_password)}@${camera.serial_number}:554/h264/ch${channel}/${stream_type === 'sub' ? 'sub' : 'main'}/av_stream`;
+    const rtspUrlAlt = `rtsp://${encodeURIComponent(camera.device_username)}:${encodeURIComponent(camera.device_password)}@${host}:554/h264/ch${channel}/${stream_type === 'sub' ? 'sub' : 'main'}/av_stream`;
 
     console.log(`Generated stream URL for camera: ${camera.name}`);
 

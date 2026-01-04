@@ -8,9 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -24,7 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Eye, EyeOff, Trash2, Edit } from "lucide-react";
+import { Plus, Loader2, Eye, EyeOff, Trash2, Edit, Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { z } from "zod";
 
 interface CameraData {
@@ -32,6 +34,7 @@ interface CameraData {
   name: string;
   description: string | null;
   serial_number: string | null;
+  device_ip: string | null;
   device_username: string | null;
   device_password: string | null;
   channel: number;
@@ -41,14 +44,26 @@ interface CameraData {
   created_at: string;
 }
 
+type ConnectionStatus = 'idle' | 'testing' | 'success' | 'error';
+
+interface ConnectionResult {
+  status: ConnectionStatus;
+  message?: string;
+  deviceInfo?: any;
+}
+
 const cameraSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-  serial_number: z.string().min(1, "Número de série é obrigatório"),
+  serial_number: z.string().optional(),
+  device_ip: z.string().optional(),
   device_username: z.string().min(1, "Usuário é obrigatório"),
   device_password: z.string().min(1, "Senha é obrigatória"),
   channel: z.number().min(1, "Canal deve ser no mínimo 1").max(64, "Canal deve ser no máximo 64"),
   description: z.string().optional(),
   location: z.string().optional(),
+}).refine(data => data.serial_number || data.device_ip, {
+  message: "Informe o Número de Série ou o IP do dispositivo",
+  path: ["serial_number"],
 });
 
 const CamerasManagement = () => {
@@ -64,12 +79,14 @@ const CamerasManagement = () => {
     name: "",
     description: "",
     serial_number: "",
+    device_ip: "",
     device_username: "",
     device_password: "",
     channel: 1,
     location: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [connectionResult, setConnectionResult] = useState<ConnectionResult>({ status: 'idle' });
 
   useEffect(() => {
     fetchCameras();
@@ -100,6 +117,7 @@ const CamerasManagement = () => {
       name: "",
       description: "",
       serial_number: "",
+      device_ip: "",
       device_username: "",
       device_password: "",
       channel: 1,
@@ -107,6 +125,65 @@ const CamerasManagement = () => {
     });
     setEditingCamera(null);
     setErrors({});
+    setConnectionResult({ status: 'idle' });
+  };
+
+  const testConnection = async () => {
+    if (!formData.device_ip || !formData.device_username || !formData.device_password) {
+      toast({
+        variant: "destructive",
+        title: "Campos obrigatórios",
+        description: "Preencha IP, usuário e senha para testar a conexão",
+      });
+      return;
+    }
+
+    setConnectionResult({ status: 'testing' });
+
+    try {
+      const { data, error } = await supabase.functions.invoke('test-camera-connection', {
+        body: {
+          device_ip: formData.device_ip,
+          device_username: formData.device_username,
+          device_password: formData.device_password,
+          port: 80,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setConnectionResult({
+          status: 'success',
+          message: data.message,
+          deviceInfo: data.device_info,
+        });
+        toast({
+          title: "Conexão OK",
+          description: data.message,
+        });
+      } else {
+        setConnectionResult({
+          status: 'error',
+          message: data.error,
+        });
+        toast({
+          variant: "destructive",
+          title: "Falha na conexão",
+          description: data.error,
+        });
+      }
+    } catch (error: any) {
+      setConnectionResult({
+        status: 'error',
+        message: error.message || 'Erro ao testar conexão',
+      });
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: error.message,
+      });
+    }
   };
 
   const handleOpenDialog = (camera?: CameraData) => {
@@ -116,6 +193,7 @@ const CamerasManagement = () => {
         name: camera.name,
         description: camera.description || "",
         serial_number: camera.serial_number || "",
+        device_ip: camera.device_ip || "",
         device_username: camera.device_username || "",
         device_password: camera.device_password || "",
         channel: camera.channel || 1,
@@ -124,6 +202,7 @@ const CamerasManagement = () => {
     } else {
       resetForm();
     }
+    setConnectionResult({ status: 'idle' });
     setIsDialogOpen(true);
   };
 
@@ -150,7 +229,8 @@ const CamerasManagement = () => {
           .update({
             name: formData.name,
             description: formData.description || null,
-            serial_number: formData.serial_number,
+            serial_number: formData.serial_number || null,
+            device_ip: formData.device_ip || null,
             device_username: formData.device_username,
             device_password: formData.device_password,
             channel: formData.channel,
@@ -168,7 +248,8 @@ const CamerasManagement = () => {
         const { error } = await supabase.from("cameras").insert({
           name: formData.name,
           description: formData.description || null,
-          serial_number: formData.serial_number,
+          serial_number: formData.serial_number || null,
+          device_ip: formData.device_ip || null,
           device_username: formData.device_username,
           device_password: formData.device_password,
           channel: formData.channel,
@@ -267,11 +348,14 @@ const CamerasManagement = () => {
                 Nova Câmera
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   {editingCamera ? "Editar Câmera" : "Nova Câmera"}
                 </DialogTitle>
+                <DialogDescription>
+                  Preencha os dados da câmera. Informe Serial (P2P) ou IP para conexão direta.
+                </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
@@ -290,9 +374,9 @@ const CamerasManagement = () => {
                   )}
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="col-span-2 space-y-2">
-                    <Label htmlFor="serial_number">Número de Série do Dispositivo</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="serial_number">Número de Série (P2P/Cloud)</Label>
                     <Input
                       id="serial_number"
                       value={formData.serial_number}
@@ -302,27 +386,39 @@ const CamerasManagement = () => {
                       placeholder="Ex: ABC123456789"
                       className={errors.serial_number ? "border-destructive" : ""}
                     />
-                    {errors.serial_number && (
-                      <p className="text-sm text-destructive">{errors.serial_number}</p>
-                    )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="channel">Canal</Label>
+                    <Label htmlFor="device_ip">IP do Dispositivo</Label>
                     <Input
-                      id="channel"
-                      type="number"
-                      min={1}
-                      max={64}
-                      value={formData.channel}
+                      id="device_ip"
+                      value={formData.device_ip}
                       onChange={(e) =>
-                        setFormData({ ...formData, channel: parseInt(e.target.value) || 1 })
+                        setFormData({ ...formData, device_ip: e.target.value })
                       }
-                      className={errors.channel ? "border-destructive" : ""}
+                      placeholder="Ex: 192.168.1.100"
                     />
-                    {errors.channel && (
-                      <p className="text-sm text-destructive">{errors.channel}</p>
-                    )}
                   </div>
+                </div>
+                {errors.serial_number && (
+                  <p className="text-sm text-destructive">{errors.serial_number}</p>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="channel">Canal</Label>
+                  <Input
+                    id="channel"
+                    type="number"
+                    min={1}
+                    max={64}
+                    value={formData.channel}
+                    onChange={(e) =>
+                      setFormData({ ...formData, channel: parseInt(e.target.value) || 1 })
+                    }
+                    className={errors.channel ? "border-destructive" : "w-24"}
+                  />
+                  {errors.channel && (
+                    <p className="text-sm text-destructive">{errors.channel}</p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -366,6 +462,65 @@ const CamerasManagement = () => {
                     )}
                   </div>
                 </div>
+
+                {/* Test Connection Section */}
+                {formData.device_ip && formData.device_username && formData.device_password && (
+                  <div className="space-y-2 p-4 border border-border rounded-lg bg-muted/30">
+                    <div className="flex items-center justify-between">
+                      <Label>Testar Conexão</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={testConnection}
+                        disabled={connectionResult.status === 'testing'}
+                      >
+                        {connectionResult.status === 'testing' ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Testando...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Testar Conexão
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    
+                    {connectionResult.status === 'success' && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
+                          <Wifi className="w-3 h-3 mr-1" />
+                          Conectado
+                        </Badge>
+                        <span className="text-muted-foreground">{connectionResult.message}</span>
+                      </div>
+                    )}
+                    
+                    {connectionResult.status === 'error' && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
+                          <WifiOff className="w-3 h-3 mr-1" />
+                          Falha
+                        </Badge>
+                        <span className="text-muted-foreground">{connectionResult.message}</span>
+                      </div>
+                    )}
+
+                    {connectionResult.deviceInfo && (
+                      <div className="text-xs text-muted-foreground mt-2 font-mono bg-background/50 p-2 rounded">
+                        {connectionResult.deviceInfo.deviceType !== 'Unknown' && (
+                          <div>Tipo: {connectionResult.deviceInfo.deviceType}</div>
+                        )}
+                        {connectionResult.deviceInfo.serialNumber !== 'Unknown' && (
+                          <div>Serial: {connectionResult.deviceInfo.serialNumber}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="description">Descrição (opcional)</Label>
@@ -427,7 +582,7 @@ const CamerasManagement = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
-                    <TableHead>Serial</TableHead>
+                    <TableHead>Serial / IP</TableHead>
                     <TableHead>Localização</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
@@ -437,7 +592,18 @@ const CamerasManagement = () => {
                   {cameras.map((camera) => (
                     <TableRow key={camera.id}>
                       <TableCell className="font-medium">{camera.name}</TableCell>
-                      <TableCell className="font-mono text-xs">{camera.serial_number || "-"}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {camera.device_ip && (
+                          <div className="flex items-center gap-1">
+                            <Wifi className="w-3 h-3 text-muted-foreground" />
+                            {camera.device_ip}
+                          </div>
+                        )}
+                        {camera.serial_number && (
+                          <div className="text-muted-foreground">{camera.serial_number}</div>
+                        )}
+                        {!camera.device_ip && !camera.serial_number && "-"}
+                      </TableCell>
                       <TableCell>{camera.location || "-"}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
