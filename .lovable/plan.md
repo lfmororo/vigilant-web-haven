@@ -1,48 +1,46 @@
 
 
-## Trocar Logo e Nome para FM TechFlow
+## Melhorar Notificacoes por Email - Template HTML Elegante
 
 ### Resumo
-Substituir todas as referencias a "SecureTech" por "FM TechFlow" e usar a logo fornecida em todo o sistema.
+Atualizar todos os templates de email do sistema para um design mais moderno, profissional e consistente, com logo da FM TechFlow em todas as funcoes de envio.
 
-### Alteracoes
+### O que sera feito
 
-**1. Copiar a logo para o projeto**
-- Copiar `user-uploads://tempImageGmYSZa_-_Editado.png` para `src/assets/fm-techflow-logo.png`
+**1. Template do `notify-ticket-update` (refinamento visual)**
+- Adicionar gradiente sutil no header em vez de cor solida
+- Melhorar a tabela de dados com bordas arredondadas e sombras leves
+- Adicionar icone visual para cada tipo de prioridade (alem da cor)
+- Incluir separador visual elegante entre secoes
+- Adicionar data/hora da notificacao no corpo do email
+- Melhorar o botao CTA com efeito de hover (usando MSO para Outlook)
+- Adicionar texto de rodape com "Este email foi enviado automaticamente, nao responda"
+- Incluir o nome do remetente da mensagem no template de atualizacao
 
-**2. Arquivos a serem editados (10 arquivos)**
+**2. Template do `daily-ticket-summary` (adicionar logo + melhorar)**
+- Adicionar a logo da FM TechFlow no header (igual ao notify-ticket-update)
+- Usar o `app_base_url` das configuracoes para o link do dashboard (corrigir bug atual que usa URL errada)
+- Manter o design atual que ja esta bom, apenas alinhar com o padrao visual
 
-| Arquivo | O que muda |
-|---|---|
-| `index.html` | Titulo, meta description, og:title, twitter:site - tudo de "SecureTech" para "FM TechFlow" |
-| `src/pages/Index.tsx` | Titulo e meta tags do Helmet |
-| `src/components/Navbar.tsx` | Substituir icone Shield + texto "SecureTech" pela imagem da logo |
-| `src/components/Footer.tsx` | Substituir icone Shield + texto "SecureTech" pela logo; atualizar copyright |
-| `src/components/HeroSection.tsx` | Nenhuma referencia direta a "SecureTech", mas o badge pode ser atualizado se necessario |
-| `src/components/AboutSection.tsx` | Trocar "SecureTech" por "FM TechFlow" no titulo e texto |
-| `src/components/ContactSection.tsx` | Trocar email de "contato@securetech.com.br" para "contato@fmtechflow.com.br" |
-| `src/components/admin/AdminLayout.tsx` | Substituir Shield + "SecureTech" pela logo (sidebar e header mobile) |
-| `src/components/helpdesk/HelpdeskLayout.tsx` | Substituir Shield + "SecureTech" pela logo |
-| `src/pages/Dashboard.tsx` | Substituir Shield + "SecureTech" pela logo |
-| `src/pages/admin/SystemSettings.tsx` | Trocar placeholder "SecureTech Suporte" |
-
-**3. Como a logo sera usada**
-- Importada como modulo ES6: `import fmLogo from "@/assets/fm-techflow-logo.png"`
-- Renderizada como `<img>` com altura fixa (~32-40px) no lugar do icone Shield + texto
-- A logo ja contem o nome "FM | TECHFLOW", entao em alguns locais o texto separado sera removido
+**3. Template do `test-smtp-connection` (converter para HTML)**
+- Converter de texto puro para template HTML elegante
+- Usar o mesmo layout base (header com logo, footer com empresa)
+- Incluir informacoes de teste como data/hora e servidor utilizado
 
 ### Detalhes Tecnicos
 
-Exemplo de como ficara a Navbar:
-```tsx
-import fmLogo from "@/assets/fm-techflow-logo.png";
+**Arquivo:** `supabase/functions/notify-ticket-update/index.ts`
+- Refinar a funcao `buildEmailHtml` com melhorias visuais
+- Adicionar campo `senderName` ao `EmailParams` para exibir quem enviou
+- Melhorar estilos inline para maior compatibilidade com clientes de email (Outlook, Gmail, etc.)
 
-// Onde antes era:
-<Shield className="w-7 h-7 text-primary" />
-<span>SecureTech</span>
+**Arquivo:** `supabase/functions/daily-ticket-summary/index.ts`
+- Adicionar logo no header usando a mesma URL do storage
+- Corrigir `baseUrl` para usar `app_base_url` das settings (linha 276 atualmente usa URL incorreta)
 
-// Ficara:
-<img src={fmLogo} alt="FM TechFlow" className="h-10" />
-```
+**Arquivo:** `supabase/functions/test-smtp-connection/index.ts`
+- Criar template HTML para o email de teste
+- Usar a logo do storage e manter consistencia visual
 
-Todas as descricoes textuais (meta tags, textos de paragrafo, copyright) serao atualizadas de "SecureTech" para "FM TechFlow".
+**Deploy:** As 3 funcoes serao re-deployadas automaticamente apos as alteracoes.
+
