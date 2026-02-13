@@ -308,7 +308,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const baseUrl = Deno.env.get("SUPABASE_URL")?.replace(".supabase.co", ".lovable.app") || "";
+    // Use app_base_url from settings, fallback to published URL
+    const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
     const emailType = notification_type || "ticket_updated";
 
     const subjectMap: Record<string, string> = {
