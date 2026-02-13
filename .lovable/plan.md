@@ -1,31 +1,38 @@
 
-## Adicionar botao de excluir OS para administradores
+# Notificar admin quando ticket for aberto via e-mail
 
-Adicionar um botao de exclusao na pagina de detalhes da Ordem de Servico (`AdminServiceOrderDetail.tsx`), com dialogo de confirmacao para evitar exclusoes acidentais. Ao confirmar, a OS sera removida e o usuario redirecionado para a lista de ordens de servico.
+## Situacao atual
 
----
+- **Tickets abertos pela interface (UI):** Ja enviam notificacao para admins via a funcao `notify-ticket-update` com `notification_type: "ticket_opened"`. Funcionando corretamente.
+- **Tickets abertos por e-mail recebido:** A funcao `process-incoming-emails` cria o ticket e a mensagem, mas **nao notifica os admins**.
 
-### Alteracoes
+## Alteracao necessaria
 
-**Arquivo: `src/pages/admin/AdminServiceOrderDetail.tsx`**
+Adicionar, na funcao `process-incoming-emails`, uma chamada direta para enviar e-mail aos admins logo apos a criacao do ticket via e-mail.
 
-1. Importar `useNavigate` do react-router-dom (ja tem `useParams` e `Link`)
-2. Importar `AlertDialog` e seus subcomponentes de `@/components/ui/alert-dialog`
-3. Adicionar `const navigate = useNavigate()`
-4. Adicionar botao vermelho com icone de lixeira ao lado do botao "Salvar" no cabecalho
-5. Envolver o botao em um `AlertDialog` com mensagem de confirmacao: "Tem certeza que deseja excluir a OS #X? Esta acao nao pode ser desfeita."
-6. Ao confirmar, executar `supabase.from("service_orders").delete().eq("id", id)` e redirecionar para `/admin/service-orders`
+Em vez de chamar a edge function `notify-ticket-update` (o que adicionaria complexidade de rede desnecessaria), a notificacao sera feita diretamente dentro da propria funcao, reutilizando as configuracoes SMTP ja carregadas.
 
-A politica RLS "Admins can delete service orders" ja existe no banco de dados, entao nenhuma alteracao no backend e necessaria.
+## Detalhes tecnicos
 
----
+**Arquivo:** `supabase/functions/process-incoming-emails/index.ts`
 
-### Detalhes Tecnicos
+Apos o bloco que cria o ticket e a mensagem (linhas 452-469), adicionar:
 
-O botao sera adicionado na barra de acoes do cabecalho, entre os botoes "Imprimir" e "Salvar":
+1. Buscar todos os admins na tabela `user_roles` (role = 'admin')
+2. Buscar seus e-mails na tabela `profiles`
+3. Para cada admin, enviar um e-mail informando o novo chamado com:
+   - Numero do ticket
+   - Titulo (assunto do e-mail)
+   - Nome do cliente
+   - Descricao resumida
+   - Link para o ticket no painel admin
 
-```
-[Voltar] [OS #123 / Cliente] ... [Excluir] [Imprimir] [Salvar]
-```
+O template do e-mail sera simples em texto plano, consistente com o que ja e usado nessa funcao para o e-mail de boas-vindas.
 
-Codigo do botao com dialogo de confirmacao seguira o mesmo padrao ja usado em `AdminTicketDetail.tsx` para exclusao de tickets.
+## Resumo das mudancas
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `supabase/functions/process-incoming-emails/index.ts` | Adicionar envio de e-mail para admins apos criacao de ticket |
+
+Nenhuma tabela ou migracao necessaria.
