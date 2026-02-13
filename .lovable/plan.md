@@ -1,78 +1,59 @@
 
 
-## Notificacao Diaria de Resumo de Chamados
+## Respostas de E-mail vinculadas ao Chamado Existente
 
-Criar uma funcao backend agendada que envia um e-mail de resumo diario para todos os administradores as 09:00 e 15:00 (horario de Brasilia), usando como modelo visual a imagem fornecida.
+### Problema Atual
+Quando um usuario responde a um e-mail de notificacao de ticket (ex: "Re: Atualizacao no Chamado #15 - Problema no sistema"), a funcao `process-incoming-emails` cria um novo chamado em vez de adicionar a resposta ao chamado original.
 
-### O que sera feito
+### Solucao
 
-**1. Nova funcao backend: `daily-ticket-summary`**
-- Consulta tickets agrupados por status:
-  - **Aguardando Cliente** (waiting_client) - card laranja "PENDENTE"
-  - **Abertos** (open sem tecnico) - card azul "ABERTOS"
-  - **Em Andamento** (in_progress ou open com tecnico) - card verde "EM ANDAMENTO"
-- Para cada categoria, lista os tickets com numero e tecnico/cliente atribuido
-- Busca todos os admins (user_roles + profiles) para envio
-- Carrega configuracoes SMTP de system_settings
-- Envia e-mail HTML seguindo o layout da imagem de referencia
+Modificar a funcao `process-incoming-emails` para:
 
-**2. Template HTML do e-mail (baseado na imagem)**
-- Cabecalho com nome da empresa (de smtp_from_name)
-- Titulo "Resumo Diario de Chamados de Suporte - [data]"
-- Secao "Visao Geral" com 3 cards coloridos lado a lado:
-  - Laranja: contador de Pendentes (waiting_client)
-  - Azul: contador de Abertos (open sem tecnico)
-  - Verde: contador de Em Andamento
-- Secao "Detalhes por Categoria" com tabela para cada categoria listando:
-  - Numero do ticket
-  - Tecnico atribuido (ou "Nao atribuido")
-- Botao "Acessar Dashboard" apontando para /admin/helpdesk
-- Footer com nome da empresa
+1. **Detectar respostas** - Ao processar cada e-mail, verificar se o assunto contem um numero de ticket (padrao `#NNNN`) que indica uma resposta a uma notificacao existente
+2. **Vincular ao chamado existente** - Se encontrar o numero do ticket, buscar o chamado no banco e adicionar o conteudo do e-mail como nova mensagem no chat do ticket
+3. **Reabrir chamados finalizados** - Se o ticket estiver com status `resolved` ou `closed`, alterar automaticamente para `open`
+4. **Manter comportamento atual** - Se nao for uma resposta (sem numero de ticket no assunto), criar novo chamado normalmente
 
-**3. Agendamento via pg_cron**
-- Dois jobs cron:
-  - `daily-ticket-summary-9am`: executa as 12:00 UTC (09:00 BRT)
-  - `daily-ticket-summary-3pm`: executa as 18:00 UTC (15:00 BRT)
+### Logica de Deteccao
 
-**4. Configuracao**
-- Adicionar `[functions.daily-ticket-summary]` com `verify_jwt = false` no config.toml
+Os assuntos das notificacoes seguem o padrao:
+- "Novo Chamado #15 - Titulo"
+- "Atualizacao no Chamado #15 - Titulo"
+- "Chamado Resolvido #15 - Titulo"
+
+Quando o usuario responde, o assunto fica:
+- "Re: Atualizacao no Chamado #15 - Titulo"
+
+A funcao vai extrair o numero `15` usando regex `#(\d+)` e buscar o ticket com `ticket_number = 15`.
 
 ### Detalhes Tecnicos
 
 | Arquivo | Acao |
 |---|---|
-| `supabase/functions/daily-ticket-summary/index.ts` | Criar - funcao que consulta tickets, monta HTML e envia via SMTP |
-| `supabase/config.toml` | Adicionar entrada para daily-ticket-summary |
-| SQL (pg_cron) | Criar 2 jobs agendados via INSERT no cron |
+| `supabase/functions/process-incoming-emails/index.ts` | Modificar - adicionar logica de deteccao de resposta |
 
-**Estrutura da funcao:**
-1. Conectar com service role key
-2. Contar e listar tickets por status
-3. Buscar admins e suas informacoes de perfil
-4. Carregar config SMTP (smtp_host, smtp_port, smtp_user, smtp_password, smtp_from_name)
-5. Gerar HTML no estilo da imagem de referencia (3 cards coloridos + tabelas detalhadas)
-6. Enviar para cada admin usando a mesma funcao SMTP da notify-ticket-update (reescrita local)
-7. Retornar quantidade de e-mails enviados
+**Fluxo modificado dentro do loop de e-mails:**
 
-**Layout do HTML:**
 ```text
-+------------------------------------------+
-|          [NOME DA EMPRESA]               |
-|  Resumo Diario - 13 de Fevereiro, 2025  |
-|------------------------------------------|
-|  Visao Geral:                            |
-|  [LARANJA]  [AZUL]      [VERDE]          |
-|   15         30           45             |
-|  PENDENTE   ABERTOS    EM ANDAMENTO      |
-|------------------------------------------|
-|  Detalhes por Categoria:                 |
-|  Chamados Em Andamento (45)              |
-|  | Ticket ID  | Tecnico Atribuido |      |
-|  | #2025-015  | Jessica M         |      |
-|  | #2025-018  | David L           |      |
-|  ...                                     |
-|  [Botao: Acessar Dashboard]              |
-|  Footer: Empresa · Sistema de Suporte    |
-+------------------------------------------+
+Para cada e-mail nao lido:
+  1. Extrair remetente e assunto
+  2. Verificar se assunto contem #NNNN (regex)
+  3. SE contem numero de ticket:
+     a. Buscar ticket por ticket_number
+     b. SE ticket existe E remetente eh o cliente do ticket:
+        - Adicionar mensagem no ticket (ticket_messages)
+        - SE status = 'resolved' ou 'closed': atualizar para 'open'
+        - Notificar admins/tecnico sobre nova mensagem
+        - Contabilizar como "resposta processada"
+        - Marcar e-mail como lido
+        - Pular para proximo e-mail
+  4. SENAO (e-mail novo):
+     - Fluxo atual: criar usuario se necessario, criar ticket, notificar
 ```
+
+**Mudancas no codigo:**
+- Nova funcao `extractTicketNumber(subject)` que retorna o numero do ticket ou null
+- Novo bloco condicional antes da criacao de ticket
+- Chamada ao `notify-ticket-update` com tipo `ticket_updated` quando adicionar resposta
+- Novos contadores de retorno: `replies_added` alem de `tickets_created` e `users_created`
 
