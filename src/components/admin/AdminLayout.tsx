@@ -69,8 +69,8 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
           {/* Logo */}
           <div className="p-6 border-b border-border">
             <Link to="/admin" className="flex items-center gap-3">
-              <img alt="FM TechFlow" className="h-9 object-cover" src="/lovable-uploads/d7cdf369-5fba-4990-90b4-0ef73bc46004.png" />
-              <p className="text-xs text-muted-foreground">{panelLabel}</p>
+              <img alt="FM TechFlow" className="h-9 object-fill" src="/lovable-uploads/8baca615-6590-42bd-839f-0166163149a0.png" />
+              
             </Link>
           </div>
 
