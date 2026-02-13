@@ -18,64 +18,96 @@ interface EmailParams {
   message: string;
   ticketLink: string;
   companyName: string;
+  senderName?: string;
   resolutionSummary?: string;
 }
 
 function buildEmailHtml(p: EmailParams): string {
-  const themes: Record<string, { heading: string; emoji: string; color: string }> = {
-    ticket_opened:   { heading: "Ticket Aberto",      emoji: "🎫", color: "#2563eb" },
-    ticket_updated:  { heading: "Ticket Atualizado",   emoji: "🔄", color: "#2563eb" },
-    ticket_resolved: { heading: "Ticket Resolvido",    emoji: "✅", color: "#16a34a" },
-    ticket_closed:   { heading: "Ticket Encerrado",    emoji: "📁", color: "#6b7280" },
+  const themes: Record<string, { heading: string; emoji: string; color: string; bgLight: string }> = {
+    ticket_opened:   { heading: "Novo Chamado Aberto",  emoji: "🎫", color: "#2563eb", bgLight: "#eff6ff" },
+    ticket_updated:  { heading: "Chamado Atualizado",   emoji: "🔄", color: "#7c3aed", bgLight: "#f5f3ff" },
+    ticket_resolved: { heading: "Chamado Resolvido",    emoji: "✅", color: "#16a34a", bgLight: "#f0fdf4" },
+    ticket_closed:   { heading: "Chamado Encerrado",    emoji: "📁", color: "#6b7280", bgLight: "#f9fafb" },
   };
 
   const theme = themes[p.type] || themes.ticket_updated;
 
-  const priorityColors: Record<string, string> = {
-    Baixa: "#22c55e", Média: "#eab308", Alta: "#f97316", Urgente: "#ef4444",
+  const priorityConfig: Record<string, { color: string; bg: string; icon: string }> = {
+    Baixa:   { color: "#15803d", bg: "#dcfce7", icon: "🟢" },
+    Média:   { color: "#a16207", bg: "#fef9c3", icon: "🟡" },
+    Alta:    { color: "#c2410c", bg: "#ffedd5", icon: "🟠" },
+    Urgente: { color: "#dc2626", bg: "#fee2e2", icon: "🔴" },
   };
-  const priColor = priorityColors[p.priority] || "#6b7280";
+  const pri = priorityConfig[p.priority] || { color: "#6b7280", bg: "#f3f4f6", icon: "⚪" };
+
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Sao_Paulo" });
+  const timeStr = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+
+  const senderInfo = p.senderName ? `<p style="margin:0 0 16px;color:#64748b;font-size:13px;">Ação realizada por: <strong style="color:#334155;">${p.senderName}</strong></p>` : "";
+
+  // Build info table rows
+  const tableRow = (label: string, value: string) => `
+    <tr>
+      <td style="padding:12px 16px;background:#f8fafc;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;width:140px;font-size:14px;">${label}</td>
+      <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;color:#1e293b;font-size:14px;">${value}</td>
+    </tr>`;
+
+  const priorityBadge = `<span style="display:inline-block;background:${pri.bg};color:${pri.color};padding:4px 14px;border-radius:20px;font-size:13px;font-weight:700;">${pri.icon} ${p.priority}</span>`;
 
   let bodyContent = "";
 
   if (p.type === "ticket_opened") {
     bodyContent = `
-      <p style="margin:0 0 8px;color:#374151;">Olá <strong>${p.recipientName}</strong>,</p>
-      <p style="margin:0 0 16px;color:#374151;">Um novo chamado foi aberto:</p>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
-        <tr><td style="padding:8px 12px;background:#f3f4f6;font-weight:600;color:#374151;border:1px solid #e5e7eb;width:140px;">Nº do Ticket</td><td style="padding:8px 12px;border:1px solid #e5e7eb;color:#111827;">#${p.ticketNumber}</td></tr>
-        <tr><td style="padding:8px 12px;background:#f3f4f6;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Assunto</td><td style="padding:8px 12px;border:1px solid #e5e7eb;color:#111827;">${p.title}</td></tr>
-        ${p.category ? `<tr><td style="padding:8px 12px;background:#f3f4f6;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Categoria</td><td style="padding:8px 12px;border:1px solid #e5e7eb;color:#111827;">${p.category}</td></tr>` : ""}
-        <tr><td style="padding:8px 12px;background:#f3f4f6;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Prioridade</td><td style="padding:8px 12px;border:1px solid #e5e7eb;"><span style="background:${priColor};color:#fff;padding:2px 10px;border-radius:12px;font-size:13px;">${p.priority}</span></td></tr>
+      <p style="margin:0 0 8px;color:#334155;font-size:15px;line-height:1.6;">Olá <strong>${p.recipientName}</strong>,</p>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">Um novo chamado foi registrado no sistema:</p>
+      ${senderInfo}
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">
+        ${tableRow("Nº do Ticket", `<strong>#${p.ticketNumber}</strong>`)}
+        ${tableRow("Assunto", p.title)}
+        ${p.category ? tableRow("Categoria", p.category) : ""}
+        ${tableRow("Prioridade", priorityBadge)}
       </table>`;
   } else if (p.type === "ticket_resolved") {
     bodyContent = `
-      <p style="margin:0 0 8px;color:#374151;">Olá <strong>${p.recipientName}</strong>,</p>
-      <p style="margin:0 0 16px;color:#374151;">O seu chamado foi resolvido:</p>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
-        <tr><td style="padding:8px 12px;background:#f3f4f6;font-weight:600;color:#374151;border:1px solid #e5e7eb;width:140px;">Nº do Ticket</td><td style="padding:8px 12px;border:1px solid #e5e7eb;color:#111827;">#${p.ticketNumber}</td></tr>
-        ${p.category ? `<tr><td style="padding:8px 12px;background:#f3f4f6;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Categoria</td><td style="padding:8px 12px;border:1px solid #e5e7eb;color:#111827;">${p.category}</td></tr>` : ""}
+      <p style="margin:0 0 8px;color:#334155;font-size:15px;line-height:1.6;">Olá <strong>${p.recipientName}</strong>,</p>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">O seu chamado <strong>#${p.ticketNumber}</strong> foi resolvido com sucesso!</p>
+      ${senderInfo}
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">
+        ${tableRow("Nº do Ticket", `<strong>#${p.ticketNumber}</strong>`)}
+        ${tableRow("Assunto", p.title)}
+        ${p.category ? tableRow("Categoria", p.category) : ""}
       </table>
-      ${p.resolutionSummary ? `<p style="margin:0 0 16px;color:#374151;"><strong>Resumo:</strong> ${p.resolutionSummary}</p>` : ""}`;
+      ${p.resolutionSummary ? `
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
+        <p style="margin:0 0 6px;font-weight:700;color:#166534;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;">Resumo da Resolução</p>
+        <p style="margin:0;color:#15803d;font-size:14px;line-height:1.5;">${p.resolutionSummary}</p>
+      </div>` : ""}`;
   } else if (p.type === "ticket_closed") {
     bodyContent = `
-      <p style="margin:0 0 8px;color:#374151;">Olá <strong>${p.recipientName}</strong>,</p>
-      <p style="margin:0 0 16px;color:#374151;">O chamado <strong>#${p.ticketNumber} - ${p.title}</strong> foi encerrado.</p>
-      ${p.resolutionSummary ? `<p style="margin:0 0 16px;color:#374151;"><strong>Resumo:</strong> ${p.resolutionSummary}</p>` : ""}
-      <p style="margin:0 0 16px;color:#374151;">Agradecemos por utilizar nosso suporte. Caso precise de algo mais, não hesite em abrir um novo chamado.</p>`;
+      <p style="margin:0 0 8px;color:#334155;font-size:15px;line-height:1.6;">Olá <strong>${p.recipientName}</strong>,</p>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">O chamado <strong>#${p.ticketNumber} - ${p.title}</strong> foi encerrado.</p>
+      ${senderInfo}
+      ${p.resolutionSummary ? `
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
+        <p style="margin:0 0 6px;font-weight:700;color:#475569;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;">Resumo</p>
+        <p style="margin:0;color:#334155;font-size:14px;line-height:1.5;">${p.resolutionSummary}</p>
+      </div>` : ""}
+      <p style="margin:0 0 20px;color:#475569;font-size:14px;line-height:1.6;">Agradecemos por utilizar nosso suporte. Caso precise de algo mais, não hesite em abrir um novo chamado.</p>`;
   } else {
-    // ticket_updated (default)
     bodyContent = `
-      <p style="margin:0 0 8px;color:#374151;">Olá <strong>${p.recipientName}</strong>,</p>
-      <p style="margin:0 0 16px;color:#374151;">Houve uma atualização no chamado <strong>#${p.ticketNumber} - ${p.title}</strong>:</p>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
-        <tr><td style="padding:8px 12px;background:#f3f4f6;font-weight:600;color:#374151;border:1px solid #e5e7eb;width:140px;">Nº do Ticket</td><td style="padding:8px 12px;border:1px solid #e5e7eb;color:#111827;">#${p.ticketNumber}</td></tr>
-        <tr><td style="padding:8px 12px;background:#f3f4f6;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Assunto</td><td style="padding:8px 12px;border:1px solid #e5e7eb;color:#111827;">${p.title}</td></tr>
-        ${p.category ? `<tr><td style="padding:8px 12px;background:#f3f4f6;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Categoria</td><td style="padding:8px 12px;border:1px solid #e5e7eb;color:#111827;">${p.category}</td></tr>` : ""}
-        <tr><td style="padding:8px 12px;background:#f3f4f6;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Prioridade</td><td style="padding:8px 12px;border:1px solid #e5e7eb;"><span style="background:${priColor};color:#fff;padding:2px 10px;border-radius:12px;font-size:13px;">${p.priority}</span></td></tr>
+      <p style="margin:0 0 8px;color:#334155;font-size:15px;line-height:1.6;">Olá <strong>${p.recipientName}</strong>,</p>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">Houve uma atualização no chamado <strong>#${p.ticketNumber} - ${p.title}</strong>:</p>
+      ${senderInfo}
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">
+        ${tableRow("Nº do Ticket", `<strong>#${p.ticketNumber}</strong>`)}
+        ${tableRow("Assunto", p.title)}
+        ${p.category ? tableRow("Categoria", p.category) : ""}
+        ${tableRow("Prioridade", priorityBadge)}
       </table>
-      <div style="background:#f9fafb;border-left:4px solid #2563eb;padding:12px 16px;margin-bottom:16px;color:#374151;">
-        ${p.message}
+      <div style="background:#f8fafc;border-left:4px solid #7c3aed;border-radius:0 8px 8px 0;padding:16px 20px;margin-bottom:20px;">
+        <p style="margin:0 0 6px;font-weight:700;color:#7c3aed;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;">Nova Mensagem</p>
+        <p style="margin:0;color:#334155;font-size:14px;line-height:1.6;">${p.message}</p>
       </div>`;
   }
 
@@ -83,40 +115,54 @@ function buildEmailHtml(p: EmailParams): string {
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 0;">
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 0;">
 <tr><td align="center">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
 
-  <!-- Header with Logo -->
-  <tr><td style="background:#1a1a2e;padding:24px 32px;text-align:center;">
-    <img src="${logoUrl}" alt="FM TechFlow" style="height:48px;max-width:200px;" />
-    <p style="margin:8px 0 0;color:#94a3b8;font-size:12px;letter-spacing:1px;text-transform:uppercase;">Sistema de Suporte</p>
+  <!-- Header with gradient -->
+  <tr><td style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);padding:28px 32px;text-align:center;">
+    <!--[if mso]><v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:600px;height:100px;"><v:fill type="gradient" color="#1a1a2e" color2="#0f3460" angle="135"/><v:textbox inset="0,0,0,0" style="mso-fit-shape-to-text:true;"><![endif]-->
+    <img src="${logoUrl}" alt="${p.companyName}" style="height:44px;max-width:200px;" />
+    <p style="margin:8px 0 0;color:#94a3b8;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;">Sistema de Suporte</p>
+    <!--[if mso]></v:textbox></v:rect><![endif]-->
   </td></tr>
 
-  <!-- Emoji Icon -->
-  <tr><td style="text-align:center;padding:32px 0 8px;">
-    <span style="font-size:56px;">${theme.emoji}</span>
+  <!-- Status banner -->
+  <tr><td style="background:${theme.bgLight};padding:20px 32px;text-align:center;border-bottom:1px solid #e2e8f0;">
+    <span style="font-size:40px;line-height:1;">${theme.emoji}</span>
+    <h1 style="margin:8px 0 0;font-size:22px;color:${theme.color};font-weight:800;letter-spacing:-0.3px;">${theme.heading}</h1>
   </td></tr>
 
-  <!-- Title -->
-  <tr><td style="text-align:center;padding:0 32px 24px;">
-    <h1 style="margin:0;font-size:24px;color:${theme.color};font-weight:700;">${theme.heading}</h1>
+  <!-- Timestamp -->
+  <tr><td style="padding:16px 32px 0;text-align:right;">
+    <p style="margin:0;color:#94a3b8;font-size:12px;">📅 ${dateStr} às ${timeStr}</p>
   </td></tr>
 
   <!-- Body -->
-  <tr><td style="padding:0 32px 24px;">
+  <tr><td style="padding:16px 32px 24px;">
     ${bodyContent}
   </td></tr>
 
+  <!-- Separator -->
+  <tr><td style="padding:0 32px;">
+    <div style="height:1px;background:linear-gradient(to right,transparent,#e2e8f0,transparent);"></div>
+  </td></tr>
+
   <!-- CTA Button -->
-  <tr><td style="padding:0 32px 32px;text-align:center;">
-    <a href="${p.ticketLink}" style="display:inline-block;background:#2563eb;color:#ffffff;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px;">Visualizar detalhes do ticket</a>
+  <tr><td style="padding:24px 32px 32px;text-align:center;">
+    <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${p.ticketLink}" style="height:48px;v-text-anchor:middle;width:280px;" arcsize="17%" strokecolor="#2563eb" fillcolor="#2563eb"><w:anchorlock/><center style="color:#ffffff;font-family:Arial;font-size:15px;font-weight:bold;">Visualizar Ticket</center></v:roundrect><![endif]-->
+    <!--[if !mso]><!-->
+    <a href="${p.ticketLink}" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;box-shadow:0 4px 14px rgba(37,99,235,0.35);letter-spacing:0.3px;">Visualizar Ticket</a>
+    <!--<![endif]-->
   </td></tr>
 
   <!-- Footer -->
-  <tr><td style="background:#1a1a2e;padding:16px 32px;text-align:center;">
-    <p style="margin:0;color:#94a3b8;font-size:13px;">${p.companyName} · Sistema de Suporte</p>
+  <tr><td style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);padding:20px 32px;text-align:center;">
+    <p style="margin:0 0 6px;color:#e2e8f0;font-size:13px;font-weight:600;">${p.companyName}</p>
+    <p style="margin:0 0 8px;color:#64748b;font-size:12px;">Sistema de Suporte Técnico</p>
+    <div style="height:1px;background:rgba(255,255,255,0.1);margin:8px 0;"></div>
+    <p style="margin:0;color:#64748b;font-size:11px;font-style:italic;">Este email foi enviado automaticamente. Por favor, não responda diretamente a esta mensagem.</p>
   </td></tr>
 
 </table>
@@ -338,6 +384,7 @@ Deno.serve(async (req) => {
           message: message || `${senderName} enviou uma atualização.`,
           ticketLink,
           companyName: smtpFromName,
+          senderName,
           resolutionSummary: resolution_summary,
         });
 
