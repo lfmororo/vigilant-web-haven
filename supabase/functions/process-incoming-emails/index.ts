@@ -110,10 +110,10 @@ function decodeBase64Content(str: string, charset = "utf-8"): string {
 
 function parseMimeBody(rawBody: string): string {
   // Check if it's a multipart message
-  const boundaryMatch = rawBody.match(/boundary="?([^"\r\n;]+)"?/i) 
-    || rawBody.match(/------=_([^\r\n\s]+)/);
+  const boundaryParamMatch = rawBody.match(/boundary="?([^"\r\n;]+)"?/i);
+  const boundaryLineMatch = rawBody.match(/(------=_[^\r\n\s]+)/);
   
-  if (!boundaryMatch && !rawBody.includes("NextPart") && !rawBody.includes("boundary")) {
+  if (!boundaryParamMatch && !boundaryLineMatch && !rawBody.includes("NextPart") && !rawBody.includes("boundary")) {
     // Not multipart - check for simple QP encoding
     if (rawBody.includes("Content-Transfer-Encoding: quoted-printable")) {
       const parts = rawBody.split(/\r?\n\r?\n/);
@@ -130,20 +130,13 @@ function parseMimeBody(rawBody: string): string {
     return rawBody;
   }
 
-  // Extract boundary string
+  // Extract boundary string - prefer the boundary= parameter, fallback to detecting delimiter lines
   let boundary = "";
-  if (boundaryMatch) {
-    boundary = boundaryMatch[1] || boundaryMatch[0];
-  }
-  // Also try to find boundary from the raw content
-  const boundaryLineMatch = rawBody.match(/------=_[^\r\n]+/);
-  if (!boundary && boundaryLineMatch) {
-    boundary = boundaryLineMatch[0];
-  }
-  if (boundary.startsWith("------=_")) {
-    // boundary is the full delimiter
-  } else {
-    boundary = "--" + boundary;
+  if (boundaryParamMatch) {
+    boundary = "--" + boundaryParamMatch[1];
+  } else if (boundaryLineMatch) {
+    // Use the full delimiter line as-is (e.g. ------=_NextPart_000_...)
+    boundary = boundaryLineMatch[1];
   }
 
   // Split by boundary
