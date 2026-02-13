@@ -56,15 +56,149 @@ function parseHeaders(headerText: string): Record<string, string> {
 
 function stripHtml(html: string): string {
   return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>/gi, "\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/tr>/gi, "\n")
+    .replace(/<\/li>/gi, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function decodeQuotedPrintable(str: string, charset = "utf-8"): string {
+  // Remove soft line breaks (= at end of line)
+  const cleaned = str.replace(/=\r?\n/g, "");
+  // Decode =XX hex sequences into bytes
+  const bytes: number[] = [];
+  for (let i = 0; i < cleaned.length; i++) {
+    if (cleaned[i] === "=" && i + 2 < cleaned.length) {
+      const hex = cleaned.substring(i + 1, i + 3);
+      if (/^[0-9A-Fa-f]{2}$/.test(hex)) {
+        bytes.push(parseInt(hex, 16));
+        i += 2;
+        continue;
+      }
+    }
+    bytes.push(cleaned.charCodeAt(i));
+  }
+  try {
+    return new TextDecoder(charset.toLowerCase().replace("iso-8859-1", "latin1")).decode(new Uint8Array(bytes));
+  } catch {
+    return new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes));
+  }
+}
+
+function decodeBase64Content(str: string, charset = "utf-8"): string {
+  try {
+    const cleaned = str.replace(/\s/g, "");
+    const binary = atob(cleaned);
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    return new TextDecoder(charset.toLowerCase().replace("iso-8859-1", "latin1")).decode(bytes);
+  } catch {
+    return str;
+  }
+}
+
+function parseMimeBody(rawBody: string): string {
+  // Check if it's a multipart message
+  const boundaryMatch = rawBody.match(/boundary="?([^"\r\n;]+)"?/i) 
+    || rawBody.match(/------=_([^\r\n\s]+)/);
+  
+  if (!boundaryMatch && !rawBody.includes("NextPart") && !rawBody.includes("boundary")) {
+    // Not multipart - check for simple QP encoding
+    if (rawBody.includes("Content-Transfer-Encoding: quoted-printable")) {
+      const parts = rawBody.split(/\r?\n\r?\n/);
+      const headerPart = parts[0] || "";
+      const bodyPart = parts.slice(1).join("\n\n");
+      const charsetMatch = headerPart.match(/charset="?([^"\s;]+)"?/i);
+      const charset = charsetMatch ? charsetMatch[1] : "utf-8";
+      return decodeQuotedPrintable(bodyPart, charset);
+    }
+    // Plain text
+    if (rawBody.includes("<html") || rawBody.includes("<div") || rawBody.includes("<p")) {
+      return stripHtml(rawBody);
+    }
+    return rawBody;
+  }
+
+  // Extract boundary string
+  let boundary = "";
+  if (boundaryMatch) {
+    boundary = boundaryMatch[1] || boundaryMatch[0];
+  }
+  // Also try to find boundary from the raw content
+  const boundaryLineMatch = rawBody.match(/------=_[^\r\n]+/);
+  if (!boundary && boundaryLineMatch) {
+    boundary = boundaryLineMatch[0];
+  }
+  if (boundary.startsWith("------=_")) {
+    // boundary is the full delimiter
+  } else {
+    boundary = "--" + boundary;
+  }
+
+  // Split by boundary
+  const sections = rawBody.split(boundary).filter(s => s.trim() && !s.trim().startsWith("--"));
+
+  let plainText = "";
+  let htmlText = "";
+
+  for (const section of sections) {
+    const dividerIdx = section.search(/\r?\n\r?\n/);
+    if (dividerIdx === -1) continue;
+
+    const sectionHeader = section.substring(0, dividerIdx);
+    const sectionBody = section.substring(dividerIdx).replace(/^\r?\n\r?\n/, "");
+
+    // Check if this section is itself multipart (nested)
+    if (sectionHeader.toLowerCase().includes("multipart/")) {
+      const nestedResult = parseMimeBody(section);
+      if (nestedResult) plainText = nestedResult;
+      continue;
+    }
+
+    const contentTypeMatch = sectionHeader.match(/Content-Type:\s*([^;\r\n]+)/i);
+    const contentType = contentTypeMatch ? contentTypeMatch[1].trim().toLowerCase() : "";
+    const transferMatch = sectionHeader.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
+    const transferEncoding = transferMatch ? transferMatch[1].trim().toLowerCase() : "";
+    const charsetMatch = sectionHeader.match(/charset="?([^"\s;]+)"?/i);
+    const charset = charsetMatch ? charsetMatch[1] : "utf-8";
+
+    // Skip attachments/images
+    if (sectionHeader.toLowerCase().includes("content-disposition: attachment") ||
+        contentType.startsWith("image/") ||
+        contentType.startsWith("application/")) {
+      continue;
+    }
+
+    let decoded = sectionBody.replace(/--\s*$/, "").trim();
+
+    if (transferEncoding === "quoted-printable") {
+      decoded = decodeQuotedPrintable(decoded, charset);
+    } else if (transferEncoding === "base64") {
+      decoded = decodeBase64Content(decoded, charset);
+    }
+
+    if (contentType.includes("text/plain")) {
+      plainText = decoded;
+    } else if (contentType.includes("text/html")) {
+      htmlText = decoded;
+    }
+  }
+
+  // Prefer plain text, fallback to stripped HTML
+  if (plainText) return plainText.trim();
+  if (htmlText) return stripHtml(htmlText);
+  return rawBody;
 }
 
 async function imapCommand(conn: Deno.TlsConn, tag: string, cmd: string): Promise<string> {
@@ -251,13 +385,10 @@ Deno.serve(async (req) => {
         const senderName = extractName(fromRaw);
         const subject = decodeMimeWord(subjectRaw);
 
-        // Parse body
+        // Parse body - handle MIME multipart
         const bodyMatch = bodyResp.match(/\{(\d+)\}\r\n([\s\S]*?)(?=\r\n[bc]\d+ |\r\n\))/);
-        let bodyText = bodyMatch ? bodyMatch[2] : bodyResp.split("\r\n").slice(1).join("\r\n");
-        // Strip HTML if needed
-        if (bodyText.includes("<html") || bodyText.includes("<div") || bodyText.includes("<p")) {
-          bodyText = stripHtml(bodyText);
-        }
+        let rawBody = bodyMatch ? bodyMatch[2] : bodyResp.split("\r\n").slice(1).join("\r\n");
+        let bodyText = parseMimeBody(rawBody);
         bodyText = bodyText.substring(0, 5000); // limit length
 
         // Check if client exists
