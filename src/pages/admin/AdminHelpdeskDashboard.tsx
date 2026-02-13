@@ -64,7 +64,7 @@ const AdminHelpdeskDashboard = () => {
     const open = tickets.filter((t) => t.status === "open").length;
     const inProgress = tickets.filter((t) => t.status === "in_progress").length;
     const waiting = tickets.filter((t) => t.status === "waiting_client").length;
-    const resolved = tickets.filter((t) => t.status === "resolved").length;
+    const resolved = tickets.filter((t) => t.status === "resolved" || t.status === "closed").length;
     const totalOpen = open + inProgress + waiting;
 
     const today = tickets.filter((t) => isToday(new Date(t.created_at))).length;
