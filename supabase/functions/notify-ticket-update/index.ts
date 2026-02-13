@@ -370,6 +370,29 @@ Deno.serve(async (req) => {
     };
     const subject = subjectMap[emailType] || subjectMap.ticket_updated;
 
+    // --- Send Telegram notification (fire-and-forget) ---
+    const telegramPromise = (async () => {
+      try {
+        const telegramUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-telegram`;
+        await fetch(telegramUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            ticket_id,
+            notification_type: emailType,
+            message,
+            sender_name: senderName,
+            resolution_summary,
+          }),
+        });
+      } catch (err) {
+        console.error("Telegram notification failed:", err);
+      }
+    })();
+
     let sent = 0;
     for (const recipient of recipients) {
       try {
@@ -398,6 +421,9 @@ Deno.serve(async (req) => {
         console.error(`Failed to send to ${recipient.email}:`, err);
       }
     }
+
+    // Wait for telegram to finish (best-effort)
+    await telegramPromise;
 
     return new Response(JSON.stringify({ success: true, sent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
