@@ -49,7 +49,7 @@ const AdminHelpdeskDashboard = () => {
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
+  const fetchTickets = () => {
     supabase
       .from("tickets")
       .select("*, client:profiles!tickets_client_id_fkey(full_name), technician:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name)")
@@ -58,6 +58,19 @@ const AdminHelpdeskDashboard = () => {
         setTickets(data || []);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchTickets();
+
+    const channel = supabase
+      .channel("dashboard-tickets")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tickets" }, () => {
+        fetchTickets();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const metrics = useMemo(() => {

@@ -17,7 +17,7 @@ const AdminTicketDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { isAdmin, isTechnician } = useAuth();
+  const { isAdmin, isTechnician, user } = useAuth();
   const [ticket, setTicket] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [technicians, setTechnicians] = useState<any[]>([]);
@@ -47,11 +47,38 @@ const AdminTicketDetail = () => {
     }
   }, [id, isAdmin]);
 
+  const statusLabels: Record<string, string> = {
+    open: "Aberto", in_progress: "Em Andamento", waiting_client: "Aguardando Cliente",
+    resolved: "Resolvido", closed: "Fechado",
+  };
+
   const updateTicket = async (field: string, value: string) => {
     setUpdating(true);
     const { error } = await supabase.from("tickets").update({ [field]: value || null } as any).eq("id", id!);
-    if (error) toast({ variant: "destructive", title: "Erro", description: error.message });
-    else { toast({ title: "Atualizado!" }); fetchTicket(); }
+    if (error) {
+      toast({ variant: "destructive", title: "Erro", description: error.message });
+    } else {
+      toast({ title: "Atualizado!" });
+      fetchTicket();
+
+      // Fire-and-forget email notification
+      let message = "";
+      if (field === "assigned_to") {
+        const tech = technicians.find((t) => t.id === value);
+        message = `O técnico ${tech?.full_name || "desconhecido"} foi atribuído ao chamado.`;
+      } else if (field === "status") {
+        message = `O status do chamado foi alterado para ${statusLabels[value] || value}.`;
+      } else if (field === "priority") {
+        const priorityLabels: Record<string, string> = { low: "Baixa", medium: "Média", high: "Alta", urgent: "Urgente" };
+        message = `A prioridade do chamado foi alterada para ${priorityLabels[value] || value}.`;
+      }
+
+      if (message) {
+        supabase.functions.invoke("notify-ticket-update", {
+          body: { ticket_id: id, sender_id: user?.id, message, is_internal: false },
+        }).catch(() => {});
+      }
+    }
     setUpdating(false);
   };
 
