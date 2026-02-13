@@ -10,13 +10,15 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Loader2 } from "lucide-react";
+import { formatTimeAgo } from "@/lib/formatTimeAgo";
 
 const AdminTicketsManagement = () => {
   const { user, isAdmin } = useAuth();
   const [tickets, setTickets] = useState<any[]>([]);
+  const [lastMessages, setLastMessages] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("open");
   const [priorityFilter, setPriorityFilter] = useState("all");
 
   useEffect(() => {
@@ -24,12 +26,28 @@ const AdminTicketsManagement = () => {
       .select("*, client:profiles!tickets_client_id_fkey(full_name), assigned:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name)")
       .order("created_at", { ascending: false });
 
-    // RLS already filters for technicians, but we can be explicit
     if (!isAdmin && user) {
       query = query.eq("assigned_to", user.id);
     }
 
-    query.then(({ data }) => { setTickets(data || []); setLoading(false); });
+    query.then(async ({ data }) => {
+      const tks = data || [];
+      setTickets(tks);
+      if (tks.length > 0) {
+        const ids = tks.map((t: any) => t.id);
+        const { data: msgs } = await supabase
+          .from("ticket_messages")
+          .select("ticket_id, created_at")
+          .in("ticket_id", ids)
+          .order("created_at", { ascending: false });
+        const map: Record<string, string> = {};
+        (msgs || []).forEach((m: any) => {
+          if (!map[m.ticket_id]) map[m.ticket_id] = m.created_at;
+        });
+        setLastMessages(map);
+      }
+      setLoading(false);
+    });
   }, [isAdmin, user]);
 
   const filtered = tickets.filter((t) => {
@@ -89,12 +107,14 @@ const AdminTicketsManagement = () => {
                     <TableHead>Técnico</TableHead>
                     <TableHead>Prioridade</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Tempo Aberto</TableHead>
+                    <TableHead>Sem Interação</TableHead>
                     <TableHead>Data</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhum chamado encontrado</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">Nenhum chamado encontrado</TableCell></TableRow>
                   ) : filtered.map((t) => (
                     <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50">
                       <TableCell><Link to={`/admin/tickets/${t.id}`} className="font-mono text-xs">{t.ticket_number}</Link></TableCell>
@@ -104,6 +124,8 @@ const AdminTicketsManagement = () => {
                       <TableCell className="text-muted-foreground">{t.assigned?.full_name || "Não atribuído"}</TableCell>
                       <TableCell><PriorityBadge priority={t.priority} /></TableCell>
                       <TableCell><TicketStatusBadge status={t.status} /></TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(t.created_at)}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(lastMessages[t.id] || t.created_at)}</TableCell>
                       <TableCell className="text-muted-foreground">{new Date(t.created_at).toLocaleDateString("pt-BR")}</TableCell>
                     </TableRow>
                   ))}

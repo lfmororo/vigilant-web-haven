@@ -11,19 +11,38 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Search, Loader2 } from "lucide-react";
+import { formatTimeAgo } from "@/lib/formatTimeAgo";
 
 const ClientTicketsList = () => {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<any[]>([]);
+  const [lastMessages, setLastMessages] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("open");
 
   useEffect(() => {
     if (!user) return;
     supabase.from("tickets").select("*, equipment_type:equipment_types(name)")
       .eq("client_id", user.id).order("created_at", { ascending: false })
-      .then(({ data }) => { setTickets(data || []); setLoading(false); });
+      .then(async ({ data }) => {
+        const tks = data || [];
+        setTickets(tks);
+        if (tks.length > 0) {
+          const ids = tks.map((t: any) => t.id);
+          const { data: msgs } = await supabase
+            .from("ticket_messages")
+            .select("ticket_id, created_at")
+            .in("ticket_id", ids)
+            .order("created_at", { ascending: false });
+          const map: Record<string, string> = {};
+          (msgs || []).forEach((m: any) => {
+            if (!map[m.ticket_id]) map[m.ticket_id] = m.created_at;
+          });
+          setLastMessages(map);
+        }
+        setLoading(false);
+      });
   }, [user]);
 
   const filtered = tickets.filter((t) => {
@@ -71,12 +90,14 @@ const ClientTicketsList = () => {
                     <TableHead>Equipamento</TableHead>
                     <TableHead>Prioridade</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Tempo Aberto</TableHead>
+                    <TableHead>Sem Interação</TableHead>
                     <TableHead>Data</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum chamado encontrado</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhum chamado encontrado</TableCell></TableRow>
                   ) : filtered.map((t) => (
                     <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50" onClick={() => window.location.href = `/helpdesk/tickets/${t.id}`}>
                       <TableCell className="font-mono text-xs">{t.ticket_number}</TableCell>
@@ -84,6 +105,8 @@ const ClientTicketsList = () => {
                       <TableCell className="text-muted-foreground">{t.equipment_type?.name || "-"}</TableCell>
                       <TableCell><PriorityBadge priority={t.priority} /></TableCell>
                       <TableCell><TicketStatusBadge status={t.status} /></TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(t.created_at)}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(lastMessages[t.id] || t.created_at)}</TableCell>
                       <TableCell className="text-muted-foreground">{new Date(t.created_at).toLocaleDateString("pt-BR")}</TableCell>
                     </TableRow>
                   ))}
