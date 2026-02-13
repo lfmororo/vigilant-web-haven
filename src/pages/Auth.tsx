@@ -29,6 +29,10 @@ const Auth = () => {
     if (!loading && user && role) {
       if (role === "admin") {
         navigate("/admin");
+      } else if (role === "technician") {
+        navigate("/admin/helpdesk");
+      } else if (role === "client") {
+        navigate("/helpdesk");
       } else {
         navigate("/dashboard");
       }
