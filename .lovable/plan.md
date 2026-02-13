@@ -1,46 +1,21 @@
 
 
-## Melhorar Notificacoes por Email - Template HTML Elegante
+## Padronizar Template de Novo Chamado com os Demais
 
 ### Resumo
-Atualizar todos os templates de email do sistema para um design mais moderno, profissional e consistente, com logo da FM TechFlow em todas as funcoes de envio.
+O email de "Novo Chamado Aberto" ja usa o mesmo layout externo (header com logo, gradiente, footer), porem o conteudo interno e mais simples que os outros tipos. A alteracao vai adicionar a descricao do chamado em um bloco estilizado, igual ao bloco "Nova Mensagem" do template de atualizacao.
 
 ### O que sera feito
 
-**1. Template do `notify-ticket-update` (refinamento visual)**
-- Adicionar gradiente sutil no header em vez de cor solida
-- Melhorar a tabela de dados com bordas arredondadas e sombras leves
-- Adicionar icone visual para cada tipo de prioridade (alem da cor)
-- Incluir separador visual elegante entre secoes
-- Adicionar data/hora da notificacao no corpo do email
-- Melhorar o botao CTA com efeito de hover (usando MSO para Outlook)
-- Adicionar texto de rodape com "Este email foi enviado automaticamente, nao responda"
-- Incluir o nome do remetente da mensagem no template de atualizacao
-
-**2. Template do `daily-ticket-summary` (adicionar logo + melhorar)**
-- Adicionar a logo da FM TechFlow no header (igual ao notify-ticket-update)
-- Usar o `app_base_url` das configuracoes para o link do dashboard (corrigir bug atual que usa URL errada)
-- Manter o design atual que ja esta bom, apenas alinhar com o padrao visual
-
-**3. Template do `test-smtp-connection` (converter para HTML)**
-- Converter de texto puro para template HTML elegante
-- Usar o mesmo layout base (header com logo, footer com empresa)
-- Incluir informacoes de teste como data/hora e servidor utilizado
+**Adicionar bloco de descricao ao template `ticket_opened`**
+- Incluir a descricao/mensagem inicial do chamado em um bloco estilizado com borda lateral colorida (igual ao bloco "Nova Mensagem" do tipo `ticket_updated`)
+- O bloco tera o titulo "Descricao do Chamado" com a cor azul (#2563eb) do tema de novo chamado
+- Manter a tabela de informacoes (numero, assunto, categoria, prioridade) que ja existe
 
 ### Detalhes Tecnicos
 
 **Arquivo:** `supabase/functions/notify-ticket-update/index.ts`
-- Refinar a funcao `buildEmailHtml` com melhorias visuais
-- Adicionar campo `senderName` ao `EmailParams` para exibir quem enviou
-- Melhorar estilos inline para maior compatibilidade com clientes de email (Outlook, Gmail, etc.)
+- Linhas 60-70: Adicionar apos a tabela de informacoes um bloco `div` com `border-left: 4px solid #2563eb` contendo a mensagem/descricao do chamado
+- O bloco seguira o mesmo padrao visual do bloco "Nova Mensagem" (linhas 108-111) mas com cor azul e titulo "Descricao do Chamado"
 
-**Arquivo:** `supabase/functions/daily-ticket-summary/index.ts`
-- Adicionar logo no header usando a mesma URL do storage
-- Corrigir `baseUrl` para usar `app_base_url` das settings (linha 276 atualmente usa URL incorreta)
-
-**Arquivo:** `supabase/functions/test-smtp-connection/index.ts`
-- Criar template HTML para o email de teste
-- Usar a logo do storage e manter consistencia visual
-
-**Deploy:** As 3 funcoes serao re-deployadas automaticamente apos as alteracoes.
-
+**Deploy:** A funcao sera re-deployada automaticamente.
