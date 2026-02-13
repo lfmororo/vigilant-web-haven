@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Save, Loader2, Mail, Send } from "lucide-react";
+import { Eye, EyeOff, Save, Loader2, Mail, Send, TestTube } from "lucide-react";
 
 const SystemSettings = () => {
   const { user } = useAuth();
@@ -34,6 +34,8 @@ const SystemSettings = () => {
   });
 
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
+  const [testingImap, setTestingImap] = useState(false);
+  const [testingSmtp, setTestingSmtp] = useState(false);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ["system-settings"],
@@ -102,6 +104,73 @@ const SystemSettings = () => {
 
   const togglePassword = (field: string) => {
     setShowPasswords((prev) => ({ ...prev, [field]: !prev[field] }));
+  };
+
+  const handleTestImap = async () => {
+    setTestingImap(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-imap-connection`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionData.session?.access_token}`,
+          },
+          body: JSON.stringify({
+            host: imapForm.email_imap_host,
+            port: imapForm.email_imap_port,
+            user: imapForm.email_imap_user,
+            password: imapForm.email_imap_password,
+          }),
+        }
+      );
+      const result = await res.json();
+      toast({
+        title: result.success ? "Teste IMAP" : "Falha no teste IMAP",
+        description: result.message || result.error,
+        variant: result.success ? "default" : "destructive",
+      });
+    } catch {
+      toast({ title: "Erro ao testar conexão IMAP", variant: "destructive" });
+    } finally {
+      setTestingImap(false);
+    }
+  };
+
+  const handleTestSmtp = async () => {
+    setTestingSmtp(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-smtp-connection`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionData.session?.access_token}`,
+          },
+          body: JSON.stringify({
+            host: smtpForm.smtp_host,
+            port: smtpForm.smtp_port,
+            user: smtpForm.smtp_user,
+            password: smtpForm.smtp_password,
+            from_name: smtpForm.smtp_from_name,
+          }),
+        }
+      );
+      const result = await res.json();
+      toast({
+        title: result.success ? "Teste SMTP" : "Falha no teste SMTP",
+        description: result.message || result.error,
+        variant: result.success ? "default" : "destructive",
+      });
+    } catch {
+      toast({ title: "Erro ao testar conexão SMTP", variant: "destructive" });
+    } finally {
+      setTestingSmtp(false);
+    }
   };
 
   if (isLoading) {
@@ -194,10 +263,16 @@ const SystemSettings = () => {
                     </button>
                   </div>
                 </div>
-                <Button onClick={handleSaveImap} disabled={saveMutation.isPending} className="gap-2">
-                  {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Salvar
-                </Button>
+                <div className="flex gap-3">
+                  <Button onClick={handleSaveImap} disabled={saveMutation.isPending} className="gap-2">
+                    {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Salvar
+                  </Button>
+                  <Button variant="outline" onClick={handleTestImap} disabled={testingImap} className="gap-2">
+                    {testingImap ? <Loader2 className="w-4 h-4 animate-spin" /> : <TestTube className="w-4 h-4" />}
+                    Testar Conexão
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -279,10 +354,16 @@ const SystemSettings = () => {
                   />
                   <Label htmlFor="notification_enabled">Ativar notificações por email</Label>
                 </div>
-                <Button onClick={handleSaveSmtp} disabled={saveMutation.isPending} className="gap-2">
-                  {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Salvar
-                </Button>
+                <div className="flex gap-3">
+                  <Button onClick={handleSaveSmtp} disabled={saveMutation.isPending} className="gap-2">
+                    {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Salvar
+                  </Button>
+                  <Button variant="outline" onClick={handleTestSmtp} disabled={testingSmtp} className="gap-2">
+                    {testingSmtp ? <Loader2 className="w-4 h-4 animate-spin" /> : <TestTube className="w-4 h-4" />}
+                    Enviar Email de Teste
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
