@@ -22,25 +22,29 @@ interface AdminLayoutProps {
   children: ReactNode;
 }
 
-const navItems = [
-  { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { label: "Usuários", href: "/admin/users", icon: Users },
-  { label: "Clientes", href: "/admin/clients", icon: UserCheck },
-  { label: "Câmeras", href: "/admin/cameras", icon: Camera },
-  { label: "Inventário", href: "/admin/inventory", icon: Package },
-  { label: "Suporte", href: "/admin/helpdesk", icon: Headphones },
-  { label: "Chamados", href: "/admin/tickets", icon: TicketCheck },
-  { label: "Ordens de Serviço", href: "/admin/service-orders", icon: FileText },
+const allNavItems = [
+  { label: "Dashboard", href: "/admin", icon: LayoutDashboard, roles: ["admin"] },
+  { label: "Usuários", href: "/admin/users", icon: Users, roles: ["admin"] },
+  { label: "Clientes", href: "/admin/clients", icon: UserCheck, roles: ["admin"] },
+  { label: "Câmeras", href: "/admin/cameras", icon: Camera, roles: ["admin"] },
+  { label: "Inventário", href: "/admin/inventory", icon: Package, roles: ["admin"] },
+  { label: "Suporte", href: "/admin/helpdesk", icon: Headphones, roles: ["admin"] },
+  { label: "Chamados", href: "/admin/tickets", icon: TicketCheck, roles: ["admin", "technician"] },
+  { label: "Ordens de Serviço", href: "/admin/service-orders", icon: FileText, roles: ["admin", "technician"] },
 ];
 
 const AdminLayout = ({ children }: AdminLayoutProps) => {
-  const { signOut } = useAuth();
+  const { signOut, role } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const navItems = allNavItems.filter((item) => item.roles.includes(role || ""));
 
   const handleSignOut = async () => {
     await signOut();
   };
+
+  const panelLabel = role === "technician" ? "Painel Técnico" : "Painel Admin";
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -68,7 +72,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
               </div>
               <div>
                 <span className="font-display font-bold text-lg">SecureTech</span>
-                <p className="text-xs text-muted-foreground">Painel Admin</p>
+                <p className="text-xs text-muted-foreground">{panelLabel}</p>
               </div>
             </Link>
           </div>

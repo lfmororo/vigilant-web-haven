@@ -20,9 +20,10 @@ interface Message {
 interface TicketChatProps {
   ticketId: string;
   isAdmin?: boolean;
+  isStaff?: boolean;
 }
 
-const TicketChat = ({ ticketId, isAdmin = false }: TicketChatProps) => {
+const TicketChat = ({ ticketId, isAdmin = false, isStaff = false }: TicketChatProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -30,6 +31,8 @@ const TicketChat = ({ ticketId, isAdmin = false }: TicketChatProps) => {
   const [isInternal, setIsInternal] = useState(false);
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const canSendInternal = isAdmin || isStaff;
 
   const fetchMessages = async () => {
     const { data } = await supabase
@@ -62,7 +65,7 @@ const TicketChat = ({ ticketId, isAdmin = false }: TicketChatProps) => {
       ticket_id: ticketId,
       sender_id: user.id,
       message: newMessage.trim(),
-      is_internal: isAdmin ? isInternal : false,
+      is_internal: canSendInternal ? isInternal : false,
     });
     if (error) {
       toast({ variant: "destructive", title: "Erro ao enviar mensagem", description: error.message });
@@ -102,10 +105,10 @@ const TicketChat = ({ ticketId, isAdmin = false }: TicketChatProps) => {
       </div>
 
       <div className="border-t border-border p-4 space-y-2">
-        {isAdmin && (
+        {canSendInternal && (
           <div className="flex items-center gap-2">
             <Checkbox id="internal" checked={isInternal} onCheckedChange={(v) => setIsInternal(!!v)} />
-            <label htmlFor="internal" className="text-xs text-muted-foreground cursor-pointer">Nota interna (somente admin)</label>
+            <label htmlFor="internal" className="text-xs text-muted-foreground cursor-pointer">Nota interna (somente equipe)</label>
           </div>
         )}
         <div className="flex gap-2">

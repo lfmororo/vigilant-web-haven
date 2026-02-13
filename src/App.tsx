@@ -47,7 +47,7 @@ const App = () => (
               <Route path="/helpdesk/tickets/new" element={<AuthGuard><NewTicket /></AuthGuard>} />
               <Route path="/helpdesk/tickets/:id" element={<AuthGuard><ClientTicketDetail /></AuthGuard>} />
               <Route path="/helpdesk/orders" element={<AuthGuard><ClientServiceOrders /></AuthGuard>} />
-              <Route path="/admin" element={<AuthGuard requireAdmin><AdminDashboard /></AuthGuard>} />
+              <Route path="/admin" element={<AuthGuard requireAdminOrTechnician><AdminDashboard /></AuthGuard>} />
               <Route path="/admin/users" element={<AuthGuard requireAdmin><UsersManagement /></AuthGuard>} />
               <Route path="/admin/cameras" element={<AuthGuard requireAdmin><CamerasManagement /></AuthGuard>} />
               <Route path="/admin/users/:userId/cameras" element={<AuthGuard requireAdmin><UserCamerasManagement /></AuthGuard>} />
@@ -55,10 +55,10 @@ const App = () => (
               <Route path="/admin/inventory" element={<AuthGuard requireAdmin><EquipmentInventory /></AuthGuard>} />
               <Route path="/admin/inventory/:id" element={<AuthGuard requireAdmin><EquipmentDetail /></AuthGuard>} />
               <Route path="/admin/helpdesk" element={<AuthGuard requireAdmin><AdminHelpdeskDashboard /></AuthGuard>} />
-              <Route path="/admin/tickets" element={<AuthGuard requireAdmin><AdminTicketsManagement /></AuthGuard>} />
-              <Route path="/admin/tickets/:id" element={<AuthGuard requireAdmin><AdminTicketDetail /></AuthGuard>} />
-              <Route path="/admin/service-orders" element={<AuthGuard requireAdmin><AdminServiceOrders /></AuthGuard>} />
-              <Route path="/admin/service-orders/:id" element={<AuthGuard requireAdmin><AdminServiceOrderDetail /></AuthGuard>} />
+              <Route path="/admin/tickets" element={<AuthGuard requireAdminOrTechnician><AdminTicketsManagement /></AuthGuard>} />
+              <Route path="/admin/tickets/:id" element={<AuthGuard requireAdminOrTechnician><AdminTicketDetail /></AuthGuard>} />
+              <Route path="/admin/service-orders" element={<AuthGuard requireAdminOrTechnician><AdminServiceOrders /></AuthGuard>} />
+              <Route path="/admin/service-orders/:id" element={<AuthGuard requireAdminOrTechnician><AdminServiceOrderDetail /></AuthGuard>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

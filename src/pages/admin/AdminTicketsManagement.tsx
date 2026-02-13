@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import AdminLayout from "@/components/admin/AdminLayout";
 import TicketStatusBadge from "@/components/helpdesk/TicketStatusBadge";
 import PriorityBadge from "@/components/helpdesk/PriorityBadge";
@@ -11,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Search, Loader2 } from "lucide-react";
 
 const AdminTicketsManagement = () => {
+  const { user, isAdmin } = useAuth();
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -18,11 +20,17 @@ const AdminTicketsManagement = () => {
   const [priorityFilter, setPriorityFilter] = useState("all");
 
   useEffect(() => {
-    supabase.from("tickets")
+    let query = supabase.from("tickets")
       .select("*, client:profiles!tickets_client_id_fkey(full_name), assigned:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name)")
-      .order("created_at", { ascending: false })
-      .then(({ data }) => { setTickets(data || []); setLoading(false); });
-  }, []);
+      .order("created_at", { ascending: false });
+
+    // RLS already filters for technicians, but we can be explicit
+    if (!isAdmin && user) {
+      query = query.eq("assigned_to", user.id);
+    }
+
+    query.then(({ data }) => { setTickets(data || []); setLoading(false); });
+  }, [isAdmin, user]);
 
   const filtered = tickets.filter((t) => {
     const matchSearch = !search || t.title.toLowerCase().includes(search.toLowerCase()) || String(t.ticket_number).includes(search) || t.client?.full_name?.toLowerCase().includes(search.toLowerCase());
@@ -34,7 +42,9 @@ const AdminTicketsManagement = () => {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <h1 className="text-2xl font-display font-bold">Gestão de Chamados</h1>
+        <h1 className="text-2xl font-display font-bold">
+          {isAdmin ? "Gestão de Chamados" : "Meus Chamados"}
+        </h1>
 
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
