@@ -1,79 +1,80 @@
 
-## Ordem de Servico para Impressao - Layout Completo
+## Notificacoes por E-mail com Templates HTML para Tickets
 
-Implementar um botao "Imprimir OS" na pagina de detalhe da OS que gera um layout para impressao identico ao PDF de exemplo, com todos os campos necessarios adicionados ao banco de dados.
-
----
-
-### 1. Alteracoes no Banco de Dados
-
-Adicionar campos faltantes nas tabelas existentes:
-
-**Tabela `profiles`** (endereco do cliente):
-- `address` (text) - Endereco/Rua
-- `address_number` (text) - Numero
-- `address_complement` (text) - Complemento
-- `neighborhood` (text) - Bairro
-- `city` (text) - Cidade
-
-**Tabela `service_orders`** (campos da OS):
-- `arrival_date` (timestamptz) - Data de chegada
-- `departure_date` (timestamptz) - Data de saida
-- `travel_cost` (numeric, default 0) - Valor de deslocamento
-- `equipment_removed` (text) - Equipamento retirado
-- `material_used` (text) - Descricao do material utilizado
-- `service_description` (text) - Descricao do servico realizado
-- `checked_by` (text) - Conferido por
-- `technician_signature` (text) - Assinatura do tecnico (texto/nome)
-- `client_signature` ja existe na tabela
+Atualizar o sistema de notificacoes por e-mail para usar templates HTML visuais e profissionais, baseados nos modelos da imagem de referencia. Cada situacao do ticket tera um template especifico.
 
 ---
 
-### 2. Atualizar Formulario da OS (AdminServiceOrderDetail.tsx)
+### Templates de E-mail (4 modelos)
 
-Adicionar os novos campos no formulario de edicao:
-- Secao "Servico": descricao do servico, equipamento retirado, material utilizado
-- Secao "Datas": data chegada, data saida
-- Secao "Custos": valor de deslocamento (junto ao campo existente de mao de obra)
-- Secao "Configuracoes": conferido por
+1. **Ticket Aberto** - Quando um novo ticket e criado pelo cliente
+   - Titulo: "Ticket Aberto"
+   - Conteudo: numero do ticket, assunto, categoria do equipamento, prioridade
+   - Botao: "Visualizar detalhes do ticket"
 
----
+2. **Ticket Atualizado** - Quando ha nova mensagem ou mudanca de status/prioridade/tecnico
+   - Titulo: "Ticket Atualizado"
+   - Conteudo: numero do ticket, assunto, categoria, prioridade, descricao da atualizacao
+   - Botao: "Visualizar detalhes do ticket"
 
-### 3. Criar Componente de Impressao (ServiceOrderPrint.tsx)
+3. **Ticket Resolvido** - Quando o status muda para "resolved"
+   - Titulo: "Ticket Resolvido"
+   - Conteudo: numero do ticket, categoria, sumario da resolucao
+   - Botao: "Visualizar detalhes do ticket"
 
-Novo componente `src/components/admin/ServiceOrderPrint.tsx` com layout identico ao PDF:
+4. **Ticket Encerrado** - Quando o status muda para "closed"
+   - Titulo: "Ticket Encerrado"
+   - Conteudo: numero do ticket, sumario, mensagem de agradecimento
+   - Botao: "Visualizar detalhes do ticket"
 
-**Pagina 1 - Cabecalho e Historico:**
-- Logo/dados da empresa (buscados de `system_settings`)
-- Titulo "Ordem de servico ID: #N"
-- Dados do cliente em grid: nome, endereco, numero, complemento, bairro, cidade, contato, telefone
-- Categoria (tipo de equipamento do ticket vinculado)
-- Assunto do problema (titulo do ticket)
-- Descricao do problema
-- Acompanhamentos: tabela com data, hora, responsavel, acao e descricao (mensagens do ticket)
-
-**Pagina 2 - Resumo do Servico:**
-- Descricao do servico realizado
-- Equipamento retirado
-- Material utilizado
-- Grid: Tecnico | Conferido por
-- Grid: Data chegada | Data saida
-- Grid: Data criacao | Data ultima atualizacao
-- Grid: Pecas | Mao de obra | Valor total | Valor de deslocamento
-- Areas de assinatura: tecnico e cliente
+Cada template segue o layout visual:
+- Cabecalho azul com "Notificacao de Ticket de Suporte"
+- Ilustracao tematica (via emoji/icone em HTML)
+- Titulo em destaque
+- Corpo com dados do ticket
+- Botao azul de acao
+- Rodape azul com nome da empresa
 
 ---
 
-### 4. Botao de Impressao
+### Alteracoes Necessarias
 
-Adicionar botao "Imprimir" ao lado do botao "Salvar" na pagina `AdminServiceOrderDetail.tsx`. Ao clicar, abre o componente de impressao em uma nova janela ou usa `window.print()` com CSS `@media print` para ocultar elementos da interface e exibir apenas o layout da OS.
+#### 1. Edge Function `notify-ticket-update`
+
+Refatorar para:
+- Aceitar um campo `notification_type` no body: `"ticket_opened"`, `"ticket_updated"`, `"ticket_resolved"`, `"ticket_closed"`
+- Aceitar campos extras opcionais: `category`, `priority_label`, `resolution_summary`
+- Gerar HTML do e-mail com base no tipo, usando uma funcao `buildEmailHtml()` que monta o template correto
+- Alterar o `Content-Type` do e-mail de `text/plain` para `text/html`
+- Buscar dados extras do ticket (equipment_type name) para preencher a "Categoria"
+
+#### 2. Frontend - `NewTicket.tsx`
+
+- Apos criar o ticket com sucesso, disparar notificacao com `notification_type: "ticket_opened"` para alertar os administradores sobre o novo chamado
+
+#### 3. Frontend - `AdminTicketDetail.tsx`
+
+- Ao mudar status para `resolved`: enviar com `notification_type: "ticket_resolved"`
+- Ao mudar status para `closed`: enviar com `notification_type: "ticket_closed"`
+- Demais mudancas (status, prioridade, tecnico): enviar com `notification_type: "ticket_updated"`
+
+#### 4. Frontend - `TicketChat.tsx`
+
+- Mensagens no chat continuam usando `notification_type: "ticket_updated"`
 
 ---
 
 ### Detalhes Tecnicos
 
-- O componente de impressao busca os dados do ticket vinculado (via `ticket_id`) incluindo mensagens (`ticket_messages`) para montar a tabela de acompanhamentos
-- Busca dados da empresa de `system_settings` (chaves como `company_name`, `company_address`, `company_phone`, `company_cnpj`)
-- CSS com `@media print` para esconder navbar/sidebar e mostrar apenas o conteudo da OS
-- Layout usa classes Tailwind com `print:` prefix para estilizacao de impressao
-- Os novos campos no profiles serao editaveis na pagina de gestao de clientes existente
+**Funcao `buildEmailHtml()`** na edge function:
+- Recebe: tipo, nome destinatario, numero do ticket, titulo, categoria, prioridade, mensagem, link, nome da empresa, resolucao
+- Retorna string HTML com inline CSS (compatibilidade com clientes de e-mail)
+- Layout: tabela centralizada com largura maxima de 600px
+- Cabecalho: fundo `#2563eb`, texto branco
+- Corpo: fundo branco, textos em cinza/preto
+- Botao: fundo `#2563eb`, texto branco, border-radius
+- Rodape: fundo `#2563eb`, texto branco com nome da empresa
+
+**Mudanca no SMTP**: Alterar header `Content-Type: text/plain` para `Content-Type: text/html; charset=utf-8` na funcao `sendSmtpEmail`
+
+**Compatibilidade**: Manter retrocompatibilidade - se `notification_type` nao for enviado, usar template "ticket_updated" como padrao
