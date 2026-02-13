@@ -3,7 +3,8 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Shield, TicketCheck, FileText, LayoutDashboard, LogOut, Menu, ArrowLeft } from "lucide-react";
+import { TicketCheck, FileText, LayoutDashboard, LogOut, Menu, ArrowLeft } from "lucide-react";
+import fmLogo from "@/assets/fm-techflow-logo.png";
 
 interface HelpdeskLayoutProps {
   children: ReactNode;
@@ -33,13 +34,8 @@ const HelpdeskLayout = ({ children }: HelpdeskLayoutProps) => {
         <div className="flex flex-col h-full">
           <div className="p-6 border-b border-border">
             <Link to="/helpdesk" className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Shield className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <span className="font-display font-bold text-lg">SecureTech</span>
-                <p className="text-xs text-muted-foreground">Central de Suporte</p>
-              </div>
+              <img src={fmLogo} alt="FM TechFlow" className="h-9" />
+              <p className="text-xs text-muted-foreground">Central de Suporte</p>
             </Link>
           </div>
 
@@ -80,10 +76,7 @@ const HelpdeskLayout = ({ children }: HelpdeskLayoutProps) => {
             <button onClick={() => setSidebarOpen(true)} className="p-2 hover:bg-muted rounded-lg">
               <Menu className="w-6 h-6" />
             </button>
-            <div className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-primary" />
-              <span className="font-display font-bold">Suporte</span>
-            </div>
+            <img src={fmLogo} alt="FM TechFlow" className="h-8" />
             <div className="w-10" />
           </div>
         </header>
