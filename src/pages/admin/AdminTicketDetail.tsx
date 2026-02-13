@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import AdminLayout from "@/components/admin/AdminLayout";
 import TicketStatusBadge from "@/components/helpdesk/TicketStatusBadge";
 import PriorityBadge from "@/components/helpdesk/PriorityBadge";
@@ -16,10 +17,13 @@ const AdminTicketDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { isAdmin, isTechnician } = useAuth();
   const [ticket, setTicket] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [updating, setUpdating] = useState(false);
+
+  const isStaff = isAdmin || isTechnician;
 
   const fetchTicket = () => {
     if (!id) return;
@@ -31,16 +35,17 @@ const AdminTicketDetail = () => {
 
   useEffect(() => {
     fetchTicket();
-    // Fetch only technicians
-    supabase.from("user_roles").select("user_id").eq("role", "technician" as any)
-      .then(async ({ data: roleData }) => {
-        if (roleData && roleData.length > 0) {
-          const ids = roleData.map(r => r.user_id);
-          const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", ids);
-          setTechnicians(profiles || []);
-        }
-      });
-  }, [id]);
+    if (isAdmin) {
+      supabase.from("user_roles").select("user_id").eq("role", "technician" as any)
+        .then(async ({ data: roleData }) => {
+          if (roleData && roleData.length > 0) {
+            const ids = roleData.map(r => r.user_id);
+            const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+            setTechnicians(profiles || []);
+          }
+        });
+    }
+  }, [id, isAdmin]);
 
   const updateTicket = async (field: string, value: string) => {
     setUpdating(true);
@@ -84,7 +89,7 @@ const AdminTicketDetail = () => {
             <Card>
               <CardHeader><CardTitle>Mensagens</CardTitle></CardHeader>
               <CardContent className="p-0">
-                <TicketChat ticketId={ticket.id} isAdmin />
+                <TicketChat ticketId={ticket.id} isStaff={isStaff} />
               </CardContent>
             </Card>
           </div>
@@ -118,17 +123,25 @@ const AdminTicketDetail = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Técnico Responsável</Label>
-                  <Select value={ticket.assigned_to || ""} onValueChange={(v) => updateTicket("assigned_to", v)} disabled={updating}>
-                    <SelectTrigger><SelectValue placeholder="Selecionar técnico" /></SelectTrigger>
-                    <SelectContent>
-                      {technicians.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {isAdmin && (
+                  <div className="space-y-2">
+                    <Label>Técnico Responsável</Label>
+                    <Select value={ticket.assigned_to || ""} onValueChange={(v) => updateTicket("assigned_to", v)} disabled={updating}>
+                      <SelectTrigger><SelectValue placeholder="Selecionar técnico" /></SelectTrigger>
+                      <SelectContent>
+                        {technicians.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {isTechnician && ticket.assigned?.full_name && (
+                  <div className="space-y-2">
+                    <Label>Técnico Responsável</Label>
+                    <p className="text-sm text-muted-foreground">{ticket.assigned.full_name}</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
