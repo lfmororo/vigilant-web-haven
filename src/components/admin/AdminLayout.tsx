@@ -15,8 +15,8 @@ import {
   Headphones,
   UserCheck,
   Package,
-  Settings,
-} from "lucide-react";
+  Settings } from
+"lucide-react";
 import fmLogo from "@/assets/fm-techflow-logo.png";
 
 interface AdminLayoutProps {
@@ -24,16 +24,16 @@ interface AdminLayoutProps {
 }
 
 const allNavItems = [
-  { label: "Dashboard", href: "/admin", icon: LayoutDashboard, roles: ["admin"] },
-  { label: "Usuários", href: "/admin/users", icon: Users, roles: ["admin"] },
-  { label: "Clientes", href: "/admin/clients", icon: UserCheck, roles: ["admin"] },
-  { label: "Câmeras", href: "/admin/cameras", icon: Camera, roles: ["admin"] },
-  { label: "Inventário", href: "/admin/inventory", icon: Package, roles: ["admin"] },
-  { label: "Dashboard Suporte", href: "/admin/helpdesk", icon: Headphones, roles: ["admin", "technician"] },
-  { label: "Chamados", href: "/admin/tickets", icon: TicketCheck, roles: ["admin", "technician"] },
-  { label: "Ordens de Serviço", href: "/admin/service-orders", icon: FileText, roles: ["admin", "technician"] },
-  { label: "Configurações", href: "/admin/settings", icon: Settings, roles: ["admin"] },
-];
+{ label: "Dashboard", href: "/admin", icon: LayoutDashboard, roles: ["admin"] },
+{ label: "Usuários", href: "/admin/users", icon: Users, roles: ["admin"] },
+{ label: "Clientes", href: "/admin/clients", icon: UserCheck, roles: ["admin"] },
+{ label: "Câmeras", href: "/admin/cameras", icon: Camera, roles: ["admin"] },
+{ label: "Inventário", href: "/admin/inventory", icon: Package, roles: ["admin"] },
+{ label: "Dashboard Suporte", href: "/admin/helpdesk", icon: Headphones, roles: ["admin", "technician"] },
+{ label: "Chamados", href: "/admin/tickets", icon: TicketCheck, roles: ["admin", "technician"] },
+{ label: "Ordens de Serviço", href: "/admin/service-orders", icon: FileText, roles: ["admin", "technician"] },
+{ label: "Configurações", href: "/admin/settings", icon: Settings, roles: ["admin"] }];
+
 
 const AdminLayout = ({ children }: AdminLayoutProps) => {
   const { signOut, role } = useAuth();
@@ -51,25 +51,25 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
   return (
     <div className="min-h-screen bg-background flex">
       {/* Mobile Overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      {sidebarOpen &&
+      <div
+        className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden"
+        onClick={() => setSidebarOpen(false)} />
+
+      }
 
       {/* Sidebar */}
       <aside
         className={cn(
           "fixed lg:static inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-200 lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
+        )}>
+
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="p-6 border-b border-border">
             <Link to="/admin" className="flex items-center gap-3">
-              <img src={fmLogo} alt="FM TechFlow" className="h-9" />
+              <img alt="FM TechFlow" className="h-9 object-cover" src="/lovable-uploads/d7cdf369-5fba-4990-90b4-0ef73bc46004.png" />
               <p className="text-xs text-muted-foreground">{panelLabel}</p>
             </Link>
           </div>
@@ -85,15 +85,15 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                   onClick={() => setSidebarOpen(false)}
                   className={cn(
                     "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
-                    isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                  )}
-                >
+                    isActive ?
+                    "bg-primary text-primary-foreground" :
+                    "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  )}>
+
                   <item.icon className="w-5 h-5" />
                   {item.label}
-                </Link>
-              );
+                </Link>);
+
             })}
           </nav>
 
@@ -102,8 +102,8 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
             <Button
               variant="ghost"
               className="w-full justify-start"
-              onClick={handleSignOut}
-            >
+              onClick={handleSignOut}>
+
               <LogOut className="w-5 h-5 mr-3" />
               Sair
             </Button>
@@ -118,8 +118,8 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
           <div className="flex items-center justify-between p-4">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="p-2 hover:bg-muted rounded-lg"
-            >
+              className="p-2 hover:bg-muted rounded-lg">
+
               <Menu className="w-6 h-6" />
             </button>
             <img src={fmLogo} alt="FM TechFlow" className="h-8" />
@@ -130,8 +130,8 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
         {/* Page Content */}
         <main className="flex-1 p-6 lg:p-8 overflow-auto">{children}</main>
       </div>
-    </div>
-  );
+    </div>);
+
 };
 
 export default AdminLayout;
