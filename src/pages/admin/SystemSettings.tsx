@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Save, Loader2, Mail, Send, TestTube } from "lucide-react";
+import { Eye, EyeOff, Save, Loader2, Mail, Send, TestTube, Inbox } from "lucide-react";
 
 const SystemSettings = () => {
   const { user } = useAuth();
@@ -36,6 +36,7 @@ const SystemSettings = () => {
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const [testingImap, setTestingImap] = useState(false);
   const [testingSmtp, setTestingSmtp] = useState(false);
+  const [processingEmails, setProcessingEmails] = useState(false);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ["system-settings"],
@@ -136,6 +137,40 @@ const SystemSettings = () => {
       toast({ title: "Erro ao testar conexão IMAP", variant: "destructive" });
     } finally {
       setTestingImap(false);
+    }
+  };
+
+  const handleProcessEmails = async () => {
+    setProcessingEmails(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-incoming-emails`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionData.session?.access_token}`,
+          },
+        }
+      );
+      const result = await res.json();
+      if (result.success) {
+        toast({
+          title: "Emails processados",
+          description: result.message,
+        });
+      } else {
+        toast({
+          title: "Erro ao processar emails",
+          description: result.error || result.message,
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({ title: "Erro ao processar emails", variant: "destructive" });
+    } finally {
+      setProcessingEmails(false);
     }
   };
 
@@ -263,7 +298,7 @@ const SystemSettings = () => {
                     </button>
                   </div>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-wrap">
                   <Button onClick={handleSaveImap} disabled={saveMutation.isPending} className="gap-2">
                     {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     Salvar
@@ -271,6 +306,10 @@ const SystemSettings = () => {
                   <Button variant="outline" onClick={handleTestImap} disabled={testingImap} className="gap-2">
                     {testingImap ? <Loader2 className="w-4 h-4 animate-spin" /> : <TestTube className="w-4 h-4" />}
                     Testar Conexão
+                  </Button>
+                  <Button variant="secondary" onClick={handleProcessEmails} disabled={processingEmails} className="gap-2">
+                    {processingEmails ? <Loader2 className="w-4 h-4 animate-spin" /> : <Inbox className="w-4 h-4" />}
+                    Verificar Emails Agora
                   </Button>
                 </div>
               </CardContent>
