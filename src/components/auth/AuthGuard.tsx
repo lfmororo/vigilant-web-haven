@@ -6,9 +6,10 @@ import { Loader2 } from "lucide-react";
 interface AuthGuardProps {
   children: ReactNode;
   requireAdmin?: boolean;
+  requireAdminOrTechnician?: boolean;
 }
 
-const AuthGuard = ({ children, requireAdmin = false }: AuthGuardProps) => {
+const AuthGuard = ({ children, requireAdmin = false, requireAdminOrTechnician = false }: AuthGuardProps) => {
   const { user, role, loading } = useAuth();
   const location = useLocation();
 
@@ -25,6 +26,10 @@ const AuthGuard = ({ children, requireAdmin = false }: AuthGuardProps) => {
   }
 
   if (requireAdmin && role !== "admin") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (requireAdminOrTechnician && role !== "admin" && role !== "technician") {
     return <Navigate to="/dashboard" replace />;
   }
 

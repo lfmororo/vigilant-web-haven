@@ -12,6 +12,7 @@ interface CreateUserRequest {
   password: string;
   full_name: string;
   phone?: string;
+  role?: "client" | "technician" | "admin";
 }
 
 serve(async (req) => {
@@ -73,7 +74,9 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const { email, password, full_name, phone }: CreateUserRequest = await req.json();
+    const { email, password, full_name, phone, role: requestedRole }: CreateUserRequest = await req.json();
+    const validRoles = ["client", "technician", "admin"];
+    const userRole = requestedRole && validRoles.includes(requestedRole) ? requestedRole : "client";
 
     if (!email || !password || !full_name) {
       return new Response(
@@ -126,7 +129,7 @@ serve(async (req) => {
       .from("user_roles")
       .insert({
         user_id: newUser.user.id,
-        role: "user",
+        role: userRole,
       });
 
     if (roleInsertError) {

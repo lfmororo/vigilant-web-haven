@@ -65,6 +65,72 @@ export type Database = {
         }
         Relationships: []
       }
+      equipment_inventory: {
+        Row: {
+          brand: string | null
+          client_id: string | null
+          created_at: string
+          equipment_type_id: string | null
+          id: string
+          location: string | null
+          model: string | null
+          name: string
+          notes: string | null
+          purchase_date: string | null
+          serial_number: string | null
+          status: Database["public"]["Enums"]["equipment_status"]
+          updated_at: string
+          warranty_until: string | null
+        }
+        Insert: {
+          brand?: string | null
+          client_id?: string | null
+          created_at?: string
+          equipment_type_id?: string | null
+          id?: string
+          location?: string | null
+          model?: string | null
+          name: string
+          notes?: string | null
+          purchase_date?: string | null
+          serial_number?: string | null
+          status?: Database["public"]["Enums"]["equipment_status"]
+          updated_at?: string
+          warranty_until?: string | null
+        }
+        Update: {
+          brand?: string | null
+          client_id?: string | null
+          created_at?: string
+          equipment_type_id?: string | null
+          id?: string
+          location?: string | null
+          model?: string | null
+          name?: string
+          notes?: string | null
+          purchase_date?: string | null
+          serial_number?: string | null
+          status?: Database["public"]["Enums"]["equipment_status"]
+          updated_at?: string
+          warranty_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_inventory_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipment_inventory_equipment_type_id_fkey"
+            columns: ["equipment_type_id"]
+            isOneToOne: false
+            referencedRelation: "equipment_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       equipment_types: {
         Row: {
           created_at: string
@@ -371,7 +437,8 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "user"
+      app_role: "admin" | "user" | "client" | "technician"
+      equipment_status: "active" | "inactive" | "maintenance" | "retired"
       service_order_status: "draft" | "in_progress" | "completed" | "cancelled"
       ticket_priority: "low" | "medium" | "high" | "urgent"
       ticket_status:
@@ -507,7 +574,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user"],
+      app_role: ["admin", "user", "client", "technician"],
+      equipment_status: ["active", "inactive", "maintenance", "retired"],
       service_order_status: ["draft", "in_progress", "completed", "cancelled"],
       ticket_priority: ["low", "medium", "high", "urgent"],
       ticket_status: [

@@ -31,8 +31,15 @@ const AdminTicketDetail = () => {
 
   useEffect(() => {
     fetchTicket();
-    // Fetch all profiles as potential technicians
-    supabase.from("profiles").select("id, full_name").then(({ data }) => setTechnicians(data || []));
+    // Fetch only technicians
+    supabase.from("user_roles").select("user_id").eq("role", "technician" as any)
+      .then(async ({ data: roleData }) => {
+        if (roleData && roleData.length > 0) {
+          const ids = roleData.map(r => r.user_id);
+          const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+          setTechnicians(profiles || []);
+        }
+      });
   }, [id]);
 
   const updateTicket = async (field: string, value: string) => {
