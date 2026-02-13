@@ -1,4 +1,5 @@
-import { Shield, Instagram, Facebook, Linkedin } from "lucide-react";
+import { Instagram, Facebook, Linkedin } from "lucide-react";
+import fmLogo from "@/assets/fm-techflow-logo.png";
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -10,12 +11,7 @@ const Footer = () => {
           {/* Logo & Description */}
           <div className="md:col-span-2">
             <a href="#inicio" className="flex items-center gap-3 mb-4">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Shield className="w-6 h-6 text-primary" />
-              </div>
-              <span className="font-display font-bold text-xl text-foreground">
-                SecureTech
-              </span>
+              <img src={fmLogo} alt="FM TechFlow" className="h-10" />
             </a>
             <p className="text-muted-foreground leading-relaxed max-w-sm">
               Soluções completas em segurança eletrônica para empresas e 
@@ -64,7 +60,7 @@ const Footer = () => {
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-sm text-muted-foreground">
-            © {currentYear} SecureTech. Todos os direitos reservados.
+            © {currentYear} FM TechFlow. Todos os direitos reservados.
           </p>
           <div className="flex gap-6 text-sm">
             <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">

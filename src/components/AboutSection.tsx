@@ -21,11 +21,11 @@ const AboutSection = () => {
             </span>
             <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold mt-4 mb-6">
               Por que escolher a{" "}
-              <span className="text-gradient">SecureTech?</span>
+              <span className="text-gradient">FM TechFlow?</span>
             </h2>
             <p className="text-muted-foreground text-lg mb-8 leading-relaxed">
               Com mais de 10 anos de experiência no mercado de segurança eletrônica, 
-              a SecureTech se consolidou como referência em proteção patrimonial e 
+              a FM TechFlow se consolidou como referência em proteção patrimonial e 
               residencial. Nossa missão é proporcionar tranquilidade através de 
               soluções tecnológicas inovadoras.
             </p>

@@ -10,10 +10,10 @@ const Index = () => {
   return (
     <>
       <Helmet>
-        <title>SecureTech - Segurança Eletrônica Inteligente | Câmeras, Alarmes e Monitoramento</title>
+        <title>FM TechFlow - Segurança Eletrônica Inteligente | Câmeras, Alarmes e Monitoramento</title>
         <meta
           name="description"
-          content="SecureTech oferece soluções completas em segurança eletrônica: câmeras de vigilância, alarmes monitorados, controle de acesso e monitoramento 24h. Solicite seu orçamento grátis!"
+          content="FM TechFlow oferece soluções completas em segurança eletrônica: câmeras de vigilância, alarmes monitorados, controle de acesso e monitoramento 24h. Solicite seu orçamento grátis!"
         />
         <meta
           name="keywords"

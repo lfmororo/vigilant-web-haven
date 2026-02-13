@@ -378,7 +378,7 @@ const SystemSettings = () => {
                   <Label htmlFor="smtp_from_name">Nome do Remetente</Label>
                   <Input
                     id="smtp_from_name"
-                    placeholder="SecureTech Suporte"
+                    placeholder="FM TechFlow Suporte"
                     value={smtpForm.smtp_from_name}
                     onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_from_name: e.target.value }))}
                   />

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Shield, Menu, X, Headphones } from "lucide-react";
+import { Menu, X, Headphones } from "lucide-react";
+import fmLogo from "@/assets/fm-techflow-logo.png";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -22,12 +23,7 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <a href="#inicio" className="flex items-center gap-3 group">
-            <div className="p-2 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
-              <Shield className="w-7 h-7 text-primary" />
-            </div>
-            <span className="font-display font-bold text-xl text-foreground">
-              SecureTech
-            </span>
+            <img src={fmLogo} alt="FM TechFlow" className="h-10" />
           </a>
 
           {/* Desktop Navigation */}

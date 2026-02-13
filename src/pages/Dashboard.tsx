@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Shield, LogOut, Camera, MapPin, Loader2, Video, Copy, ExternalLink, Headphones } from "lucide-react";
+import { LogOut, Camera, MapPin, Loader2, Video, Copy, ExternalLink, Headphones } from "lucide-react";
+import fmLogo from "@/assets/fm-techflow-logo.png";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import VideoPlayer from "@/components/VideoPlayer";
@@ -132,13 +133,8 @@ const Dashboard = () => {
       <header className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Shield className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="font-display font-bold text-lg">SecureTech</h1>
-              <p className="text-xs text-muted-foreground">Área do Cliente</p>
-            </div>
+            <img src={fmLogo} alt="FM TechFlow" className="h-9" />
+            <p className="text-xs text-muted-foreground">Área do Cliente</p>
           </div>
           <div className="flex items-center gap-2">
             <Link to="/helpdesk">
