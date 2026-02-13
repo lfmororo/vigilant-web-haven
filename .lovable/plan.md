@@ -1,45 +1,41 @@
 
 
-# Botao Salvar com registro de alteracoes no chat do chamado
+# Filtro padrao "Em Aberto" e colunas de tempo nos chamados
 
-## O que muda
+## Mudancas
 
-Atualmente, cada alteracao de status, prioridade ou tecnico e salva e notificada individualmente ao selecionar o valor. Com essa mudanca:
+### 1. Filtro padrao alterado para "open"
+Ambas as telas de listagem de chamados (admin e cliente) iniciarao com o filtro de status em "Aberto" em vez de "Todos".
 
-1. Os selects apenas alteram o estado local (sem salvar no banco imediatamente)
-2. Um botao "Salvar Alteracoes" aparece quando ha mudancas pendentes
-3. Ao clicar em Salvar, todas as alteracoes sao aplicadas de uma vez
-4. Uma mensagem automatica e criada no chat do chamado detalhando todas as alteracoes, quem fez e quando
-5. A notificacao por e-mail e enviada uma unica vez com todas as mudancas
+- `AdminTicketsManagement.tsx`: `useState("all")` passa para `useState("open")`
+- `ClientTicketsList.tsx`: `useState("all")` passa para `useState("open")`
 
-## Exemplo da mensagem no chat
+### 2. Duas novas colunas na tabela
 
-```
-Alteracoes realizadas por Joao Silva em 13/02/2026 as 14:30:
-- Status alterado de "Aberto" para "Em Andamento"
-- Prioridade alterada de "Media" para "Alta"
-- Tecnico responsavel alterado para "Carlos Souza"
-```
+**Tempo Aberto** - Tempo desde a criacao do chamado (`created_at`) ate agora, exibido em formato legivel (ex: "2d 5h", "3h 20min", "45min").
+
+**Sem Interacao** - Tempo desde a ultima mensagem no chamado (`ticket_messages`) ate agora. Se nao houver mensagens, usa a data de criacao do ticket.
+
+### 3. Busca da ultima mensagem
+
+A query de tickets sera ajustada para incluir a ultima mensagem de cada ticket. Como o Supabase nao suporta agregacoes complexas diretamente, a abordagem sera:
+
+- Na tela **admin**, apos carregar os tickets, fazer uma segunda query buscando a ultima mensagem de cada ticket (agrupado por `ticket_id`, pegando o `MAX(created_at)`)
+- Na tela **cliente**, mesma abordagem
+
+### 4. Funcao auxiliar de formatacao de tempo
+
+Uma funcao `formatTimeAgo` sera criada para converter a diferenca de tempo em texto legivel:
+- Menos de 1h: "Xmin"
+- 1h a 24h: "Xh Ymin"
+- Mais de 24h: "Xd Yh"
 
 ## Detalhes tecnicos
 
-**Arquivo:** `src/pages/admin/AdminTicketDetail.tsx`
-
-1. Adicionar estados locais para armazenar valores pendentes (`pendingStatus`, `pendingPriority`, `pendingAssignedTo`)
-2. Os `Select` passam a alterar apenas os estados locais em vez de chamar `updateTicket` diretamente
-3. Calcular `hasChanges` comparando valores pendentes com os valores atuais do ticket
-4. Substituir a funcao `updateTicket` por `saveChanges` que:
-   - Monta um objeto com todos os campos alterados
-   - Faz um unico `UPDATE` no banco
-   - Monta a mensagem descritiva com todas as alteracoes
-   - Insere a mensagem na tabela `ticket_messages` como mensagem do sistema (nao interna)
-   - Envia uma unica notificacao por e-mail com todas as mudancas
-5. Adicionar botao "Salvar Alteracoes" no card "Gerenciar", visivel apenas quando ha mudancas pendentes
-
-**Nenhuma migracao ou alteracao de banco necessaria** - a tabela `ticket_messages` ja suporta o registro de mensagens.
-
-## Resumo
-
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/pages/admin/AdminTicketDetail.tsx` | Refatorar selects para estado local + botao Salvar + mensagem no chat |
+| `src/pages/admin/AdminTicketsManagement.tsx` | Filtro padrao "open", query para ultima mensagem, 2 novas colunas |
+| `src/pages/helpdesk/ClientTicketsList.tsx` | Filtro padrao "open", query para ultima mensagem, 2 novas colunas |
+
+Nenhuma migracao necessaria. Os dados ja existem nas tabelas `tickets` e `ticket_messages`.
+
