@@ -67,7 +67,11 @@ function buildEmailHtml(p: EmailParams): string {
         ${tableRow("Assunto", p.title)}
         ${p.category ? tableRow("Categoria", p.category) : ""}
         ${tableRow("Prioridade", priorityBadge)}
-      </table>`;
+      </table>
+      <div style="background:#eff6ff;border-left:4px solid #2563eb;border-radius:0 8px 8px 0;padding:16px 20px;margin-bottom:20px;">
+        <p style="margin:0 0 6px;font-weight:700;color:#2563eb;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;">Descrição do Chamado</p>
+        <p style="margin:0;color:#334155;font-size:14px;line-height:1.6;">${p.message}</p>
+      </div>`;
   } else if (p.type === "ticket_resolved") {
     bodyContent = `
       <p style="margin:0 0 8px;color:#334155;font-size:15px;line-height:1.6;">Olá <strong>${p.recipientName}</strong>,</p>
