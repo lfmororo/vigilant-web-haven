@@ -28,7 +28,7 @@ const allNavItems = [
   { label: "Clientes", href: "/admin/clients", icon: UserCheck, roles: ["admin"] },
   { label: "Câmeras", href: "/admin/cameras", icon: Camera, roles: ["admin"] },
   { label: "Inventário", href: "/admin/inventory", icon: Package, roles: ["admin"] },
-  { label: "Suporte", href: "/admin/helpdesk", icon: Headphones, roles: ["admin", "technician"] },
+  { label: "Dashboard Suporte", href: "/admin/helpdesk", icon: Headphones, roles: ["admin", "technician"] },
   { label: "Chamados", href: "/admin/tickets", icon: TicketCheck, roles: ["admin", "technician"] },
   { label: "Ordens de Serviço", href: "/admin/service-orders", icon: FileText, roles: ["admin", "technician"] },
 ];
