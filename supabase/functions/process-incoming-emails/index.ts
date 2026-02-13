@@ -357,6 +357,7 @@ Deno.serve(async (req) => {
 
     let ticketsCreated = 0;
     let usersCreated = 0;
+    let repliesAdded = 0;
 
     const loginUrl = Deno.env.get("SUPABASE_URL")?.replace(".supabase.co", ".lovable.app") || "";
 
@@ -383,6 +384,75 @@ Deno.serve(async (req) => {
         let rawBody = bodyMatch ? bodyMatch[2] : bodyResp.split("\r\n").slice(1).join("\r\n");
         let bodyText = parseMimeBody(rawBody);
         bodyText = bodyText.substring(0, 5000); // limit length
+
+        // --- Detect reply to existing ticket ---
+        const ticketNumberMatch = subject.match(/#(\d+)/);
+        if (ticketNumberMatch) {
+          const ticketNumber = parseInt(ticketNumberMatch[1], 10);
+          const { data: existingTicket } = await supabaseAdmin
+            .from("tickets")
+            .select("id, client_id, status, assigned_to, title, priority")
+            .eq("ticket_number", ticketNumber)
+            .maybeSingle();
+
+          if (existingTicket) {
+            // Find sender profile
+            const { data: senderProfile } = await supabaseAdmin
+              .from("profiles")
+              .select("id")
+              .eq("email", senderEmail)
+              .maybeSingle();
+
+            if (senderProfile) {
+              // Add message to existing ticket
+              await supabaseAdmin.from("ticket_messages").insert({
+                ticket_id: existingTicket.id,
+                sender_id: senderProfile.id,
+                message: bodyText,
+                is_internal: false,
+              });
+
+              // Reopen if resolved or closed
+              if (existingTicket.status === "resolved" || existingTicket.status === "closed") {
+                await supabaseAdmin
+                  .from("tickets")
+                  .update({ status: "open" })
+                  .eq("id", existingTicket.id);
+                console.log(`Ticket #${ticketNumber} reopened from ${existingTicket.status}`);
+              }
+
+              // Notify via notify-ticket-update edge function
+              try {
+                const notifyResp = await fetch(
+                  `${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-ticket-update`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                    },
+                    body: JSON.stringify({
+                      ticket_id: existingTicket.id,
+                      sender_id: senderProfile.id,
+                      message: bodyText,
+                      is_internal: false,
+                      notification_type: "ticket_updated",
+                    }),
+                  }
+                );
+                console.log(`Notify reply result: ${notifyResp.status}`);
+              } catch (notifyErr) {
+                console.error("Error notifying ticket reply:", notifyErr);
+              }
+
+              repliesAdded++;
+              await imapCommand(conn, `d${num}`, `STORE ${num} +FLAGS (\\Seen)`);
+              continue; // Skip new ticket creation
+            }
+          }
+        }
+
+        // --- Normal flow: create new ticket ---
 
         // Check if client exists
         const { data: existingProfile } = await supabaseAdmin
@@ -514,8 +584,9 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Processamento concluído. ${ticketsCreated} ticket(s) criado(s), ${usersCreated} usuário(s) novo(s).`,
+        message: `Processamento concluído. ${ticketsCreated} ticket(s) criado(s), ${repliesAdded} resposta(s) adicionada(s), ${usersCreated} usuário(s) novo(s).`,
         tickets_created: ticketsCreated,
+        replies_added: repliesAdded,
         users_created: usersCreated,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
