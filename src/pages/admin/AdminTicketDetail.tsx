@@ -41,10 +41,10 @@ const AdminTicketDetail = () => {
   useEffect(() => {
     fetchTicket();
     if (isAdmin) {
-      supabase.from("user_roles").select("user_id").eq("role", "technician" as any)
+      supabase.from("user_roles").select("user_id").in("role", ["technician", "admin"] as any)
         .then(async ({ data: roleData }) => {
           if (roleData && roleData.length > 0) {
-            const ids = roleData.map(r => r.user_id);
+            const ids = [...new Set(roleData.map(r => r.user_id))];
             const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", ids);
             setTechnicians(profiles || []);
           }
