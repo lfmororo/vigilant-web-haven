@@ -1,52 +1,78 @@
 
 
-# Filtro por cliente, edicao de equipamentos, novos tipos e relatorio PDF
+## Notificacao Diaria de Resumo de Chamados
 
-## Mudancas
+Criar uma funcao backend agendada que envia um e-mail de resumo diario para todos os administradores as 09:00 e 15:00 (horario de Brasilia), usando como modelo visual a imagem fornecida.
 
-### 1. Filtro por cliente na listagem
-Adicionar um terceiro Select nos filtros existentes para selecionar um cliente especifico. O estado `filterClient` (padrao "all") sera adicionado e incluido nas dependencias do useEffect. No `fetchEquipment`, quando diferente de "all", aplica `.eq("client_id", filterClient)`.
+### O que sera feito
 
-### 2. Edicao de equipamentos
-Adicionar botao "Editar" (icone de lapis) na coluna de acoes da tabela. Ao clicar, abre um Dialog pre-preenchido com os dados do equipamento. Ao salvar, faz UPDATE no banco e recarrega a lista.
+**1. Nova funcao backend: `daily-ticket-summary`**
+- Consulta tickets agrupados por status:
+  - **Aguardando Cliente** (waiting_client) - card laranja "PENDENTE"
+  - **Abertos** (open sem tecnico) - card azul "ABERTOS"
+  - **Em Andamento** (in_progress ou open com tecnico) - card verde "EM ANDAMENTO"
+- Para cada categoria, lista os tickets com numero e tecnico/cliente atribuido
+- Busca todos os admins (user_roles + profiles) para envio
+- Carrega configuracoes SMTP de system_settings
+- Envia e-mail HTML seguindo o layout da imagem de referencia
 
-- Novo estado `editTarget: Equipment | null`
-- Quando definido, abre Dialog com formulario identico ao de criacao, porem preenchido
-- Ao submeter: `supabase.from("equipment_inventory").update({...}).eq("id", editTarget.id)`
-- Fecha dialog e recarrega lista
+**2. Template HTML do e-mail (baseado na imagem)**
+- Cabecalho com nome da empresa (de smtp_from_name)
+- Titulo "Resumo Diario de Chamados de Suporte - [data]"
+- Secao "Visao Geral" com 3 cards coloridos lado a lado:
+  - Laranja: contador de Pendentes (waiting_client)
+  - Azul: contador de Abertos (open sem tecnico)
+  - Verde: contador de Em Andamento
+- Secao "Detalhes por Categoria" com tabela para cada categoria listando:
+  - Numero do ticket
+  - Tecnico atribuido (ou "Nao atribuido")
+- Botao "Acessar Dashboard" apontando para /admin/helpdesk
+- Footer com nome da empresa
 
-### 3. Novos tipos de equipamento
-Inserir na tabela `equipment_types` via migracao:
-- **Maquina Virtual** (icone: "monitor")
-- **Servidor** (icone: "server")
+**3. Agendamento via pg_cron**
+- Dois jobs cron:
+  - `daily-ticket-summary-9am`: executa as 12:00 UTC (09:00 BRT)
+  - `daily-ticket-summary-3pm`: executa as 18:00 UTC (15:00 BRT)
 
-### 4. Relatorio PDF do inventario
-Criar um componente `EquipmentInventoryPrint.tsx` seguindo o mesmo padrao do `ServiceOrderPrint.tsx` existente (layout de impressao com `window.print()` e CSS para pagina A4).
+**4. Configuracao**
+- Adicionar `[functions.daily-ticket-summary]` com `verify_jwt = false` no config.toml
 
-O relatorio incluira:
-- Cabecalho com dados da empresa (buscados de `system_settings`)
-- Titulo "Relatorio de Inventario de Equipamentos"
-- Filtros aplicados no momento (status, tipo, cliente)
-- Tabela com todos os equipamentos filtrados: Nome, Tipo, Marca/Modelo, Serie, Cliente, Localizacao, Status
-- Data de geracao do relatorio
-- Contagem total de equipamentos
+### Detalhes Tecnicos
 
-Um botao "Gerar PDF" sera adicionado ao lado dos botoes existentes no cabecalho da pagina. Ao clicar, abre o componente de impressao (mesmo mecanismo do ServiceOrderPrint: renderiza uma pagina de impressao e chama `window.print()`).
-
-## Detalhes tecnicos
-
-| Arquivo / Recurso | Mudanca |
+| Arquivo | Acao |
 |---|---|
-| `src/pages/admin/EquipmentInventory.tsx` | Filtro por cliente, botao Editar com dialog, botao Gerar PDF, estado `editTarget`, `filterClient`, `showPrint` |
-| `src/components/admin/EquipmentInventoryPrint.tsx` | Novo componente de layout de impressao para o relatorio |
-| Banco de dados (migracao) | INSERT de "Maquina Virtual" e "Servidor" na tabela `equipment_types` |
+| `supabase/functions/daily-ticket-summary/index.ts` | Criar - funcao que consulta tickets, monta HTML e envia via SMTP |
+| `supabase/config.toml` | Adicionar entrada para daily-ticket-summary |
+| SQL (pg_cron) | Criar 2 jobs agendados via INSERT no cron |
 
-### Estrutura do relatorio PDF
+**Estrutura da funcao:**
+1. Conectar com service role key
+2. Contar e listar tickets por status
+3. Buscar admins e suas informacoes de perfil
+4. Carregar config SMTP (smtp_host, smtp_port, smtp_user, smtp_password, smtp_from_name)
+5. Gerar HTML no estilo da imagem de referencia (3 cards coloridos + tabelas detalhadas)
+6. Enviar para cada admin usando a mesma funcao SMTP da notify-ticket-update (reescrita local)
+7. Retornar quantidade de e-mails enviados
 
-O componente `EquipmentInventoryPrint.tsx` recebera:
-- `equipment: Equipment[]` (lista filtrada atual)
-- `filters: { status, type, client }` (filtros ativos para exibir no cabecalho)
-- `onClose: () => void`
-
-Usara o mesmo padrao visual do `ServiceOrderPrint`: fundo branco, bordas pretas, secoes com cabecalho cinza, texto pequeno, botoes "Imprimir" e "Voltar" ocultos na impressao.
+**Layout do HTML:**
+```text
++------------------------------------------+
+|          [NOME DA EMPRESA]               |
+|  Resumo Diario - 13 de Fevereiro, 2025  |
+|------------------------------------------|
+|  Visao Geral:                            |
+|  [LARANJA]  [AZUL]      [VERDE]          |
+|   15         30           45             |
+|  PENDENTE   ABERTOS    EM ANDAMENTO      |
+|------------------------------------------|
+|  Detalhes por Categoria:                 |
+|  Chamados Em Andamento (45)              |
+|  | Ticket ID  | Tecnico Atribuido |      |
+|  | #2025-015  | Jessica M         |      |
+|  | #2025-018  | David L           |      |
+|  ...                                     |
+|  [Botao: Acessar Dashboard]              |
+|  Footer: Empresa · Sistema de Suporte    |
++------------------------------------------+
+```
 
