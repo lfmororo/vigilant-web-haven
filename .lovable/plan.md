@@ -1,47 +1,61 @@
 
 
-## Verificacao Automatica de Emails a Cada Minuto
+## Notificacao por Email nas Interacoes do Ticket
 
-Configurar um cron job no banco de dados usando as extensoes `pg_cron` e `pg_net` para chamar a edge function `process-incoming-emails` automaticamente a cada minuto.
-
----
-
-### 1. Habilitar extensoes `pg_cron` e `pg_net`
-
-Criar uma migration que ativa as extensoes necessarias:
-
-```sql
-CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog;
-CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
-```
+Criar uma Edge Function `notify-ticket-update` que envia emails para todos os envolvidos no ticket sempre que houver uma nova mensagem (exceto notas internas). A funcao sera chamada automaticamente apos cada mensagem enviada no chat.
 
 ---
 
-### 2. Criar o cron job via SQL (executado manualmente)
+### 1. Nova Edge Function `notify-ticket-update`
 
-Como o SQL contem dados especificos do projeto (URL e chave), sera executado via ferramenta de insert SQL (nao como migration):
+Recebe o `ticket_id`, `sender_id` e `message` como payload. Fluxo:
 
-```sql
-SELECT cron.schedule(
-  'process-incoming-emails-every-minute',
-  '* * * * *',
-  $$
-  SELECT net.http_post(
-    url := 'https://egbusmegupjfxqswdlxq.supabase.co/functions/v1/process-incoming-emails',
-    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}'::jsonb,
-    body := '{}'::jsonb
-  ) AS request_id;
-  $$
-);
 ```
+1. Buscar dados do ticket (titulo, ticket_number, client_id, assigned_to)
+2. Buscar email do cliente (profiles)
+3. Buscar email do tecnico responsavel, se houver (profiles)
+4. Buscar emails de todos os admins (user_roles + profiles)
+5. Remover o remetente da lista (nao notificar quem enviou)
+6. Carregar configuracoes SMTP da tabela system_settings
+7. Enviar email para cada destinatario com:
+   - Assunto: "Atualizacao no Chamado #NNN - Titulo"
+   - Corpo: nome do remetente, mensagem, link para o ticket
+```
+
+Notas internas (`is_internal = true`) nao disparam notificacao.
+
+Configuracao no `config.toml`:
+```toml
+[functions.notify-ticket-update]
+verify_jwt = false
+```
+
+Usa `SUPABASE_SERVICE_ROLE_KEY` para acessar dados de todos os envolvidos.
+
+---
+
+### 2. Alterar `TicketChat.tsx`
+
+Apos inserir a mensagem com sucesso no banco, chamar a edge function `notify-ticket-update` passando `ticket_id`, `sender_id`, `message` e `is_internal`. A chamada sera fire-and-forget (nao bloqueia o chat).
+
+---
+
+### 3. Alterar `process-incoming-emails`
+
+Apos criar um ticket via email, NAO enviar notificacao (o email ja e a propria interacao do cliente). Sem mudancas necessarias nessa funcao.
 
 ---
 
 ### Detalhes Tecnicos
 
-- `pg_cron` permite agendar tarefas SQL recorrentes dentro do banco de dados
-- `pg_net` permite fazer chamadas HTTP de dentro do banco, necessario para invocar a edge function
-- O cron roda a cada minuto (`* * * * *`)
-- A edge function ja esta configurada com `verify_jwt = false`, entao aceita a chamada do cron
-- Nenhuma alteracao de codigo frontend e necessaria
+**Destinatarios por interacao:**
+- Cliente do ticket (sempre, exceto se ele for o remetente)
+- Tecnico responsavel (se atribuido, exceto se ele for o remetente)
+- Todos os admins (exceto se o admin for o remetente)
+
+**Conteudo do email:**
+- Assunto: `Atualizacao no Chamado #123 - Titulo do chamado`
+- Corpo: Nome de quem enviou, texto da mensagem, link para acessar o ticket
+
+**Edge Function reutiliza** a mesma logica SMTP ja presente em `process-incoming-emails` (funcao `sendSmtpEmail`).
 
