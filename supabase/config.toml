@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.process-incoming-emails]
 verify_jwt = false
+
+[functions.notify-ticket-update]
+verify_jwt = false

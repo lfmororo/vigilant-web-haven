@@ -70,8 +70,14 @@ const TicketChat = ({ ticketId, isAdmin = false, isStaff = false }: TicketChatPr
     if (error) {
       toast({ variant: "destructive", title: "Erro ao enviar mensagem", description: error.message });
     } else {
+      const sentMessage = newMessage.trim();
+      const sentInternal = canSendInternal ? isInternal : false;
       setNewMessage("");
       setIsInternal(false);
+      // Fire-and-forget notification
+      supabase.functions.invoke("notify-ticket-update", {
+        body: { ticket_id: ticketId, sender_id: user.id, message: sentMessage, is_internal: sentInternal },
+      }).catch((err) => console.error("Notification error:", err));
     }
     setSending(false);
   };
