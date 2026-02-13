@@ -11,6 +11,9 @@ import {
   LogOut,
   Menu,
   X,
+  TicketCheck,
+  FileText,
+  Headphones,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -21,6 +24,9 @@ const navItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { label: "Usuários", href: "/admin/users", icon: Users },
   { label: "Câmeras", href: "/admin/cameras", icon: Camera },
+  { label: "Suporte", href: "/admin/helpdesk", icon: Headphones },
+  { label: "Chamados", href: "/admin/tickets", icon: TicketCheck },
+  { label: "Ordens de Serviço", href: "/admin/service-orders", icon: FileText },
 ];
 
 const AdminLayout = ({ children }: AdminLayoutProps) => {

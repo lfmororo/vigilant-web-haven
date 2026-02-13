@@ -13,6 +13,16 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import UsersManagement from "./pages/admin/UsersManagement";
 import CamerasManagement from "./pages/admin/CamerasManagement";
 import UserCamerasManagement from "./pages/admin/UserCamerasManagement";
+import AdminHelpdeskDashboard from "./pages/admin/AdminHelpdeskDashboard";
+import AdminTicketsManagement from "./pages/admin/AdminTicketsManagement";
+import AdminTicketDetail from "./pages/admin/AdminTicketDetail";
+import AdminServiceOrders from "./pages/admin/AdminServiceOrders";
+import AdminServiceOrderDetail from "./pages/admin/AdminServiceOrderDetail";
+import HelpdeskDashboard from "./pages/helpdesk/HelpdeskDashboard";
+import ClientTicketsList from "./pages/helpdesk/ClientTicketsList";
+import NewTicket from "./pages/helpdesk/NewTicket";
+import ClientTicketDetail from "./pages/helpdesk/ClientTicketDetail";
+import ClientServiceOrders from "./pages/helpdesk/ClientServiceOrders";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,46 +38,21 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
-              <Route
-                path="/dashboard"
-                element={
-                  <AuthGuard>
-                    <Dashboard />
-                  </AuthGuard>
-                }
-              />
-              <Route
-                path="/admin"
-                element={
-                  <AuthGuard requireAdmin>
-                    <AdminDashboard />
-                  </AuthGuard>
-                }
-              />
-              <Route
-                path="/admin/users"
-                element={
-                  <AuthGuard requireAdmin>
-                    <UsersManagement />
-                  </AuthGuard>
-                }
-              />
-              <Route
-                path="/admin/cameras"
-                element={
-                  <AuthGuard requireAdmin>
-                    <CamerasManagement />
-                  </AuthGuard>
-                }
-              />
-              <Route
-                path="/admin/users/:userId/cameras"
-                element={
-                  <AuthGuard requireAdmin>
-                    <UserCamerasManagement />
-                  </AuthGuard>
-                }
-              />
+              <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
+              <Route path="/helpdesk" element={<AuthGuard><HelpdeskDashboard /></AuthGuard>} />
+              <Route path="/helpdesk/tickets" element={<AuthGuard><ClientTicketsList /></AuthGuard>} />
+              <Route path="/helpdesk/tickets/new" element={<AuthGuard><NewTicket /></AuthGuard>} />
+              <Route path="/helpdesk/tickets/:id" element={<AuthGuard><ClientTicketDetail /></AuthGuard>} />
+              <Route path="/helpdesk/orders" element={<AuthGuard><ClientServiceOrders /></AuthGuard>} />
+              <Route path="/admin" element={<AuthGuard requireAdmin><AdminDashboard /></AuthGuard>} />
+              <Route path="/admin/users" element={<AuthGuard requireAdmin><UsersManagement /></AuthGuard>} />
+              <Route path="/admin/cameras" element={<AuthGuard requireAdmin><CamerasManagement /></AuthGuard>} />
+              <Route path="/admin/users/:userId/cameras" element={<AuthGuard requireAdmin><UserCamerasManagement /></AuthGuard>} />
+              <Route path="/admin/helpdesk" element={<AuthGuard requireAdmin><AdminHelpdeskDashboard /></AuthGuard>} />
+              <Route path="/admin/tickets" element={<AuthGuard requireAdmin><AdminTicketsManagement /></AuthGuard>} />
+              <Route path="/admin/tickets/:id" element={<AuthGuard requireAdmin><AdminTicketDetail /></AuthGuard>} />
+              <Route path="/admin/service-orders" element={<AuthGuard requireAdmin><AdminServiceOrders /></AuthGuard>} />
+              <Route path="/admin/service-orders/:id" element={<AuthGuard requireAdmin><AdminServiceOrderDetail /></AuthGuard>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
