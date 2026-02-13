@@ -27,7 +27,7 @@ const AdminTicketsManagement = () => {
       .order("created_at", { ascending: false });
 
     if (!isAdmin && user) {
-      query = query.eq("assigned_to", user.id);
+      query = query.or(`assigned_to.eq.${user.id},created_by.eq.${user.id}`);
     }
 
     query.then(async ({ data }) => {
