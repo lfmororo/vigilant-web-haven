@@ -192,29 +192,44 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address: string | null
+          address_complement: string | null
+          address_number: string | null
+          city: string | null
           created_at: string
           email: string
           full_name: string
           id: string
           must_change_password: boolean | null
+          neighborhood: string | null
           phone: string | null
           updated_at: string
         }
         Insert: {
+          address?: string | null
+          address_complement?: string | null
+          address_number?: string | null
+          city?: string | null
           created_at?: string
           email: string
           full_name: string
           id: string
           must_change_password?: boolean | null
+          neighborhood?: string | null
           phone?: string | null
           updated_at?: string
         }
         Update: {
+          address?: string | null
+          address_complement?: string | null
+          address_number?: string | null
+          city?: string | null
           created_at?: string
           email?: string
           full_name?: string
           id?: string
           must_change_password?: boolean | null
+          neighborhood?: string | null
           phone?: string | null
           updated_at?: string
         }
@@ -222,60 +237,84 @@ export type Database = {
       }
       service_orders: {
         Row: {
+          arrival_date: string | null
+          checked_by: string | null
           client_id: string
           client_signature: string | null
           completed_at: string | null
           created_at: string
+          departure_date: string | null
           diagnosis: string | null
+          equipment_removed: string | null
           id: string
           labor_cost: number | null
+          material_used: string | null
           notes: string | null
           order_number: number
           parts_used: Json | null
+          service_description: string | null
           solution: string | null
           started_at: string | null
           status: Database["public"]["Enums"]["service_order_status"]
           technician_id: string | null
+          technician_signature: string | null
           ticket_id: string | null
           total_cost: number | null
+          travel_cost: number | null
           updated_at: string
         }
         Insert: {
+          arrival_date?: string | null
+          checked_by?: string | null
           client_id: string
           client_signature?: string | null
           completed_at?: string | null
           created_at?: string
+          departure_date?: string | null
           diagnosis?: string | null
+          equipment_removed?: string | null
           id?: string
           labor_cost?: number | null
+          material_used?: string | null
           notes?: string | null
           order_number?: number
           parts_used?: Json | null
+          service_description?: string | null
           solution?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["service_order_status"]
           technician_id?: string | null
+          technician_signature?: string | null
           ticket_id?: string | null
           total_cost?: number | null
+          travel_cost?: number | null
           updated_at?: string
         }
         Update: {
+          arrival_date?: string | null
+          checked_by?: string | null
           client_id?: string
           client_signature?: string | null
           completed_at?: string | null
           created_at?: string
+          departure_date?: string | null
           diagnosis?: string | null
+          equipment_removed?: string | null
           id?: string
           labor_cost?: number | null
+          material_used?: string | null
           notes?: string | null
           order_number?: number
           parts_used?: Json | null
+          service_description?: string | null
           solution?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["service_order_status"]
           technician_id?: string | null
+          technician_signature?: string | null
           ticket_id?: string | null
           total_cost?: number | null
+          travel_cost?: number | null
           updated_at?: string
         }
         Relationships: [
