@@ -122,6 +122,13 @@ function buildEmailHtml(p: EmailParams): string {
 </body></html>`;
 }
 
+// ---------- Helpers ----------
+
+function encodeRFC2047(str: string): string {
+  const encoded = btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+  return `=?UTF-8?B?${encoded}?=`;
+}
+
 // ---------- SMTP sender ----------
 
 async function sendSmtpEmail(
@@ -175,7 +182,9 @@ async function sendSmtpEmail(
   await readResp();
 
   const contentType = isHtml ? "text/html; charset=utf-8" : "text/plain; charset=utf-8";
-  const msg = `From: "${fromName}" <${user}>\r\nTo: <${to}>\r\nSubject: ${subject}\r\nMIME-Version: 1.0\r\nContent-Type: ${contentType}\r\n\r\n${body}\r\n.\r\n`;
+  const encodedSubject = encodeRFC2047(subject);
+  const encodedFromName = encodeRFC2047(fromName);
+  const msg = `From: ${encodedFromName} <${user}>\r\nTo: <${to}>\r\nSubject: ${encodedSubject}\r\nMIME-Version: 1.0\r\nContent-Type: ${contentType}\r\nContent-Transfer-Encoding: 8bit\r\n\r\n${body}\r\n.\r\n`;
   await conn.write(encoder.encode(msg));
   await readResp();
   await conn.write(encoder.encode("QUIT\r\n"));
