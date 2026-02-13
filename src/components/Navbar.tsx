@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Shield, Menu, X } from "lucide-react";
+import { Shield, Menu, X, Headphones } from "lucide-react";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -45,6 +45,10 @@ const Navbar = () => {
 
           {/* CTA Buttons */}
           <div className="hidden md:flex items-center gap-3">
+            <Button variant="outline" onClick={() => window.location.href = "/helpdesk"}>
+              <Headphones className="w-4 h-4" />
+              Suporte
+            </Button>
             <Button variant="outline" onClick={handleClientAreaClick}>
               Área do Cliente
             </Button>
@@ -76,6 +80,10 @@ const Navbar = () => {
                   {link.label}
                 </a>
               ))}
+              <Button variant="outline" className="mt-2" onClick={() => { setIsOpen(false); window.location.href = "/helpdesk"; }}>
+                <Headphones className="w-4 h-4" />
+                Suporte
+              </Button>
               <Button variant="outline" className="mt-2" onClick={handleClientAreaClick}>
                 Área do Cliente
               </Button>
