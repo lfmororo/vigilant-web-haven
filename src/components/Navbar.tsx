@@ -7,11 +7,11 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const navLinks = [
-    { label: "Início", href: "#inicio" },
-    { label: "Serviços", href: "#servicos" },
-    { label: "Sobre", href: "#sobre" },
-    { label: "Contato", href: "#contato" },
-  ];
+  { label: "Início", href: "#inicio" },
+  { label: "Serviços", href: "#servicos" },
+  { label: "Sobre", href: "#sobre" },
+  { label: "Contato", href: "#contato" }];
+
 
   const handleClientAreaClick = () => {
     window.location.href = "/auth";
@@ -23,20 +23,20 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <a href="#inicio" className="flex items-center gap-3 group">
-            <img src={fmLogo} alt="FM TechFlow" className="h-14" />
+            <img alt="FM TechFlow" className="h-14" src="/lovable-uploads/6a5524af-fc9f-4a85-85ec-2236896048a6.png" />
           </a>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
-            {navLinks.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                className="text-muted-foreground hover:text-foreground transition-colors font-medium"
-              >
+            {navLinks.map((link) =>
+            <a
+              key={link.label}
+              href={link.href}
+              className="text-muted-foreground hover:text-foreground transition-colors font-medium">
+
                 {link.label}
               </a>
-            ))}
+            )}
           </div>
 
           {/* CTA Buttons */}
@@ -56,27 +56,27 @@ const Navbar = () => {
           {/* Mobile Menu Button */}
           <button
             className="md:hidden p-2 text-foreground"
-            onClick={() => setIsOpen(!isOpen)}
-          >
+            onClick={() => setIsOpen(!isOpen)}>
+
             {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
         </div>
 
         {/* Mobile Navigation */}
-        {isOpen && (
-          <div className="md:hidden py-4 border-t border-border animate-fade-in">
+        {isOpen &&
+        <div className="md:hidden py-4 border-t border-border animate-fade-in">
             <div className="flex flex-col gap-4">
-              {navLinks.map((link) => (
-                <a
-                  key={link.label}
-                  href={link.href}
-                  className="text-muted-foreground hover:text-foreground transition-colors font-medium py-2"
-                  onClick={() => setIsOpen(false)}
-                >
+              {navLinks.map((link) =>
+            <a
+              key={link.label}
+              href={link.href}
+              className="text-muted-foreground hover:text-foreground transition-colors font-medium py-2"
+              onClick={() => setIsOpen(false)}>
+
                   {link.label}
                 </a>
-              ))}
-              <Button variant="outline" className="mt-2" onClick={() => { setIsOpen(false); window.location.href = "/helpdesk"; }}>
+            )}
+              <Button variant="outline" className="mt-2" onClick={() => {setIsOpen(false);window.location.href = "/helpdesk";}}>
                 <Headphones className="w-4 h-4" />
                 Suporte
               </Button>
@@ -88,10 +88,10 @@ const Navbar = () => {
               </Button>
             </div>
           </div>
-        )}
+        }
       </div>
-    </nav>
-  );
+    </nav>);
+
 };
 
 export default Navbar;
