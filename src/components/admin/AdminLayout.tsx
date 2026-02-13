@@ -67,9 +67,13 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
 
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="p-6 border-b border-border">
-            <Link to="/admin" className="flex items-center justify-center w-full py-4">
-              <img alt="FM TechFlow" className="h-44 w-full object-contain" src="/lovable-uploads/f066724a-93ef-4c74-a639-4f8766fa1f97.png" />
+          <div className="px-4 py-6 border-b border-border bg-card">
+            <Link to="/admin" className="flex items-center justify-center w-full">
+              <img 
+                alt="FM TechFlow" 
+                className="h-16 max-w-[200px] object-contain drop-shadow-sm" 
+                src="/lovable-uploads/f066724a-93ef-4c74-a639-4f8766fa1f97.png" 
+              />
             </Link>
           </div>
 
