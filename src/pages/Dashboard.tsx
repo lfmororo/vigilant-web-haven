@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Shield, LogOut, Camera, MapPin, Loader2, Video, Copy, ExternalLink } from "lucide-react";
+import { Shield, LogOut, Camera, MapPin, Loader2, Video, Copy, ExternalLink, Headphones } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import VideoPlayer from "@/components/VideoPlayer";
 interface CameraData {
@@ -139,10 +140,18 @@ const Dashboard = () => {
               <p className="text-xs text-muted-foreground">Área do Cliente</p>
             </div>
           </div>
-          <Button variant="ghost" onClick={handleSignOut}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Sair
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link to="/helpdesk">
+              <Button variant="outline" size="sm">
+                <Headphones className="w-4 h-4 mr-2" />
+                Suporte
+              </Button>
+            </Link>
+            <Button variant="ghost" onClick={handleSignOut}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Sair
+            </Button>
+          </div>
         </div>
       </header>
 

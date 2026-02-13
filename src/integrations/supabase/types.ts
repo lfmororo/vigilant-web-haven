@@ -65,6 +65,27 @@ export type Database = {
         }
         Relationships: []
       }
+      equipment_types: {
+        Row: {
+          created_at: string
+          icon: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          icon?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          icon?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -91,6 +112,197 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      service_orders: {
+        Row: {
+          client_id: string
+          client_signature: string | null
+          completed_at: string | null
+          created_at: string
+          diagnosis: string | null
+          id: string
+          labor_cost: number | null
+          notes: string | null
+          order_number: number
+          parts_used: Json | null
+          solution: string | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["service_order_status"]
+          technician_id: string | null
+          ticket_id: string | null
+          total_cost: number | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          client_signature?: string | null
+          completed_at?: string | null
+          created_at?: string
+          diagnosis?: string | null
+          id?: string
+          labor_cost?: number | null
+          notes?: string | null
+          order_number?: number
+          parts_used?: Json | null
+          solution?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["service_order_status"]
+          technician_id?: string | null
+          ticket_id?: string | null
+          total_cost?: number | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          client_signature?: string | null
+          completed_at?: string | null
+          created_at?: string
+          diagnosis?: string | null
+          id?: string
+          labor_cost?: number | null
+          notes?: string | null
+          order_number?: number
+          parts_used?: Json | null
+          solution?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["service_order_status"]
+          technician_id?: string | null
+          ticket_id?: string | null
+          total_cost?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_orders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_orders_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_orders_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_messages: {
+        Row: {
+          created_at: string
+          id: string
+          is_internal: boolean
+          message: string
+          sender_id: string
+          ticket_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_internal?: boolean
+          message: string
+          sender_id: string
+          ticket_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_internal?: boolean
+          message?: string
+          sender_id?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tickets: {
+        Row: {
+          assigned_to: string | null
+          client_id: string
+          created_at: string
+          description: string
+          equipment_info: string | null
+          equipment_type_id: string | null
+          id: string
+          priority: Database["public"]["Enums"]["ticket_priority"]
+          status: Database["public"]["Enums"]["ticket_status"]
+          ticket_number: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          client_id: string
+          created_at?: string
+          description: string
+          equipment_info?: string | null
+          equipment_type_id?: string | null
+          id?: string
+          priority?: Database["public"]["Enums"]["ticket_priority"]
+          status?: Database["public"]["Enums"]["ticket_status"]
+          ticket_number?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          client_id?: string
+          created_at?: string
+          description?: string
+          equipment_info?: string | null
+          equipment_type_id?: string | null
+          id?: string
+          priority?: Database["public"]["Enums"]["ticket_priority"]
+          status?: Database["public"]["Enums"]["ticket_status"]
+          ticket_number?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tickets_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_equipment_type_id_fkey"
+            columns: ["equipment_type_id"]
+            isOneToOne: false
+            referencedRelation: "equipment_types"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_cameras: {
         Row: {
@@ -160,6 +372,14 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user"
+      service_order_status: "draft" | "in_progress" | "completed" | "cancelled"
+      ticket_priority: "low" | "medium" | "high" | "urgent"
+      ticket_status:
+        | "open"
+        | "in_progress"
+        | "waiting_client"
+        | "resolved"
+        | "closed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -288,6 +508,15 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
+      service_order_status: ["draft", "in_progress", "completed", "cancelled"],
+      ticket_priority: ["low", "medium", "high", "urgent"],
+      ticket_status: [
+        "open",
+        "in_progress",
+        "waiting_client",
+        "resolved",
+        "closed",
+      ],
     },
   },
 } as const

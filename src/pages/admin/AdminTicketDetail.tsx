@@ -1,0 +1,144 @@
+import { useEffect, useState } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import AdminLayout from "@/components/admin/AdminLayout";
+import TicketStatusBadge from "@/components/helpdesk/TicketStatusBadge";
+import PriorityBadge from "@/components/helpdesk/PriorityBadge";
+import TicketChat from "@/components/helpdesk/TicketChat";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, Loader2, FileText } from "lucide-react";
+
+const AdminTicketDetail = () => {
+  const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const [ticket, setTicket] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [technicians, setTechnicians] = useState<any[]>([]);
+  const [updating, setUpdating] = useState(false);
+
+  const fetchTicket = () => {
+    if (!id) return;
+    supabase.from("tickets")
+      .select("*, client:profiles!tickets_client_id_fkey(full_name, email), assigned:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name)")
+      .eq("id", id).single()
+      .then(({ data }) => { setTicket(data); setLoading(false); });
+  };
+
+  useEffect(() => {
+    fetchTicket();
+    // Fetch all profiles as potential technicians
+    supabase.from("profiles").select("id, full_name").then(({ data }) => setTechnicians(data || []));
+  }, [id]);
+
+  const updateTicket = async (field: string, value: string) => {
+    setUpdating(true);
+    const { error } = await supabase.from("tickets").update({ [field]: value || null } as any).eq("id", id!);
+    if (error) toast({ variant: "destructive", title: "Erro", description: error.message });
+    else { toast({ title: "Atualizado!" }); fetchTicket(); }
+    setUpdating(false);
+  };
+
+  const createServiceOrder = async () => {
+    if (!ticket) return;
+    const { data, error } = await supabase.from("service_orders").insert({
+      ticket_id: ticket.id,
+      client_id: ticket.client_id,
+      technician_id: ticket.assigned_to,
+    }).select().single();
+    if (error) toast({ variant: "destructive", title: "Erro", description: error.message });
+    else { toast({ title: "OS criada!" }); navigate(`/admin/service-orders/${data.id}`); }
+  };
+
+  if (loading) return <AdminLayout><div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></AdminLayout>;
+  if (!ticket) return <AdminLayout><p className="text-center text-muted-foreground py-12">Ticket não encontrado</p></AdminLayout>;
+
+  return (
+    <AdminLayout>
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Link to="/admin/tickets"><Button variant="ghost" size="icon"><ArrowLeft className="w-5 h-5" /></Button></Link>
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground font-mono">#{ticket.ticket_number}</span>
+              <h1 className="text-xl font-display font-bold">{ticket.title}</h1>
+            </div>
+            <p className="text-sm text-muted-foreground">Cliente: {ticket.client?.full_name} ({ticket.client?.email})</p>
+          </div>
+          <Button variant="outline" onClick={createServiceOrder}><FileText className="w-4 h-4 mr-2" />Criar OS</Button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader><CardTitle>Mensagens</CardTitle></CardHeader>
+              <CardContent className="p-0">
+                <TicketChat ticketId={ticket.id} isAdmin />
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-4">
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Gerenciar</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={ticket.status} onValueChange={(v) => updateTicket("status", v)} disabled={updating}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="open">Aberto</SelectItem>
+                      <SelectItem value="in_progress">Em Andamento</SelectItem>
+                      <SelectItem value="waiting_client">Aguardando Cliente</SelectItem>
+                      <SelectItem value="resolved">Resolvido</SelectItem>
+                      <SelectItem value="closed">Fechado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Prioridade</Label>
+                  <Select value={ticket.priority} onValueChange={(v) => updateTicket("priority", v)} disabled={updating}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Baixa</SelectItem>
+                      <SelectItem value="medium">Média</SelectItem>
+                      <SelectItem value="high">Alta</SelectItem>
+                      <SelectItem value="urgent">Urgente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Técnico Responsável</Label>
+                  <Select value={ticket.assigned_to || ""} onValueChange={(v) => updateTicket("assigned_to", v)} disabled={updating}>
+                    <SelectTrigger><SelectValue placeholder="Selecionar técnico" /></SelectTrigger>
+                    <SelectContent>
+                      {technicians.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Detalhes</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div><span className="text-muted-foreground">Descrição:</span><p className="mt-1">{ticket.description}</p></div>
+                {ticket.equipment_type?.name && <div><span className="text-muted-foreground">Equipamento:</span><p className="mt-1">{ticket.equipment_type.name}</p></div>}
+                {ticket.equipment_info && <div><span className="text-muted-foreground">Info:</span><p className="mt-1">{ticket.equipment_info}</p></div>}
+                <div><span className="text-muted-foreground">Criado em:</span><p className="mt-1">{new Date(ticket.created_at).toLocaleString("pt-BR")}</p></div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </AdminLayout>
+  );
+};
+
+export default AdminTicketDetail;
