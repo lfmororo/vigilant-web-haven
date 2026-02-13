@@ -14,3 +14,9 @@ verify_jwt = true
 
 [functions.inventory-sync]
 verify_jwt = false
+
+[functions.test-imap-connection]
+verify_jwt = false
+
+[functions.test-smtp-connection]
+verify_jwt = false
