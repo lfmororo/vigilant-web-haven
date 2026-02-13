@@ -213,9 +213,96 @@ async function imapCommand(conn: Deno.TlsConn, tag: string, cmd: string): Promis
   return fullResponse;
 }
 
+function encodeRFC2047(str: string): string {
+  const encoded = btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+  return `=?UTF-8?B?${encoded}?=`;
+}
+
+function buildEmailWrapper(companyName: string, bodyContent: string): string {
+  const logoUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/email-assets/fm-techflow-logo.png`;
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 0;">
+<tr><td align="center">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+  <tr><td style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);padding:28px 32px;text-align:center;">
+    <img src="${logoUrl}" alt="${companyName}" style="height:44px;max-width:200px;" />
+    <p style="margin:8px 0 0;color:#94a3b8;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;">Sistema de Suporte</p>
+  </td></tr>
+  <tr><td style="padding:28px 32px;">${bodyContent}</td></tr>
+  <tr><td style="padding:0 32px;"><div style="height:1px;background:linear-gradient(to right,transparent,#e2e8f0,transparent);"></div></td></tr>
+  <tr><td style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);padding:20px 32px;text-align:center;">
+    <p style="margin:0 0 6px;color:#e2e8f0;font-size:13px;font-weight:600;">${companyName}</p>
+    <p style="margin:0 0 8px;color:#64748b;font-size:12px;">Sistema de Suporte Técnico</p>
+    <div style="height:1px;background:rgba(255,255,255,0.1);margin:8px 0;"></div>
+    <p style="margin:0;color:#64748b;font-size:11px;font-style:italic;">Este email foi enviado automaticamente. Por favor, não responda diretamente.</p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`;
+}
+
+function buildWelcomeEmailHtml(companyName: string, name: string, email: string, password: string, loginUrl: string): string {
+  const body = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <span style="font-size:48px;">🎉</span>
+      <h1 style="margin:10px 0 0;font-size:22px;color:#2563eb;font-weight:800;">Bem-vindo ao Sistema de Suporte!</h1>
+    </div>
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.6;">Olá <strong>${name}</strong>,</p>
+    <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">Seu chamado foi recebido com sucesso! Foi criada uma conta para você em nosso sistema.</p>
+    <table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:20px;">
+      <tr>
+        <td style="padding:12px 16px;background:#f8fafc;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;width:160px;font-size:14px;">📧 Email</td>
+        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;color:#1e293b;font-size:14px;">${email}</td>
+      </tr>
+      <tr>
+        <td style="padding:12px 16px;background:#f8fafc;font-weight:600;color:#475569;font-size:14px;">🔑 Senha Provisória</td>
+        <td style="padding:12px 16px;color:#1e293b;font-size:14px;font-family:monospace;background:#fffbeb;">${password}</td>
+      </tr>
+    </table>
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
+      <p style="margin:0;color:#c2410c;font-size:14px;line-height:1.5;">⚠️ <strong>Importante:</strong> Altere sua senha no primeiro login por segurança.</p>
+    </div>
+    <div style="text-align:center;">
+      <a href="${loginUrl}" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;box-shadow:0 4px 14px rgba(37,99,235,0.35);">Acessar o Sistema</a>
+    </div>`;
+  return buildEmailWrapper(companyName, body);
+}
+
+function buildAdminNewTicketHtml(companyName: string, adminName: string, senderName: string, senderEmail: string, subject: string, description: string, ticketUrl: string): string {
+  const descPreview = description.length > 300 ? description.substring(0, 300) + "..." : description;
+  const body = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <span style="font-size:48px;">🎫</span>
+      <h1 style="margin:10px 0 0;font-size:22px;color:#2563eb;font-weight:800;">Novo Chamado Recebido por E-mail</h1>
+    </div>
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.6;">Olá <strong>${adminName}</strong>,</p>
+    <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">Um novo chamado foi aberto automaticamente via e-mail:</p>
+    <table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:20px;">
+      <tr>
+        <td style="padding:12px 16px;background:#f8fafc;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;width:140px;font-size:14px;">Cliente</td>
+        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;color:#1e293b;font-size:14px;">${senderName} (${senderEmail})</td>
+      </tr>
+      <tr>
+        <td style="padding:12px 16px;background:#f8fafc;font-weight:600;color:#475569;font-size:14px;">Assunto</td>
+        <td style="padding:12px 16px;color:#1e293b;font-size:14px;">${subject}</td>
+      </tr>
+    </table>
+    <div style="background:#eff6ff;border-left:4px solid #2563eb;border-radius:0 8px 8px 0;padding:16px 20px;margin-bottom:24px;">
+      <p style="margin:0 0 6px;font-weight:700;color:#2563eb;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;">Descrição do Chamado</p>
+      <p style="margin:0;color:#334155;font-size:14px;line-height:1.6;">${descPreview}</p>
+    </div>
+    <div style="text-align:center;">
+      <a href="${ticketUrl}" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;box-shadow:0 4px 14px rgba(37,99,235,0.35);">Visualizar Ticket</a>
+    </div>`;
+  return buildEmailWrapper(companyName, body);
+}
+
 async function sendSmtpEmail(
   host: string, port: number, user: string, password: string,
-  fromName: string, to: string, subject: string, body: string
+  fromName: string, to: string, subject: string, body: string, isHtml = false
 ) {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
@@ -242,7 +329,7 @@ async function sendSmtpEmail(
     return decoder.decode(b.subarray(0, n || 0));
   };
 
-  if (port === 465) await readResp(); // greeting
+  if (port === 465) await readResp();
   await conn.write(encoder.encode("EHLO localhost\r\n"));
   await readResp();
   await conn.write(encoder.encode("AUTH LOGIN\r\n"));
@@ -263,7 +350,10 @@ async function sendSmtpEmail(
   await conn.write(encoder.encode("DATA\r\n"));
   await readResp();
 
-  const msg = `From: "${fromName}" <${user}>\r\nTo: <${to}>\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${body}\r\n.\r\n`;
+  const contentType = isHtml ? "text/html; charset=utf-8" : "text/plain; charset=utf-8";
+  const encodedSubject = encodeRFC2047(subject);
+  const encodedFromName = encodeRFC2047(fromName);
+  const msg = `From: ${encodedFromName} <${user}>\r\nTo: <${to}>\r\nSubject: ${encodedSubject}\r\nMIME-Version: 1.0\r\nContent-Type: ${contentType}\r\nContent-Transfer-Encoding: 8bit\r\n\r\n${body}\r\n.\r\n`;
   await conn.write(encoder.encode(msg));
   await readResp();
   await conn.write(encoder.encode("QUIT\r\n"));
@@ -500,11 +590,14 @@ Deno.serve(async (req) => {
           // Send welcome email with temp password via SMTP
           if (smtpHost && smtpUser && smtpPassword) {
             try {
+              const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
+              const welcomeHtml = buildWelcomeEmailHtml(smtpFromName, senderName, senderEmail, tempPassword, `${baseUrl}/auth`);
               await sendSmtpEmail(
                 smtpHost, smtpPort, smtpUser, smtpPassword, smtpFromName,
                 senderEmail,
                 "Bem-vindo ao Sistema de Suporte",
-                `Olá ${senderName},\n\nSeu chamado foi recebido com sucesso!\n\nFoi criada uma conta para você em nosso sistema de suporte.\n\nSeus dados de acesso:\nEmail: ${senderEmail}\nSenha provisória: ${tempPassword}\n\nAcesse o sistema e altere sua senha no primeiro login.\n\nAtenciosamente,\n${smtpFromName}`
+                welcomeHtml,
+                true
               );
             } catch (smtpErr) {
               console.error("Error sending welcome email:", smtpErr);
@@ -549,16 +642,18 @@ Deno.serve(async (req) => {
                 .select("email, full_name")
                 .in("id", adminIds);
 
-              const ticketUrl = `${loginUrl}/admin/tickets/${newTicket.id}`;
-              const descriptionPreview = bodyText.length > 200 ? bodyText.substring(0, 200) + "..." : bodyText;
+              const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
+              const ticketUrl = `${baseUrl}/admin/tickets/${newTicket.id}`;
 
               for (const admin of (adminProfiles || [])) {
                 try {
+                  const adminHtml = buildAdminNewTicketHtml(smtpFromName, admin.full_name, senderName, senderEmail, subject, bodyText, ticketUrl);
                   await sendSmtpEmail(
                     smtpHost, smtpPort, smtpUser, smtpPassword, smtpFromName,
                     admin.email,
                     `Novo chamado recebido por e-mail: ${subject}`,
-                    `Olá ${admin.full_name},\n\nUm novo chamado foi aberto via e-mail.\n\nCliente: ${senderName} (${senderEmail})\nAssunto: ${subject}\n\nDescrição:\n${descriptionPreview}\n\nAcesse o chamado: ${ticketUrl}\n\nAtenciosamente,\n${smtpFromName}`
+                    adminHtml,
+                    true
                   );
                 } catch (adminEmailErr) {
                   console.error(`Error sending admin notification to ${admin.email}:`, adminEmailErr);
