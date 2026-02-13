@@ -470,6 +470,42 @@ Deno.serve(async (req) => {
 
         ticketsCreated++;
 
+        // Notify admins about new ticket via email
+        if (newTicket && smtpHost && smtpUser && smtpPassword) {
+          try {
+            const { data: adminRoles } = await supabaseAdmin
+              .from("user_roles")
+              .select("user_id")
+              .eq("role", "admin");
+
+            if (adminRoles && adminRoles.length > 0) {
+              const adminIds = adminRoles.map((r: any) => r.user_id);
+              const { data: adminProfiles } = await supabaseAdmin
+                .from("profiles")
+                .select("email, full_name")
+                .in("id", adminIds);
+
+              const ticketUrl = `${loginUrl}/admin/tickets/${newTicket.id}`;
+              const descriptionPreview = bodyText.length > 200 ? bodyText.substring(0, 200) + "..." : bodyText;
+
+              for (const admin of (adminProfiles || [])) {
+                try {
+                  await sendSmtpEmail(
+                    smtpHost, smtpPort, smtpUser, smtpPassword, smtpFromName,
+                    admin.email,
+                    `Novo chamado recebido por e-mail: ${subject}`,
+                    `Olá ${admin.full_name},\n\nUm novo chamado foi aberto via e-mail.\n\nCliente: ${senderName} (${senderEmail})\nAssunto: ${subject}\n\nDescrição:\n${descriptionPreview}\n\nAcesse o chamado: ${ticketUrl}\n\nAtenciosamente,\n${smtpFromName}`
+                  );
+                } catch (adminEmailErr) {
+                  console.error(`Error sending admin notification to ${admin.email}:`, adminEmailErr);
+                }
+              }
+            }
+          } catch (notifyErr) {
+            console.error("Error notifying admins:", notifyErr);
+          }
+        }
+
         // Mark email as seen
         await imapCommand(conn, `d${num}`, `STORE ${num} +FLAGS (\\Seen)`);
       } catch (emailErr) {
