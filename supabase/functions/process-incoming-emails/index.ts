@@ -319,13 +319,23 @@ Deno.serve(async (req) => {
         }
 
         // Create ticket
-        await supabaseAdmin.from("tickets").insert({
+        const { data: newTicket } = await supabaseAdmin.from("tickets").insert({
           client_id: clientId,
           title: subject,
           description: bodyText,
           priority: "medium",
           status: "open",
-        });
+        }).select("id").single();
+
+        // Add email body as first message in the ticket
+        if (newTicket) {
+          await supabaseAdmin.from("ticket_messages").insert({
+            ticket_id: newTicket.id,
+            sender_id: clientId,
+            message: bodyText,
+            is_internal: false,
+          });
+        }
 
         ticketsCreated++;
 
