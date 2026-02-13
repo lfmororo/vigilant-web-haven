@@ -79,6 +79,8 @@ function buildEmailHtml(p: EmailParams): string {
       </div>`;
   }
 
+  const logoUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/email-assets/fm-techflow-logo.png`;
+
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
@@ -86,9 +88,10 @@ function buildEmailHtml(p: EmailParams): string {
 <tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
 
-  <!-- Header -->
-  <tr><td style="background:#2563eb;padding:24px 32px;text-align:center;">
-    <p style="margin:0;color:#ffffff;font-size:14px;letter-spacing:1px;text-transform:uppercase;">Notificação de Ticket de Suporte</p>
+  <!-- Header with Logo -->
+  <tr><td style="background:#1a1a2e;padding:24px 32px;text-align:center;">
+    <img src="${logoUrl}" alt="FM TechFlow" style="height:48px;max-width:200px;" />
+    <p style="margin:8px 0 0;color:#94a3b8;font-size:12px;letter-spacing:1px;text-transform:uppercase;">Sistema de Suporte</p>
   </td></tr>
 
   <!-- Emoji Icon -->
@@ -112,8 +115,8 @@ function buildEmailHtml(p: EmailParams): string {
   </td></tr>
 
   <!-- Footer -->
-  <tr><td style="background:#2563eb;padding:16px 32px;text-align:center;">
-    <p style="margin:0;color:#ffffff;font-size:13px;">${p.companyName} · Sistema de Suporte</p>
+  <tr><td style="background:#1a1a2e;padding:16px 32px;text-align:center;">
+    <p style="margin:0;color:#94a3b8;font-size:13px;">${p.companyName} · Sistema de Suporte</p>
   </td></tr>
 
 </table>
