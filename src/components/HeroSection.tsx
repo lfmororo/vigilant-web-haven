@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Shield, Lock, Eye, ArrowRight } from "lucide-react";
+import { Shield, Lock, Eye, ArrowRight, Headphones } from "lucide-react";
 
 const HeroSection = () => {
   return (
@@ -45,6 +45,10 @@ const HeroSection = () => {
             </Button>
             <Button variant="heroOutline">
               Conhecer Soluções
+            </Button>
+            <Button variant="heroOutline" onClick={() => window.location.href = "/helpdesk"}>
+              <Headphones className="w-5 h-5" />
+              Suporte Técnico
             </Button>
           </div>
 
