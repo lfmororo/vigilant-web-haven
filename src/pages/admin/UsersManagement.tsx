@@ -29,7 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Camera, Eye, EyeOff } from "lucide-react";
+import { Plus, Loader2, Camera, Eye, EyeOff, Pencil } from "lucide-react";
 import { z } from "zod";
 import { Link } from "react-router-dom";
 
@@ -63,6 +63,11 @@ const createUserSchema = z.object({
   phone: z.string().optional(),
 });
 
+const editUserSchema = z.object({
+  full_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  phone: z.string().optional(),
+});
+
 const UsersManagement = () => {
   const { toast } = useToast();
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -80,6 +85,13 @@ const UsersManagement = () => {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Edit state
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+  const [editFormData, setEditFormData] = useState({ full_name: "", phone: "", role: "client" });
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -93,7 +105,6 @@ const UsersManagement = () => {
 
       if (error) throw error;
 
-      // Fetch roles for all users
       const { data: roles } = await supabase.from("user_roles").select("user_id, role");
       const roleMap = new Map<string, string>();
       roles?.forEach((r) => roleMap.set(r.user_id, r.role));
@@ -143,6 +154,72 @@ const UsersManagement = () => {
       toast({ variant: "destructive", title: "Erro ao criar usuário", description: error.message });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const openEditDialog = (user: UserProfile) => {
+    setEditingUser(user);
+    setEditFormData({ full_name: user.full_name, phone: user.phone || "", role: user.role || "client" });
+    setEditErrors({});
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setEditErrors({});
+
+    const result = editUserSchema.safeParse(editFormData);
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      result.error.errors.forEach((err) => {
+        fieldErrors[err.path[0] as string] = err.message;
+      });
+      setEditErrors(fieldErrors);
+      return;
+    }
+
+    setIsEditSubmitting(true);
+
+    try {
+      // Update profile
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ full_name: editFormData.full_name, phone: editFormData.phone || null })
+        .eq("id", editingUser.id);
+
+      if (profileError) throw profileError;
+
+      // Update role if changed
+      if (editFormData.role !== editingUser.role) {
+        const { data: existingRole } = await supabase
+          .from("user_roles")
+          .select("id")
+          .eq("user_id", editingUser.id)
+          .maybeSingle();
+
+        if (existingRole) {
+          const { error: roleError } = await supabase
+            .from("user_roles")
+            .update({ role: editFormData.role as any })
+            .eq("user_id", editingUser.id);
+          if (roleError) throw roleError;
+        } else {
+          const { error: roleError } = await supabase
+            .from("user_roles")
+            .insert({ user_id: editingUser.id, role: editFormData.role as any });
+          if (roleError) throw roleError;
+        }
+      }
+
+      toast({ title: "Usuário atualizado", description: `${editFormData.full_name} foi atualizado com sucesso.` });
+      setIsEditDialogOpen(false);
+      setEditingUser(null);
+      fetchUsers();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao atualizar usuário", description: error.message });
+    } finally {
+      setIsEditSubmitting(false);
     }
   };
 
@@ -250,9 +327,12 @@ const UsersManagement = () => {
                       </TableCell>
                       <TableCell>{user.phone || "-"}</TableCell>
                       <TableCell>{new Date(user.created_at).toLocaleDateString("pt-BR")}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-1">
+                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(user)}>
+                          <Pencil className="w-4 h-4 mr-1" />Editar
+                        </Button>
                         <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/admin/users/${user.id}/cameras`}><Camera className="w-4 h-4 mr-2" />Câmeras</Link>
+                          <Link to={`/admin/users/${user.id}/cameras`}><Camera className="w-4 h-4 mr-1" />Câmeras</Link>
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -262,6 +342,42 @@ const UsersManagement = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Edit User Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Editar Usuário</DialogTitle></DialogHeader>
+            <form onSubmit={handleEditUser} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input value={editingUser?.email || ""} disabled className="opacity-60" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_full_name">Nome Completo</Label>
+                <Input id="edit_full_name" value={editFormData.full_name} onChange={(e) => setEditFormData({ ...editFormData, full_name: e.target.value })} className={editErrors.full_name ? "border-destructive" : ""} />
+                {editErrors.full_name && <p className="text-sm text-destructive">{editErrors.full_name}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_phone">Telefone</Label>
+                <Input id="edit_phone" value={editFormData.phone} onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Perfil</Label>
+                <Select value={editFormData.role} onValueChange={(v) => setEditFormData({ ...editFormData, role: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="client">Cliente</SelectItem>
+                    <SelectItem value="technician">Técnico</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="submit" className="w-full" disabled={isEditSubmitting}>
+                {isEditSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Salvando...</> : "Salvar Alterações"}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );
