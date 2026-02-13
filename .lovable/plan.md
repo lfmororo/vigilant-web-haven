@@ -1,41 +1,79 @@
 
+## Ordem de Servico para Impressao - Layout Completo
 
-## Notificacao por Email ao Atribuir Tecnico + Dashboard em Tempo Real
-
-Existem dois problemas identificados:
-
-1. **Email nao enviado ao atribuir tecnico**: A funcao `updateTicket` em `AdminTicketDetail.tsx` atualiza o ticket no banco mas NAO chama a edge function `notify-ticket-update`. As notificacoes por email so sao disparadas quando uma mensagem e enviada no chat.
-
-2. **Dashboard nao atualiza em tempo real**: O `AdminHelpdeskDashboard.tsx` busca os tickets apenas uma vez ao carregar a pagina (sem Realtime). Quando um ticket e atualizado (status, tecnico), o dashboard nao reflete a mudanca ate um reload manual.
+Implementar um botao "Imprimir OS" na pagina de detalhe da OS que gera um layout para impressao identico ao PDF de exemplo, com todos os campos necessarios adicionados ao banco de dados.
 
 ---
 
-### 1. Enviar notificacao ao atribuir tecnico ou alterar status
+### 1. Alteracoes no Banco de Dados
 
-No arquivo `AdminTicketDetail.tsx`, apos o `updateTicket` ser bem-sucedido, chamar a edge function `notify-ticket-update` com uma mensagem automatica informando a alteracao.
+Adicionar campos faltantes nas tabelas existentes:
 
-Exemplo de mensagens automaticas:
-- Atribuicao de tecnico: "O tecnico [Nome] foi atribuido ao chamado."
-- Mudanca de status: "O status do chamado foi alterado para [Status]."
+**Tabela `profiles`** (endereco do cliente):
+- `address` (text) - Endereco/Rua
+- `address_number` (text) - Numero
+- `address_complement` (text) - Complemento
+- `neighborhood` (text) - Bairro
+- `city` (text) - Cidade
 
-A chamada sera fire-and-forget, igual ao padrao ja usado no `TicketChat`.
+**Tabela `service_orders`** (campos da OS):
+- `arrival_date` (timestamptz) - Data de chegada
+- `departure_date` (timestamptz) - Data de saida
+- `travel_cost` (numeric, default 0) - Valor de deslocamento
+- `equipment_removed` (text) - Equipamento retirado
+- `material_used` (text) - Descricao do material utilizado
+- `service_description` (text) - Descricao do servico realizado
+- `checked_by` (text) - Conferido por
+- `technician_signature` (text) - Assinatura do tecnico (texto/nome)
+- `client_signature` ja existe na tabela
 
-### 2. Adicionar Realtime ao Dashboard
+---
 
-No `AdminHelpdeskDashboard.tsx`, adicionar uma subscription Realtime na tabela `tickets` para que qualquer INSERT, UPDATE ou DELETE atualize automaticamente a lista de tickets no dashboard.
+### 2. Atualizar Formulario da OS (AdminServiceOrderDetail.tsx)
+
+Adicionar os novos campos no formulario de edicao:
+- Secao "Servico": descricao do servico, equipamento retirado, material utilizado
+- Secao "Datas": data chegada, data saida
+- Secao "Custos": valor de deslocamento (junto ao campo existente de mao de obra)
+- Secao "Configuracoes": conferido por
+
+---
+
+### 3. Criar Componente de Impressao (ServiceOrderPrint.tsx)
+
+Novo componente `src/components/admin/ServiceOrderPrint.tsx` com layout identico ao PDF:
+
+**Pagina 1 - Cabecalho e Historico:**
+- Logo/dados da empresa (buscados de `system_settings`)
+- Titulo "Ordem de servico ID: #N"
+- Dados do cliente em grid: nome, endereco, numero, complemento, bairro, cidade, contato, telefone
+- Categoria (tipo de equipamento do ticket vinculado)
+- Assunto do problema (titulo do ticket)
+- Descricao do problema
+- Acompanhamentos: tabela com data, hora, responsavel, acao e descricao (mensagens do ticket)
+
+**Pagina 2 - Resumo do Servico:**
+- Descricao do servico realizado
+- Equipamento retirado
+- Material utilizado
+- Grid: Tecnico | Conferido por
+- Grid: Data chegada | Data saida
+- Grid: Data criacao | Data ultima atualizacao
+- Grid: Pecas | Mao de obra | Valor total | Valor de deslocamento
+- Areas de assinatura: tecnico e cliente
+
+---
+
+### 4. Botao de Impressao
+
+Adicionar botao "Imprimir" ao lado do botao "Salvar" na pagina `AdminServiceOrderDetail.tsx`. Ao clicar, abre o componente de impressao em uma nova janela ou usa `window.print()` com CSS `@media print` para ocultar elementos da interface e exibir apenas o layout da OS.
 
 ---
 
 ### Detalhes Tecnicos
 
-**Arquivo: `src/pages/admin/AdminTicketDetail.tsx`**
-- Na funcao `updateTicket`, apos o sucesso, montar uma mensagem descritiva baseada no campo alterado e chamar `supabase.functions.invoke("notify-ticket-update", ...)`.
-- Buscar o nome do tecnico da lista `technicians` quando o campo for `assigned_to`.
-- Mapear os valores de status para labels em portugues.
-
-**Arquivo: `src/pages/admin/AdminHelpdeskDashboard.tsx`**
-- Adicionar um `useEffect` com `supabase.channel('dashboard-tickets')` escutando `postgres_changes` (event: `*`) na tabela `tickets`.
-- Ao receber qualquer mudanca, re-buscar os tickets do banco para atualizar metricas e graficos.
-
-**Nenhuma mudanca necessaria** na edge function `notify-ticket-update` -- ela ja suporta receber qualquer mensagem e enviar para os envolvidos.
-
+- O componente de impressao busca os dados do ticket vinculado (via `ticket_id`) incluindo mensagens (`ticket_messages`) para montar a tabela de acompanhamentos
+- Busca dados da empresa de `system_settings` (chaves como `company_name`, `company_address`, `company_phone`, `company_cnpj`)
+- CSS com `@media print` para esconder navbar/sidebar e mostrar apenas o conteudo da OS
+- Layout usa classes Tailwind com `print:` prefix para estilizacao de impressao
+- Os novos campos no profiles serao editaveis na pagina de gestao de clientes existente
