@@ -74,8 +74,8 @@ const AdminHelpdeskDashboard = () => {
   }, []);
 
   const metrics = useMemo(() => {
-    const open = tickets.filter((t) => t.status === "open").length;
-    const inProgress = tickets.filter((t) => t.status === "in_progress").length;
+    const open = tickets.filter((t) => t.status === "open" && !t.assigned_to).length;
+    const inProgress = tickets.filter((t) => t.status === "in_progress" || (t.status === "open" && t.assigned_to)).length;
     const waiting = tickets.filter((t) => t.status === "waiting_client").length;
     const resolved = tickets.filter((t) => t.status === "resolved" || t.status === "closed").length;
     const totalOpen = open + inProgress + waiting;
