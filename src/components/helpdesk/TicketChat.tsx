@@ -76,7 +76,7 @@ const TicketChat = ({ ticketId, isAdmin = false, isStaff = false }: TicketChatPr
       setIsInternal(false);
       // Fire-and-forget notification
       supabase.functions.invoke("notify-ticket-update", {
-        body: { ticket_id: ticketId, sender_id: user.id, message: sentMessage, is_internal: sentInternal },
+        body: { ticket_id: ticketId, sender_id: user.id, message: sentMessage, is_internal: sentInternal, notification_type: "ticket_updated" },
       }).catch((err) => console.error("Notification error:", err));
     }
     setSending(false);
