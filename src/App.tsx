@@ -21,6 +21,7 @@ import AdminTicketsManagement from "./pages/admin/AdminTicketsManagement";
 import AdminTicketDetail from "./pages/admin/AdminTicketDetail";
 import AdminServiceOrders from "./pages/admin/AdminServiceOrders";
 import AdminServiceOrderDetail from "./pages/admin/AdminServiceOrderDetail";
+import SystemSettings from "./pages/admin/SystemSettings";
 import HelpdeskDashboard from "./pages/helpdesk/HelpdeskDashboard";
 import ClientTicketsList from "./pages/helpdesk/ClientTicketsList";
 import NewTicket from "./pages/helpdesk/NewTicket";
@@ -59,6 +60,7 @@ const App = () => (
               <Route path="/admin/tickets/:id" element={<AuthGuard requireAdminOrTechnician><AdminTicketDetail /></AuthGuard>} />
               <Route path="/admin/service-orders" element={<AuthGuard requireAdminOrTechnician><AdminServiceOrders /></AuthGuard>} />
               <Route path="/admin/service-orders/:id" element={<AuthGuard requireAdminOrTechnician><AdminServiceOrderDetail /></AuthGuard>} />
+              <Route path="/admin/settings" element={<AuthGuard requireAdmin><SystemSettings /></AuthGuard>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

@@ -16,6 +16,7 @@ import {
   Headphones,
   UserCheck,
   Package,
+  Settings,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -31,6 +32,7 @@ const allNavItems = [
   { label: "Dashboard Suporte", href: "/admin/helpdesk", icon: Headphones, roles: ["admin", "technician"] },
   { label: "Chamados", href: "/admin/tickets", icon: TicketCheck, roles: ["admin", "technician"] },
   { label: "Ordens de Serviço", href: "/admin/service-orders", icon: FileText, roles: ["admin", "technician"] },
+  { label: "Configurações", href: "/admin/settings", icon: Settings, roles: ["admin"] },
 ];
 
 const AdminLayout = ({ children }: AdminLayoutProps) => {
