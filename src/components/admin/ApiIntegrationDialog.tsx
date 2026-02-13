@@ -146,7 +146,11 @@ const ApiIntegrationDialog = ({ open, onOpenChange, clientId, clientName }: ApiI
   })
 } | ConvertTo-Json -Depth 3
 
-Invoke-RestMethod -Uri "${functionsUrl}/inventory-sync" -Method POST -Body $body -ContentType "application/json"`;
+$headers = @{
+  "apikey" = "${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}"
+}
+
+Invoke-RestMethod -Uri "${functionsUrl}/inventory-sync" -Method POST -Body $body -ContentType "application/json" -Headers $headers`;
 
   const pythonScript = (cId: string, key: string) =>
     `import requests
@@ -174,7 +178,8 @@ data = {
     }]
 }
 
-response = requests.post("${functionsUrl}/inventory-sync", json=data)
+headers = {"apikey": "${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}"}
+response = requests.post("${functionsUrl}/inventory-sync", json=data, headers=headers)
 print(response.json())`;
 
   const exampleClientId = clientId || selectedClientId || "SEU_CLIENT_ID";
