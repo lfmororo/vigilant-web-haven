@@ -33,18 +33,30 @@ const NewTicket = () => {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.from("tickets").insert({
+    const { data: insertedTicket, error } = await supabase.from("tickets").insert({
       title: form.title,
       description: form.description,
       equipment_type_id: form.equipment_type_id || null,
       equipment_info: form.equipment_info || null,
       priority: form.priority as any,
       client_id: user.id,
-    });
+    }).select("id").single();
     if (error) {
       toast({ variant: "destructive", title: "Erro ao criar chamado", description: error.message });
     } else {
       toast({ title: "Chamado criado com sucesso!" });
+      // Fire-and-forget notification for new ticket
+      if (insertedTicket?.id) {
+        supabase.functions.invoke("notify-ticket-update", {
+          body: {
+            ticket_id: insertedTicket.id,
+            sender_id: user.id,
+            message: form.description,
+            is_internal: false,
+            notification_type: "ticket_opened",
+          },
+        }).catch((err) => console.error("Notification error:", err));
+      }
       navigate("/helpdesk/tickets");
     }
     setLoading(false);

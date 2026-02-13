@@ -68,11 +68,14 @@ const AdminTicketDetail = () => {
 
       // Fire-and-forget email notification
       let message = "";
+      let notificationType = "ticket_updated";
       if (field === "assigned_to") {
         const tech = technicians.find((t) => t.id === value);
         message = `O técnico ${tech?.full_name || "desconhecido"} foi atribuído ao chamado.`;
       } else if (field === "status") {
         message = `O status do chamado foi alterado para ${statusLabels[value] || value}.`;
+        if (value === "resolved") notificationType = "ticket_resolved";
+        else if (value === "closed") notificationType = "ticket_closed";
       } else if (field === "priority") {
         const priorityLabels: Record<string, string> = { low: "Baixa", medium: "Média", high: "Alta", urgent: "Urgente" };
         message = `A prioridade do chamado foi alterada para ${priorityLabels[value] || value}.`;
@@ -80,7 +83,7 @@ const AdminTicketDetail = () => {
 
       if (message) {
         supabase.functions.invoke("notify-ticket-update", {
-          body: { ticket_id: id, sender_id: user?.id, message, is_internal: false },
+          body: { ticket_id: id, sender_id: user?.id, message, is_internal: false, notification_type: notificationType },
         }).catch(() => {});
       }
     }
