@@ -445,6 +445,7 @@ Deno.serve(async (req) => {
         // Create ticket
         const { data: newTicket } = await supabaseAdmin.from("tickets").insert({
           client_id: clientId,
+          created_by: clientId,
           title: subject,
           description: bodyText,
           priority: "medium",

@@ -40,6 +40,7 @@ const NewTicket = () => {
       equipment_info: form.equipment_info || null,
       priority: form.priority as any,
       client_id: user.id,
+      created_by: user.id,
     }).select("id").single();
     if (error) {
       toast({ variant: "destructive", title: "Erro ao criar chamado", description: error.message });
