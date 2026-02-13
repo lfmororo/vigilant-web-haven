@@ -1,109 +1,57 @@
 
 
-## Acesso de Tecnicos e Clientes aos Tickets
+## Dashboard de Suporte Estilo GLPI
 
-### Resumo
-
-Liberar acesso dos tecnicos ao menu de chamados (criar, atualizar, finalizar tickets) e garantir que clientes possam acessar e interagir nos tickets relacionados a eles.
+Recriar o dashboard de suporte (`AdminHelpdeskDashboard.tsx`) com visual inspirado no GLPI, usando graficos e metricas detalhadas.
 
 ---
 
-### 1. Banco de Dados - Atualizar RLS
+### Layout do Dashboard (3 linhas)
 
-**Tabela `tickets`:**
-- Adicionar politica SELECT para tecnicos verem tickets atribuidos a eles (`assigned_to = auth.uid()`) ou onde sao admin
-- Adicionar politica UPDATE para tecnicos atualizarem tickets atribuidos a eles (status, prioridade)
-- Adicionar politica INSERT para tecnicos poderem criar tickets
+**Linha 1 - Contadores por Status:**
+5 cards em linha: Novo (open), Atribuido (in_progress), Pendente (waiting_client), Solucionado (resolved), Total Aberto (open + in_progress + waiting_client)
 
-**Tabela `ticket_messages`:**
-- Atualizar politica INSERT para permitir tecnicos enviarem mensagens em tickets atribuidos a eles
-- Atualizar politica SELECT para tecnicos verem mensagens (incluindo internas) de tickets atribuidos a eles
+**Linha 2 - Metricas Detalhadas:**
+4 cards:
+- Tempo e Data (relogio em tempo real, dia da semana, data)
+- Total de Chamados (numero total com mini grafico sparkline dos ultimos 7 dias)
+- Chamados de Hoje (quantidade criada hoje com percentual de variacao vs ontem)
+- Chamados no Prazo % (gauge/indicador visual com percentual de chamados resolvidos)
 
-**Tabela `service_orders`:**
-- Adicionar politicas para tecnicos verem e atualizarem OS atribuidas a eles
-
----
-
-### 2. Rotas e AuthGuard (App.tsx)
-
-Alterar as rotas de tickets e OS de `requireAdmin` para `requireAdminOrTechnician`:
-
-```text
-/admin/tickets       -> requireAdminOrTechnician (era requireAdmin)
-/admin/tickets/:id   -> requireAdminOrTechnician (era requireAdmin)
-/admin/service-orders     -> requireAdminOrTechnician (era requireAdmin)
-/admin/service-orders/:id -> requireAdminOrTechnician (era requireAdmin)
-```
+**Linha 3 - Graficos:**
+4 cards com graficos Recharts:
+- Chamados por Prioridade (PieChart - low, medium, high, urgent)
+- Chamados por Tipo de Equipamento (BarChart horizontal - por equipment_type)
+- Tempo de Solucao (PieChart - faixas: < 1 dia, 1-2 dias, 2-3 dias, etc.)
+- Top 5 Tecnicos (BarChart horizontal - tecnicos com mais chamados resolvidos)
 
 ---
 
-### 3. AdminLayout - Menu Condicional
+### Dados Necessarios
 
-Mostrar itens de menu com base na role do usuario:
-- **Admin**: todos os itens (Dashboard, Usuarios, Clientes, Cameras, Inventario, Suporte, Chamados, OS)
-- **Tecnico**: apenas Chamados e Ordens de Servico (e Dashboard adaptado)
-
-Usar o hook `useAuth` para verificar `isAdmin` e filtrar os `navItems`.
-
----
-
-### 4. AdminTicketsManagement - Filtro por Tecnico
-
-Para tecnicos:
-- Mostrar apenas tickets atribuidos a eles (filtro por `assigned_to`)
-- Titulo muda para "Meus Chamados" em vez de "Gestao de Chamados"
-
-Para admins: comportamento atual (ver todos).
+Buscar todos os tickets (sem limit) para calcular as metricas:
+- Todos os tickets com joins em `profiles` (client + assigned_to) e `equipment_types`
+- Agrupar por status, prioridade, tipo de equipamento
+- Calcular tempo de resolucao (diferenca entre `created_at` e `updated_at` para resolvidos/fechados)
+- Contar chamados criados hoje vs ontem
+- Agrupar por tecnico atribuido para ranking
 
 ---
 
-### 5. AdminTicketDetail - Permissoes do Tecnico
+### Detalhes Tecnicos
 
-Para tecnicos:
-- Podem alterar **status** do ticket (em andamento, aguardando, resolvido, fechado)
-- Podem enviar mensagens (incluindo notas internas)
-- **Nao podem** reatribuir o tecnico responsavel (campo oculto ou desabilitado)
-- Podem criar OS a partir do ticket
+**Arquivo a modificar:** `src/pages/admin/AdminHelpdeskDashboard.tsx`
 
-Para admins: tudo como esta.
+**Bibliotecas utilizadas (ja instaladas):**
+- `recharts` - PieChart, BarChart, ResponsiveContainer, Cell, Tooltip
+- `date-fns` - formatacao de datas, calculo de diferencas
+- Componentes shadcn/ui existentes (Card, etc.)
 
----
+**Relogio em tempo real:** useState + setInterval atualizando a cada segundo
 
-### 6. TicketChat - Suporte a Tecnicos
+**Calculo do gauge "Chamados no Prazo":** Percentual de tickets resolvidos/fechados sobre o total (excluindo abertos recentes)
 
-Atualizar o componente para aceitar tecnicos como "staff" (similar a admin):
-- Tecnicos podem enviar notas internas
-- Prop `isAdmin` renomeada/expandida para verificar se e admin OU tecnico
+**Sparkline "Total de Chamados":** Agrupar tickets por dia nos ultimos 7 dias usando `created_at` e renderizar com LineChart simplificado
 
----
-
-### 7. Dashboard do Tecnico
-
-Quando um tecnico acessa `/admin`, redirecionar para `/admin/tickets` ou mostrar um dashboard simplificado com:
-- Contadores de tickets atribuidos por status
-- Lista dos ultimos tickets atribuidos
-
----
-
-### 8. Helpdesk do Cliente (ja existente)
-
-Verificar que o fluxo do cliente esta completo:
-- Clientes acessam `/helpdesk` -> veem seus tickets
-- Podem abrir novos tickets
-- Podem enviar mensagens nos tickets deles
-- Podem ver OS relacionadas
-
-O fluxo ja existe nas paginas `HelpdeskDashboard`, `ClientTicketsList`, `ClientTicketDetail`, `NewTicket`. Apenas confirmar que as RLS policies permitem a interacao correta.
-
----
-
-### Arquivos a Modificar
-
-1. **Migracao SQL** - Novas RLS policies para tecnicos em `tickets`, `ticket_messages`, `service_orders`
-2. `src/App.tsx` - Alterar `requireAdmin` para `requireAdminOrTechnician` nas rotas de tickets/OS
-3. `src/components/admin/AdminLayout.tsx` - Menu condicional por role
-4. `src/pages/admin/AdminTicketsManagement.tsx` - Filtro por tecnico logado
-5. `src/pages/admin/AdminTicketDetail.tsx` - Restricoes de UI para tecnicos
-6. `src/components/helpdesk/TicketChat.tsx` - Suporte a tecnicos como staff
-7. `src/pages/admin/AdminDashboard.tsx` - Dashboard adaptado para tecnicos
+**Cores dos graficos:** Palette escura compativel com o tema atual (cyan/teal para principal, tons de verde, amarelo, vermelho para prioridades)
 
