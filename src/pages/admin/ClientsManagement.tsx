@@ -21,9 +21,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Eye, EyeOff, Package, TicketCheck } from "lucide-react";
+import { Plus, Loader2, Eye, EyeOff, Package, TicketCheck, Key } from "lucide-react";
 import { z } from "zod";
 import { Link } from "react-router-dom";
+import ApiIntegrationDialog from "@/components/admin/ApiIntegrationDialog";
 
 interface ClientProfile {
   id: string;
@@ -41,6 +42,8 @@ const createClientSchema = z.object({
 });
 
 const ClientsManagement = () => {
+  const [apiDialogClientId, setApiDialogClientId] = useState<string | null>(null);
+  const [apiDialogClientName, setApiDialogClientName] = useState("");
   const { toast } = useToast();
   const [clients, setClients] = useState<ClientProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -264,6 +267,10 @@ const ClientsManagement = () => {
                             Equipamentos
                           </Link>
                         </Button>
+                        <Button variant="ghost" size="sm" onClick={() => { setApiDialogClientId(client.id); setApiDialogClientName(client.full_name); }}>
+                          <Key className="w-4 h-4 mr-1" />
+                          API
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -272,6 +279,13 @@ const ClientsManagement = () => {
             )}
           </CardContent>
         </Card>
+
+        <ApiIntegrationDialog
+          open={!!apiDialogClientId}
+          onOpenChange={(open) => { if (!open) setApiDialogClientId(null); }}
+          clientId={apiDialogClientId || undefined}
+          clientName={apiDialogClientName}
+        />
       </div>
     </AdminLayout>
   );

@@ -152,6 +152,44 @@ export type Database = {
         }
         Relationships: []
       }
+      inventory_api_keys: {
+        Row: {
+          api_key: string
+          client_id: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          last_used_at: string | null
+        }
+        Insert: {
+          api_key: string
+          client_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          last_used_at?: string | null
+        }
+        Update: {
+          api_key?: string
+          client_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          last_used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_api_keys_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string

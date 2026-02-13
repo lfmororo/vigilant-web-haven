@@ -11,3 +11,6 @@ verify_jwt = true
 
 [functions.test-camera-connection]
 verify_jwt = true
+
+[functions.inventory-sync]
+verify_jwt = false

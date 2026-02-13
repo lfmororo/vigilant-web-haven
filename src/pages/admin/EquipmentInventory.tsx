@@ -30,8 +30,9 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Eye } from "lucide-react";
+import { Plus, Loader2, Eye, Key } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
+import ApiIntegrationDialog from "@/components/admin/ApiIntegrationDialog";
 
 interface Equipment {
   id: string;
@@ -66,6 +67,7 @@ const statusColors: Record<string, string> = {
 };
 
 const EquipmentInventory = () => {
+  const [isApiDialogOpen, setIsApiDialogOpen] = useState(false);
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const clientFilter = searchParams.get("client");
@@ -174,10 +176,14 @@ const EquipmentInventory = () => {
             <h1 className="text-3xl font-display font-bold">Inventário de Equipamentos</h1>
             <p className="text-muted-foreground">Gerencie os equipamentos cadastrados</p>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button><Plus className="w-4 h-4 mr-2" />Novo Equipamento</Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setIsApiDialogOpen(true)}>
+              <Key className="w-4 h-4 mr-2" />Integração API
+            </Button>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button><Plus className="w-4 h-4 mr-2" />Novo Equipamento</Button>
+              </DialogTrigger>
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Cadastrar Equipamento</DialogTitle></DialogHeader>
               <form onSubmit={handleCreate} className="space-y-4">
@@ -234,7 +240,10 @@ const EquipmentInventory = () => {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
+
+        <ApiIntegrationDialog open={isApiDialogOpen} onOpenChange={setIsApiDialogOpen} />
 
         {/* Filters */}
         <div className="flex gap-4">
