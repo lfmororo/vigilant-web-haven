@@ -40,9 +40,10 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Eye, Key, Trash2 } from "lucide-react";
+import { Plus, Loader2, Eye, Key, Trash2, Pencil, FileText } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import ApiIntegrationDialog from "@/components/admin/ApiIntegrationDialog";
+import EquipmentInventoryPrint from "@/components/admin/EquipmentInventoryPrint";
 
 interface Equipment {
   id: string;
@@ -76,6 +77,20 @@ const statusColors: Record<string, string> = {
   retired: "bg-destructive/20 text-destructive border-destructive/30",
 };
 
+const emptyForm = {
+  name: "",
+  equipment_type_id: "",
+  brand: "",
+  model: "",
+  serial_number: "",
+  client_id: "",
+  location: "",
+  status: "active",
+  purchase_date: "",
+  warranty_until: "",
+  notes: "",
+};
+
 const EquipmentInventory = () => {
   const [isApiDialogOpen, setIsApiDialogOpen] = useState(false);
   const { toast } = useToast();
@@ -89,26 +104,17 @@ const EquipmentInventory = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
+  const [filterClient, setFilterClient] = useState<string>("all");
   const [deleteTarget, setDeleteTarget] = useState<Equipment | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    equipment_type_id: "",
-    brand: "",
-    model: "",
-    serial_number: "",
-    client_id: "",
-    location: "",
-    status: "active",
-    purchase_date: "",
-    warranty_until: "",
-    notes: "",
-  });
+  const [editTarget, setEditTarget] = useState<Equipment | null>(null);
+  const [showPrint, setShowPrint] = useState(false);
+  const [formData, setFormData] = useState({ ...emptyForm });
 
   useEffect(() => {
     fetchEquipment();
     fetchClients();
     fetchEquipmentTypes();
-  }, [clientFilter, filterStatus, filterType]);
+  }, [clientFilter, filterStatus, filterType, filterClient]);
 
   const fetchEquipment = async () => {
     try {
@@ -120,6 +126,7 @@ const EquipmentInventory = () => {
       if (clientFilter) query = query.eq("client_id", clientFilter);
       if (filterStatus !== "all") query = query.eq("status", filterStatus as any);
       if (filterType !== "all") query = query.eq("equipment_type_id", filterType);
+      if (filterClient !== "all") query = query.eq("client_id", filterClient);
 
       const { data, error } = await query;
       if (error) throw error;
@@ -169,7 +176,7 @@ const EquipmentInventory = () => {
       if (error) throw error;
 
       toast({ title: "Equipamento cadastrado com sucesso!" });
-      setFormData({ name: "", equipment_type_id: "", brand: "", model: "", serial_number: "", client_id: "", location: "", status: "active", purchase_date: "", warranty_until: "", notes: "" });
+      setFormData({ ...emptyForm });
       setIsDialogOpen(false);
       fetchEquipment();
     } catch (error: any) {
@@ -177,6 +184,57 @@ const EquipmentInventory = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTarget || !formData.name) return;
+    setIsSubmitting(true);
+
+    try {
+      const updateData: any = {
+        name: formData.name,
+        brand: formData.brand || null,
+        model: formData.model || null,
+        serial_number: formData.serial_number || null,
+        location: formData.location || null,
+        status: formData.status as any,
+        equipment_type_id: formData.equipment_type_id || null,
+        client_id: formData.client_id || null,
+        purchase_date: formData.purchase_date || null,
+        warranty_until: formData.warranty_until || null,
+        notes: formData.notes || null,
+      };
+
+      const { error } = await supabase.from("equipment_inventory").update(updateData).eq("id", editTarget.id);
+      if (error) throw error;
+
+      toast({ title: "Equipamento atualizado com sucesso!" });
+      setEditTarget(null);
+      setFormData({ ...emptyForm });
+      fetchEquipment();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao atualizar", description: error.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openEdit = (item: Equipment) => {
+    setFormData({
+      name: item.name,
+      equipment_type_id: item.equipment_type_id || "",
+      brand: item.brand || "",
+      model: item.model || "",
+      serial_number: item.serial_number || "",
+      client_id: item.client_id || "",
+      location: item.location || "",
+      status: item.status,
+      purchase_date: item.purchase_date || "",
+      warranty_until: item.warranty_until || "",
+      notes: item.notes || "",
+    });
+    setEditTarget(item);
   };
 
   const handleDelete = async () => {
@@ -192,6 +250,69 @@ const EquipmentInventory = () => {
     }
   };
 
+  const getFilterLabels = () => {
+    const typeName = filterType !== "all" ? equipmentTypes.find(t => t.id === filterType)?.name || filterType : "all";
+    const clientName = filterClient !== "all" ? clients.find(c => c.id === filterClient)?.full_name || filterClient : "all";
+    return { status: filterStatus, type: typeName, client: clientName };
+  };
+
+  // Equipment form fields (shared between create and edit)
+  const renderFormFields = () => (
+    <>
+      <div className="space-y-2">
+        <Label>Nome *</Label>
+        <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Tipo</Label>
+          <Select value={formData.equipment_type_id} onValueChange={(v) => setFormData({ ...formData, equipment_type_id: v })}>
+            <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+            <SelectContent>
+              {equipmentTypes.map((t) => (<SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Status</Label>
+          <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Ativo</SelectItem>
+              <SelectItem value="inactive">Inativo</SelectItem>
+              <SelectItem value="maintenance">Em Manutenção</SelectItem>
+              <SelectItem value="retired">Aposentado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2"><Label>Marca</Label><Input value={formData.brand} onChange={(e) => setFormData({ ...formData, brand: e.target.value })} /></div>
+        <div className="space-y-2"><Label>Modelo</Label><Input value={formData.model} onChange={(e) => setFormData({ ...formData, model: e.target.value })} /></div>
+      </div>
+      <div className="space-y-2"><Label>Número de Série</Label><Input value={formData.serial_number} onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })} /></div>
+      <div className="space-y-2">
+        <Label>Cliente</Label>
+        <Select value={formData.client_id} onValueChange={(v) => setFormData({ ...formData, client_id: v })}>
+          <SelectTrigger><SelectValue placeholder="Selecionar cliente" /></SelectTrigger>
+          <SelectContent>
+            {clients.map((c) => (<SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2"><Label>Localização</Label><Input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} /></div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2"><Label>Data de Compra</Label><Input type="date" value={formData.purchase_date} onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })} /></div>
+        <div className="space-y-2"><Label>Garantia até</Label><Input type="date" value={formData.warranty_until} onChange={(e) => setFormData({ ...formData, warranty_until: e.target.value })} /></div>
+      </div>
+      <div className="space-y-2"><Label>Observações</Label><Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} /></div>
+    </>
+  );
+
+  if (showPrint) {
+    return <EquipmentInventoryPrint equipment={equipment} filters={getFilterLabels()} onClose={() => setShowPrint(false)} />;
+  }
+
   return (
     <AdminLayout>
       <div className="space-y-8">
@@ -201,76 +322,46 @@ const EquipmentInventory = () => {
             <p className="text-muted-foreground">Gerencie os equipamentos cadastrados</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowPrint(true)}>
+              <FileText className="w-4 h-4 mr-2" />Gerar PDF
+            </Button>
             <Button variant="outline" onClick={() => setIsApiDialogOpen(true)}>
               <Key className="w-4 h-4 mr-2" />Integração API
             </Button>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) setFormData({ ...emptyForm }); }}>
               <DialogTrigger asChild>
                 <Button><Plus className="w-4 h-4 mr-2" />Novo Equipamento</Button>
               </DialogTrigger>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader><DialogTitle>Cadastrar Equipamento</DialogTitle></DialogHeader>
-              <form onSubmit={handleCreate} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Nome *</Label>
-                  <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Tipo</Label>
-                    <Select value={formData.equipment_type_id} onValueChange={(v) => setFormData({ ...formData, equipment_type_id: v })}>
-                      <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                      <SelectContent>
-                        {equipmentTypes.map((t) => (<SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Ativo</SelectItem>
-                        <SelectItem value="inactive">Inativo</SelectItem>
-                        <SelectItem value="maintenance">Em Manutenção</SelectItem>
-                        <SelectItem value="retired">Aposentado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Marca</Label><Input value={formData.brand} onChange={(e) => setFormData({ ...formData, brand: e.target.value })} /></div>
-                  <div className="space-y-2"><Label>Modelo</Label><Input value={formData.model} onChange={(e) => setFormData({ ...formData, model: e.target.value })} /></div>
-                </div>
-                <div className="space-y-2"><Label>Número de Série</Label><Input value={formData.serial_number} onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })} /></div>
-                <div className="space-y-2">
-                  <Label>Cliente</Label>
-                  <Select value={formData.client_id} onValueChange={(v) => setFormData({ ...formData, client_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="Selecionar cliente" /></SelectTrigger>
-                    <SelectContent>
-                      {clients.map((c) => (<SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2"><Label>Localização</Label><Input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} /></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Data de Compra</Label><Input type="date" value={formData.purchase_date} onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })} /></div>
-                  <div className="space-y-2"><Label>Garantia até</Label><Input type="date" value={formData.warranty_until} onChange={(e) => setFormData({ ...formData, warranty_until: e.target.value })} /></div>
-                </div>
-                <div className="space-y-2"><Label>Observações</Label><Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} /></div>
-                <Button type="submit" className="w-full" disabled={isSubmitting}>
-                  {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Cadastrando...</> : "Cadastrar Equipamento"}
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogHeader><DialogTitle>Cadastrar Equipamento</DialogTitle></DialogHeader>
+                <form onSubmit={handleCreate} className="space-y-4">
+                  {renderFormFields()}
+                  <Button type="submit" className="w-full" disabled={isSubmitting}>
+                    {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Cadastrando...</> : "Cadastrar Equipamento"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
         <ApiIntegrationDialog open={isApiDialogOpen} onOpenChange={setIsApiDialogOpen} />
 
+        {/* Edit Dialog */}
+        <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) { setEditTarget(null); setFormData({ ...emptyForm }); } }}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Editar Equipamento</DialogTitle></DialogHeader>
+            <form onSubmit={handleEdit} className="space-y-4">
+              {renderFormFields()}
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Salvando...</> : "Salvar Alterações"}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+
         {/* Filters */}
-        <div className="flex gap-4">
+        <div className="flex gap-4 flex-wrap">
           <Select value={filterStatus} onValueChange={setFilterStatus}>
             <SelectTrigger className="w-48"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
@@ -286,6 +377,13 @@ const EquipmentInventory = () => {
             <SelectContent>
               <SelectItem value="all">Todos os Tipos</SelectItem>
               {equipmentTypes.map((t) => (<SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>))}
+            </SelectContent>
+          </Select>
+          <Select value={filterClient} onValueChange={setFilterClient}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Cliente" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os Clientes</SelectItem>
+              {clients.map((c) => (<SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>))}
             </SelectContent>
           </Select>
         </div>
@@ -326,6 +424,9 @@ const EquipmentInventory = () => {
                       <TableCell className="text-right flex gap-1 justify-end">
                         <Button variant="ghost" size="sm" asChild>
                           <Link to={`/admin/inventory/${item.id}`}><Eye className="w-4 h-4 mr-1" />Ver</Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
+                          <Pencil className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(item)}>
                           <Trash2 className="w-4 h-4 text-destructive" />
