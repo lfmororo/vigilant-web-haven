@@ -14,6 +14,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -30,7 +40,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Eye, Key } from "lucide-react";
+import { Plus, Loader2, Eye, Key, Trash2 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import ApiIntegrationDialog from "@/components/admin/ApiIntegrationDialog";
 
@@ -79,6 +89,7 @@ const EquipmentInventory = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
+  const [deleteTarget, setDeleteTarget] = useState<Equipment | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     equipment_type_id: "",
@@ -165,6 +176,19 @@ const EquipmentInventory = () => {
       toast({ variant: "destructive", title: "Erro ao cadastrar", description: error.message });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      const { error } = await supabase.from("equipment_inventory").delete().eq("id", deleteTarget.id);
+      if (error) throw error;
+      toast({ title: "Equipamento excluído com sucesso!" });
+      setDeleteTarget(null);
+      fetchEquipment();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao excluir", description: error.message });
     }
   };
 
@@ -299,9 +323,12 @@ const EquipmentInventory = () => {
                           {statusLabels[item.status] || item.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right flex gap-1 justify-end">
                         <Button variant="ghost" size="sm" asChild>
                           <Link to={`/admin/inventory/${item.id}`}><Eye className="w-4 h-4 mr-1" />Ver</Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(item)}>
+                          <Trash2 className="w-4 h-4 text-destructive" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -311,6 +338,23 @@ const EquipmentInventory = () => {
             )}
           </CardContent>
         </Card>
+
+        <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir equipamento</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja excluir o equipamento <strong>{deleteTarget?.name}</strong>? Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AdminLayout>
   );
