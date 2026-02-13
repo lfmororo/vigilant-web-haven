@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.test-smtp-connection]
 verify_jwt = false
+
+[functions.process-incoming-emails]
+verify_jwt = false
