@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, Plus, Trash2, Save, Printer } from "lucide-react";
 import ServiceOrderPrint from "@/components/admin/ServiceOrderPrint";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface Part {
   name: string;
@@ -20,10 +24,12 @@ interface Part {
 
 const AdminServiceOrderDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [showPrint, setShowPrint] = useState(false);
   const [form, setForm] = useState({
@@ -122,6 +128,18 @@ const AdminServiceOrderDetail = () => {
     setTimeout(() => window.print(), 300);
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    const { error } = await supabase.from("service_orders").delete().eq("id", id!);
+    if (error) {
+      toast({ variant: "destructive", title: "Erro ao excluir", description: error.message });
+      setDeleting(false);
+    } else {
+      toast({ title: "OS excluída com sucesso!" });
+      navigate("/admin/service-orders");
+    }
+  };
+
   if (loading) return <AdminLayout><div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></AdminLayout>;
   if (!order) return <AdminLayout><p className="text-center text-muted-foreground py-12">OS não encontrada</p></AdminLayout>;
 
@@ -138,6 +156,27 @@ const AdminServiceOrderDetail = () => {
             <h1 className="text-xl font-display font-bold">OS #{order.order_number}</h1>
             <p className="text-sm text-muted-foreground">Cliente: {order.client?.full_name} ({order.client?.email})</p>
           </div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" disabled={deleting}>
+                {deleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}Excluir
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir Ordem de Serviço</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Tem certeza que deseja excluir a OS #{order.order_number}? Esta ação não pode ser desfeita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Excluir
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Button variant="outline" onClick={handlePrint}>
             <Printer className="w-4 h-4 mr-2" />Imprimir
           </Button>
