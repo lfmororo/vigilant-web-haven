@@ -1,41 +1,52 @@
 
 
-# Filtro padrao "Em Aberto" e colunas de tempo nos chamados
+# Filtro por cliente, edicao de equipamentos, novos tipos e relatorio PDF
 
 ## Mudancas
 
-### 1. Filtro padrao alterado para "open"
-Ambas as telas de listagem de chamados (admin e cliente) iniciarao com o filtro de status em "Aberto" em vez de "Todos".
+### 1. Filtro por cliente na listagem
+Adicionar um terceiro Select nos filtros existentes para selecionar um cliente especifico. O estado `filterClient` (padrao "all") sera adicionado e incluido nas dependencias do useEffect. No `fetchEquipment`, quando diferente de "all", aplica `.eq("client_id", filterClient)`.
 
-- `AdminTicketsManagement.tsx`: `useState("all")` passa para `useState("open")`
-- `ClientTicketsList.tsx`: `useState("all")` passa para `useState("open")`
+### 2. Edicao de equipamentos
+Adicionar botao "Editar" (icone de lapis) na coluna de acoes da tabela. Ao clicar, abre um Dialog pre-preenchido com os dados do equipamento. Ao salvar, faz UPDATE no banco e recarrega a lista.
 
-### 2. Duas novas colunas na tabela
+- Novo estado `editTarget: Equipment | null`
+- Quando definido, abre Dialog com formulario identico ao de criacao, porem preenchido
+- Ao submeter: `supabase.from("equipment_inventory").update({...}).eq("id", editTarget.id)`
+- Fecha dialog e recarrega lista
 
-**Tempo Aberto** - Tempo desde a criacao do chamado (`created_at`) ate agora, exibido em formato legivel (ex: "2d 5h", "3h 20min", "45min").
+### 3. Novos tipos de equipamento
+Inserir na tabela `equipment_types` via migracao:
+- **Maquina Virtual** (icone: "monitor")
+- **Servidor** (icone: "server")
 
-**Sem Interacao** - Tempo desde a ultima mensagem no chamado (`ticket_messages`) ate agora. Se nao houver mensagens, usa a data de criacao do ticket.
+### 4. Relatorio PDF do inventario
+Criar um componente `EquipmentInventoryPrint.tsx` seguindo o mesmo padrao do `ServiceOrderPrint.tsx` existente (layout de impressao com `window.print()` e CSS para pagina A4).
 
-### 3. Busca da ultima mensagem
+O relatorio incluira:
+- Cabecalho com dados da empresa (buscados de `system_settings`)
+- Titulo "Relatorio de Inventario de Equipamentos"
+- Filtros aplicados no momento (status, tipo, cliente)
+- Tabela com todos os equipamentos filtrados: Nome, Tipo, Marca/Modelo, Serie, Cliente, Localizacao, Status
+- Data de geracao do relatorio
+- Contagem total de equipamentos
 
-A query de tickets sera ajustada para incluir a ultima mensagem de cada ticket. Como o Supabase nao suporta agregacoes complexas diretamente, a abordagem sera:
-
-- Na tela **admin**, apos carregar os tickets, fazer uma segunda query buscando a ultima mensagem de cada ticket (agrupado por `ticket_id`, pegando o `MAX(created_at)`)
-- Na tela **cliente**, mesma abordagem
-
-### 4. Funcao auxiliar de formatacao de tempo
-
-Uma funcao `formatTimeAgo` sera criada para converter a diferenca de tempo em texto legivel:
-- Menos de 1h: "Xmin"
-- 1h a 24h: "Xh Ymin"
-- Mais de 24h: "Xd Yh"
+Um botao "Gerar PDF" sera adicionado ao lado dos botoes existentes no cabecalho da pagina. Ao clicar, abre o componente de impressao (mesmo mecanismo do ServiceOrderPrint: renderiza uma pagina de impressao e chama `window.print()`).
 
 ## Detalhes tecnicos
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/pages/admin/AdminTicketsManagement.tsx` | Filtro padrao "open", query para ultima mensagem, 2 novas colunas |
-| `src/pages/helpdesk/ClientTicketsList.tsx` | Filtro padrao "open", query para ultima mensagem, 2 novas colunas |
+| Arquivo / Recurso | Mudanca |
+|---|---|
+| `src/pages/admin/EquipmentInventory.tsx` | Filtro por cliente, botao Editar com dialog, botao Gerar PDF, estado `editTarget`, `filterClient`, `showPrint` |
+| `src/components/admin/EquipmentInventoryPrint.tsx` | Novo componente de layout de impressao para o relatorio |
+| Banco de dados (migracao) | INSERT de "Maquina Virtual" e "Servidor" na tabela `equipment_types` |
 
-Nenhuma migracao necessaria. Os dados ja existem nas tabelas `tickets` e `ticket_messages`.
+### Estrutura do relatorio PDF
+
+O componente `EquipmentInventoryPrint.tsx` recebera:
+- `equipment: Equipment[]` (lista filtrada atual)
+- `filters: { status, type, client }` (filtros ativos para exibir no cabecalho)
+- `onClose: () => void`
+
+Usara o mesmo padrao visual do `ServiceOrderPrint`: fundo branco, bordas pretas, secoes com cabecalho cinza, texto pequeno, botoes "Imprimir" e "Voltar" ocultos na impressao.
 
