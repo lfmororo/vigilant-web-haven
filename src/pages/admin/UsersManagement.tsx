@@ -29,7 +29,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Camera, Eye, EyeOff, Pencil } from "lucide-react";
+import { Plus, Loader2, Camera, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { z } from "zod";
 import { Link } from "react-router-dom";
 
@@ -91,6 +101,10 @@ const UsersManagement = () => {
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [editFormData, setEditFormData] = useState({ full_name: "", phone: "", role: "client" });
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+
+  // Delete state
+  const [deletingUser, setDeletingUser] = useState<UserProfile | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -223,6 +237,25 @@ const UsersManagement = () => {
     }
   };
 
+  const handleDeleteUser = async () => {
+    if (!deletingUser) return;
+    setIsDeleting(true);
+    try {
+      const response = await supabase.functions.invoke("delete-user", {
+        body: { user_id: deletingUser.id },
+      });
+      if (response.error) throw new Error(response.error.message);
+      if (response.data?.error) throw new Error(response.data.error);
+      toast({ title: "Usuário excluído", description: `${deletingUser.full_name} foi excluído com sucesso.` });
+      setDeletingUser(null);
+      fetchUsers();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao excluir usuário", description: error.message });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const filteredUsers = filterRole === "all" ? users : users.filter((u) => u.role === filterRole);
 
   return (
@@ -334,6 +367,9 @@ const UsersManagement = () => {
                         <Button variant="ghost" size="sm" asChild>
                           <Link to={`/admin/users/${user.id}/cameras`}><Camera className="w-4 h-4 mr-1" />Câmeras</Link>
                         </Button>
+                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeletingUser(user)}>
+                          <Trash2 className="w-4 h-4 mr-1" />Excluir
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -378,6 +414,24 @@ const UsersManagement = () => {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Confirmation */}
+        <AlertDialog open={!!deletingUser} onOpenChange={(open) => !open && setDeletingUser(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir Usuário</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja excluir <strong>{deletingUser?.full_name}</strong> ({deletingUser?.email})? Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteUser} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                {isDeleting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Excluindo...</> : "Excluir"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AdminLayout>
   );
