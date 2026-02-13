@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, FileText, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, FileText, Trash2, Save } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -27,15 +27,32 @@ const AdminTicketDetail = () => {
   const [loading, setLoading] = useState(true);
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [updating, setUpdating] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<string>("");
+  const [pendingPriority, setPendingPriority] = useState<string>("");
+  const [pendingAssignedTo, setPendingAssignedTo] = useState<string>("");
 
   const isStaff = isAdmin || isTechnician;
+
+  const statusLabels: Record<string, string> = {
+    open: "Aberto", in_progress: "Em Andamento", waiting_client: "Aguardando Cliente",
+    resolved: "Resolvido", closed: "Fechado",
+  };
+  const priorityLabels: Record<string, string> = { low: "Baixa", medium: "Média", high: "Alta", urgent: "Urgente" };
 
   const fetchTicket = () => {
     if (!id) return;
     supabase.from("tickets")
       .select("*, client:profiles!tickets_client_id_fkey(full_name, email), assigned:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name)")
       .eq("id", id).single()
-      .then(({ data }) => { setTicket(data); setLoading(false); });
+      .then(({ data }) => {
+        setTicket(data);
+        if (data) {
+          setPendingStatus(data.status);
+          setPendingPriority(data.priority);
+          setPendingAssignedTo(data.assigned_to || "");
+        }
+        setLoading(false);
+      });
   };
 
   useEffect(() => {
@@ -52,41 +69,67 @@ const AdminTicketDetail = () => {
     }
   }, [id, isAdmin]);
 
-  const statusLabels: Record<string, string> = {
-    open: "Aberto", in_progress: "Em Andamento", waiting_client: "Aguardando Cliente",
-    resolved: "Resolvido", closed: "Fechado",
-  };
+  const hasChanges = ticket && (
+    pendingStatus !== ticket.status ||
+    pendingPriority !== ticket.priority ||
+    (pendingAssignedTo || null) !== (ticket.assigned_to || null)
+  );
 
-  const updateTicket = async (field: string, value: string) => {
+  const saveChanges = async () => {
+    if (!ticket || !hasChanges || !user) return;
     setUpdating(true);
-    const { error } = await supabase.from("tickets").update({ [field]: value || null } as any).eq("id", id!);
+
+    const updates: Record<string, any> = {};
+    const changes: string[] = [];
+    let notificationType = "ticket_updated";
+
+    if (pendingStatus !== ticket.status) {
+      updates.status = pendingStatus;
+      changes.push(`- Status alterado de "${statusLabels[ticket.status] || ticket.status}" para "${statusLabels[pendingStatus] || pendingStatus}"`);
+      if (pendingStatus === "resolved") notificationType = "ticket_resolved";
+      else if (pendingStatus === "closed") notificationType = "ticket_closed";
+    }
+    if (pendingPriority !== ticket.priority) {
+      updates.priority = pendingPriority;
+      changes.push(`- Prioridade alterada de "${priorityLabels[ticket.priority] || ticket.priority}" para "${priorityLabels[pendingPriority] || pendingPriority}"`);
+    }
+    if ((pendingAssignedTo || null) !== (ticket.assigned_to || null)) {
+      updates.assigned_to = pendingAssignedTo || null;
+      const newTech = technicians.find(t => t.id === pendingAssignedTo);
+      const oldTechName = ticket.assigned?.full_name || "Nenhum";
+      const newTechName = newTech?.full_name || "Nenhum";
+      changes.push(`- Técnico responsável alterado de "${oldTechName}" para "${newTechName}"`);
+    }
+
+    const { error } = await supabase.from("tickets").update(updates as any).eq("id", id!);
     if (error) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
-    } else {
-      toast({ title: "Atualizado!" });
-      fetchTicket();
-
-      // Fire-and-forget email notification
-      let message = "";
-      let notificationType = "ticket_updated";
-      if (field === "assigned_to") {
-        const tech = technicians.find((t) => t.id === value);
-        message = `O técnico ${tech?.full_name || "desconhecido"} foi atribuído ao chamado.`;
-      } else if (field === "status") {
-        message = `O status do chamado foi alterado para ${statusLabels[value] || value}.`;
-        if (value === "resolved") notificationType = "ticket_resolved";
-        else if (value === "closed") notificationType = "ticket_closed";
-      } else if (field === "priority") {
-        const priorityLabels: Record<string, string> = { low: "Baixa", medium: "Média", high: "Alta", urgent: "Urgente" };
-        message = `A prioridade do chamado foi alterada para ${priorityLabels[value] || value}.`;
-      }
-
-      if (message) {
-        supabase.functions.invoke("notify-ticket-update", {
-          body: { ticket_id: id, sender_id: user?.id, message, is_internal: false, notification_type: notificationType },
-        }).catch(() => {});
-      }
+      setUpdating(false);
+      return;
     }
+
+    // Get current user's name
+    const { data: userProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).single();
+    const userName = userProfile?.full_name || "Usuário";
+    const now = new Date().toLocaleString("pt-BR");
+    const chatMessage = `Alterações realizadas por ${userName} em ${now}:\n${changes.join("\n")}`;
+
+    // Insert audit message in ticket chat
+    await supabase.from("ticket_messages").insert({
+      ticket_id: id!,
+      sender_id: user.id,
+      message: chatMessage,
+      is_internal: false,
+    });
+
+    // Single email notification
+    const emailMessage = changes.join("\n");
+    supabase.functions.invoke("notify-ticket-update", {
+      body: { ticket_id: id, sender_id: user.id, message: emailMessage, is_internal: false, notification_type: notificationType },
+    }).catch(() => {});
+
+    toast({ title: "Alterações salvas!" });
+    fetchTicket();
     setUpdating(false);
   };
 
@@ -158,7 +201,7 @@ const AdminTicketDetail = () => {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Status</Label>
-                  <Select value={ticket.status} onValueChange={(v) => updateTicket("status", v)} disabled={updating}>
+                  <Select value={pendingStatus} onValueChange={setPendingStatus} disabled={updating}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="open">Aberto</SelectItem>
@@ -171,7 +214,7 @@ const AdminTicketDetail = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>Prioridade</Label>
-                  <Select value={ticket.priority} onValueChange={(v) => updateTicket("priority", v)} disabled={updating}>
+                  <Select value={pendingPriority} onValueChange={setPendingPriority} disabled={updating}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="low">Baixa</SelectItem>
@@ -184,7 +227,7 @@ const AdminTicketDetail = () => {
                 {isAdmin && (
                   <div className="space-y-2">
                     <Label>Técnico Responsável</Label>
-                    <Select value={ticket.assigned_to || ""} onValueChange={(v) => updateTicket("assigned_to", v)} disabled={updating}>
+                    <Select value={pendingAssignedTo} onValueChange={setPendingAssignedTo} disabled={updating}>
                       <SelectTrigger><SelectValue placeholder="Selecionar técnico" /></SelectTrigger>
                       <SelectContent>
                         {technicians.map((t) => (
@@ -199,6 +242,12 @@ const AdminTicketDetail = () => {
                     <Label>Técnico Responsável</Label>
                     <p className="text-sm text-muted-foreground">{ticket.assigned.full_name}</p>
                   </div>
+                )}
+                {hasChanges && (
+                  <Button onClick={saveChanges} disabled={updating} className="w-full">
+                    {updating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                    Salvar Alterações
+                  </Button>
                 )}
               </CardContent>
             </Card>
