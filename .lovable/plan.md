@@ -1,137 +1,109 @@
 
 
-## Endpoint API para Receber Dados de Inventario via POST
+## Acesso de Tecnicos e Clientes aos Tickets
 
-Criar uma backend function que aceita dados de equipamentos via POST, permitindo que scripts externos (PowerShell, Python, etc.) enviem informacoes das maquinas automaticamente para o inventario.
+### Resumo
 
----
-
-### 1. Nova Backend Function: `inventory-sync`
-
-Arquivo: `supabase/functions/inventory-sync/index.ts`
-
-**Autenticacao:** Via API key do cliente (usando o `client_id` + um token gerado). O endpoint valida o token antes de aceitar dados.
-
-**Endpoints (via metodo HTTP):**
-
-- `POST` - Cadastrar ou atualizar equipamento (upsert por `serial_number`)
-- `GET` - Listar equipamentos do cliente (para o script verificar o que ja foi enviado)
-
-**Campos aceitos no body:**
-```json
-{
-  "client_id": "uuid-do-cliente",
-  "api_key": "chave-de-acesso",
-  "equipment": [
-    {
-      "name": "PC-RECEPCAO-01",
-      "serial_number": "SN123456",
-      "brand": "Dell",
-      "model": "OptiPlex 7090",
-      "equipment_type": "PC/Notebook",
-      "location": "Recepcao",
-      "notes": "Windows 11 Pro, 16GB RAM, Intel i7-11700, SSD 512GB, IP: 192.168.1.50"
-    }
-  ]
-}
-```
-
-**Logica:**
-- Valida o `client_id` e `api_key` contra uma nova tabela `inventory_api_keys`
-- Para cada equipamento, faz upsert por `serial_number` + `client_id` (se ja existe, atualiza; senao, cria)
-- Resolve `equipment_type` pelo nome (busca na tabela `equipment_types`)
-- Retorna resumo: quantos criados, quantos atualizados, erros
+Liberar acesso dos tecnicos ao menu de chamados (criar, atualizar, finalizar tickets) e garantir que clientes possam acessar e interagir nos tickets relacionados a eles.
 
 ---
 
-### 2. Banco de Dados - Nova Tabela
+### 1. Banco de Dados - Atualizar RLS
 
-**Tabela `inventory_api_keys`:**
-- `id` (uuid, PK)
-- `client_id` (uuid, FK -> profiles.id) - Cliente dono da chave
-- `api_key` (text, unique) - Chave de acesso gerada (UUID v4)
-- `description` (text) - Descricao/nome do script
-- `is_active` (boolean, default true)
-- `last_used_at` (timestamptz, nullable)
-- `created_at` (timestamptz)
+**Tabela `tickets`:**
+- Adicionar politica SELECT para tecnicos verem tickets atribuidos a eles (`assigned_to = auth.uid()`) ou onde sao admin
+- Adicionar politica UPDATE para tecnicos atualizarem tickets atribuidos a eles (status, prioridade)
+- Adicionar politica INSERT para tecnicos poderem criar tickets
 
-**RLS:** Admins podem CRUD; Clientes podem ver suas proprias chaves.
+**Tabela `ticket_messages`:**
+- Atualizar politica INSERT para permitir tecnicos enviarem mensagens em tickets atribuidos a eles
+- Atualizar politica SELECT para tecnicos verem mensagens (incluindo internas) de tickets atribuidos a eles
 
----
-
-### 3. UI - Gerenciar Chaves de API
-
-**Adicionar na pagina de Detalhes do Cliente (`/admin/clients`) ou nova secao no inventario:**
-- Botao "Gerar Chave de API" para cada cliente
-- Lista de chaves ativas com opcao de desativar
-- Exibir a chave apenas uma vez ao criar (depois mostra apenas os ultimos 8 caracteres)
-
-**Adicionar secao na pagina `EquipmentInventory.tsx`:**
-- Botao "Integracao API" que abre um dialog com:
-  - Lista de chaves de API ativas
-  - Exemplo de script PowerShell/Python para copiar
+**Tabela `service_orders`:**
+- Adicionar politicas para tecnicos verem e atualizarem OS atribuidas a eles
 
 ---
 
-### 4. Exemplos de Scripts (exibidos na UI)
+### 2. Rotas e AuthGuard (App.tsx)
 
-**PowerShell (Windows):**
-```powershell
-$body = @{
-  client_id = "SEU_CLIENT_ID"
-  api_key = "SUA_API_KEY"
-  equipment = @(@{
-    name = $env:COMPUTERNAME
-    serial_number = (Get-WmiObject Win32_BIOS).SerialNumber
-    brand = (Get-WmiObject Win32_ComputerSystem).Manufacturer
-    model = (Get-WmiObject Win32_ComputerSystem).Model
-    equipment_type = "PC/Notebook"
-    notes = "OS: $([System.Environment]::OSVersion.VersionString), RAM: $([math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory/1GB))GB"
-  })
-} | ConvertTo-Json -Depth 3
+Alterar as rotas de tickets e OS de `requireAdmin` para `requireAdminOrTechnician`:
 
-Invoke-RestMethod -Uri "URL_DA_FUNCAO/inventory-sync" -Method POST -Body $body -ContentType "application/json"
-```
-
-**Python:**
-```python
-import requests, subprocess
-requests.post("URL_DA_FUNCAO/inventory-sync", json={
-    "client_id": "SEU_CLIENT_ID",
-    "api_key": "SUA_API_KEY",
-    "equipment": [{"name": "PC-01", "serial_number": "SN123", ...}]
-})
+```text
+/admin/tickets       -> requireAdminOrTechnician (era requireAdmin)
+/admin/tickets/:id   -> requireAdminOrTechnician (era requireAdmin)
+/admin/service-orders     -> requireAdminOrTechnician (era requireAdmin)
+/admin/service-orders/:id -> requireAdminOrTechnician (era requireAdmin)
 ```
 
 ---
 
-### 5. Configuracao
+### 3. AdminLayout - Menu Condicional
 
-No `supabase/config.toml`:
-```toml
-[functions.inventory-sync]
-verify_jwt = false
-```
+Mostrar itens de menu com base na role do usuario:
+- **Admin**: todos os itens (Dashboard, Usuarios, Clientes, Cameras, Inventario, Suporte, Chamados, OS)
+- **Tecnico**: apenas Chamados e Ordens de Servico (e Dashboard adaptado)
 
-JWT desabilitado pois a autenticacao sera via `api_key` propria (para scripts externos que nao tem sessao de usuario).
+Usar o hook `useAuth` para verificar `isAdmin` e filtrar os `navItems`.
 
 ---
 
-### 6. Arquivos a Criar/Modificar
+### 4. AdminTicketsManagement - Filtro por Tecnico
 
-**Criar:**
-1. `supabase/functions/inventory-sync/index.ts` - Endpoint principal
-2. Migracao SQL para tabela `inventory_api_keys`
+Para tecnicos:
+- Mostrar apenas tickets atribuidos a eles (filtro por `assigned_to`)
+- Titulo muda para "Meus Chamados" em vez de "Gestao de Chamados"
 
-**Modificar:**
-1. `src/pages/admin/EquipmentInventory.tsx` - Adicionar botao/dialog de integracao API com exemplos de script
-2. `src/pages/admin/ClientsManagement.tsx` - Adicionar secao de chaves de API por cliente
+Para admins: comportamento atual (ver todos).
 
 ---
 
-### 7. Ordem de Implementacao
+### 5. AdminTicketDetail - Permissoes do Tecnico
 
-1. Migracao de banco (tabela `inventory_api_keys`)
-2. Backend function `inventory-sync`
-3. UI para gerenciar chaves e exibir exemplos de scripts
+Para tecnicos:
+- Podem alterar **status** do ticket (em andamento, aguardando, resolvido, fechado)
+- Podem enviar mensagens (incluindo notas internas)
+- **Nao podem** reatribuir o tecnico responsavel (campo oculto ou desabilitado)
+- Podem criar OS a partir do ticket
+
+Para admins: tudo como esta.
+
+---
+
+### 6. TicketChat - Suporte a Tecnicos
+
+Atualizar o componente para aceitar tecnicos como "staff" (similar a admin):
+- Tecnicos podem enviar notas internas
+- Prop `isAdmin` renomeada/expandida para verificar se e admin OU tecnico
+
+---
+
+### 7. Dashboard do Tecnico
+
+Quando um tecnico acessa `/admin`, redirecionar para `/admin/tickets` ou mostrar um dashboard simplificado com:
+- Contadores de tickets atribuidos por status
+- Lista dos ultimos tickets atribuidos
+
+---
+
+### 8. Helpdesk do Cliente (ja existente)
+
+Verificar que o fluxo do cliente esta completo:
+- Clientes acessam `/helpdesk` -> veem seus tickets
+- Podem abrir novos tickets
+- Podem enviar mensagens nos tickets deles
+- Podem ver OS relacionadas
+
+O fluxo ja existe nas paginas `HelpdeskDashboard`, `ClientTicketsList`, `ClientTicketDetail`, `NewTicket`. Apenas confirmar que as RLS policies permitem a interacao correta.
+
+---
+
+### Arquivos a Modificar
+
+1. **Migracao SQL** - Novas RLS policies para tecnicos em `tickets`, `ticket_messages`, `service_orders`
+2. `src/App.tsx` - Alterar `requireAdmin` para `requireAdminOrTechnician` nas rotas de tickets/OS
+3. `src/components/admin/AdminLayout.tsx` - Menu condicional por role
+4. `src/pages/admin/AdminTicketsManagement.tsx` - Filtro por tecnico logado
+5. `src/pages/admin/AdminTicketDetail.tsx` - Restricoes de UI para tecnicos
+6. `src/components/helpdesk/TicketChat.tsx` - Suporte a tecnicos como staff
+7. `src/pages/admin/AdminDashboard.tsx` - Dashboard adaptado para tecnicos
 
