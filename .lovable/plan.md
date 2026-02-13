@@ -1,72 +1,92 @@
 
 
-## Menu Configuracoes do Sistema
+## Captura Automatica de Emails para Abertura de Tickets
 
-Criar uma pagina de configuracoes acessivel apenas pelo admin, com opcoes para configurar email de captura de tickets e SMTP para notificacoes.
+Criar uma Edge Function que conecta ao servidor IMAP configurado, le emails nao lidos, e automaticamente abre tickets no sistema. Se o remetente ja for um cliente cadastrado, abre o ticket vinculado a ele. Se nao for cadastrado, cria um novo usuario com senha provisoria, envia a senha por email via SMTP, e marca o usuario para trocar a senha no primeiro login.
 
 ---
 
-### 1. Criar tabela `system_settings` no banco de dados
+### 1. Nova coluna `must_change_password` na tabela `profiles`
 
-Tabela chave-valor para armazenar configuracoes do sistema:
+Adicionar uma coluna booleana para controlar se o usuario precisa trocar a senha no primeiro login:
 
 ```sql
-CREATE TABLE public.system_settings (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  key text UNIQUE NOT NULL,
-  value text,
-  description text,
-  updated_at timestamptz DEFAULT now(),
-  updated_by uuid
-);
+ALTER TABLE public.profiles ADD COLUMN must_change_password boolean DEFAULT false;
 ```
 
-RLS: somente admin pode ler e gravar.
+---
 
-Inserir registros iniciais para as configuracoes:
-- `email_imap_host` - Servidor IMAP
-- `email_imap_port` - Porta IMAP
-- `email_imap_user` - Email para captura de tickets
-- `email_imap_password` - Senha do email (captura)
-- `smtp_host` - Servidor SMTP
-- `smtp_port` - Porta SMTP
-- `smtp_user` - Email de envio
-- `smtp_password` - Senha SMTP
-- `smtp_from_name` - Nome do remetente
-- `notification_enabled` - Ativar/desativar notificacoes
+### 2. Nova Edge Function `process-incoming-emails`
+
+Funcao que sera chamada periodicamente (via cron externo ou manualmente pelo admin). Fluxo:
+
+```
+1. Ler configuracoes IMAP e SMTP da tabela system_settings
+2. Conectar ao IMAP via TLS
+3. Selecionar INBOX e buscar emails nao lidos (UNSEEN)
+4. Para cada email:
+   a. Extrair remetente (From), assunto (Subject) e corpo
+   b. Buscar na tabela profiles se existe cliente com esse email
+   c. SE EXISTE:
+      - Criar ticket com client_id do perfil encontrado
+      - Titulo = assunto do email
+      - Descricao = corpo do email
+   d. SE NAO EXISTE:
+      - Gerar senha provisoria aleatoria
+      - Criar usuario via supabase admin API (email_confirm: true)
+      - Criar perfil com must_change_password = true
+      - Atribuir role "client"
+      - Criar ticket vinculado ao novo usuario
+      - Enviar email via SMTP com a senha provisoria
+   e. Marcar email como lido (SEEN)
+5. Fechar conexao IMAP
+```
+
+Configuracao no `config.toml`:
+```toml
+[functions.process-incoming-emails]
+verify_jwt = false
+```
+
+A funcao usara `SUPABASE_SERVICE_ROLE_KEY` para criar usuarios e tickets.
 
 ---
 
-### 2. Criar pagina `src/pages/admin/SystemSettings.tsx`
+### 3. Alterar fluxo de login para forcar troca de senha
 
-Pagina com formulario organizado em secoes usando Tabs:
+**Arquivo: `src/pages/Auth.tsx`**
 
-**Aba "Email de Captura":**
-- Campos: Servidor IMAP, Porta, Email, Senha
-- Descricao explicando que o sistema verificara este email para abrir tickets automaticamente
-
-**Aba "SMTP (Notificacoes)":**
-- Campos: Servidor SMTP, Porta, Email de envio, Senha, Nome do remetente
-- Toggle para ativar/desativar notificacoes
-
-Cada aba tera botao "Salvar" que faz upsert na tabela `system_settings`.
+Apos login bem-sucedido, antes de redirecionar, verificar se o perfil do usuario tem `must_change_password = true`. Se sim, mostrar um dialog/modal pedindo nova senha. Ao salvar:
+- Atualizar a senha via `supabase.auth.updateUser({ password })`
+- Atualizar `must_change_password = false` no perfil
+- Prosseguir com o redirecionamento normal
 
 ---
 
-### 3. Adicionar rota e menu
+### 4. Botao "Verificar Emails Agora" na pagina de Configuracoes
 
-**`src/App.tsx`:** Nova rota `/admin/settings` com `AuthGuard requireAdmin`
+**Arquivo: `src/pages/admin/SystemSettings.tsx`**
 
-**`src/components/admin/AdminLayout.tsx`:** Adicionar item "Configuracoes" no menu com icone `Settings`, visivel apenas para `admin`, posicionado no final da lista
+Adicionar um botao na aba IMAP que chama a edge function `process-incoming-emails` manualmente, permitindo ao admin disparar a verificacao sem esperar um cron. Mostrar resultado com quantidade de tickets criados e usuarios novos.
 
 ---
 
 ### Detalhes Tecnicos
 
-- Formulario com `react-hook-form` + `zod` para validacao
-- Campos de senha com tipo `password` e botao para mostrar/ocultar
-- Busca inicial dos dados com `useQuery` na tabela `system_settings`
-- Salvamento com `upsert` usando a coluna `key` como conflito
-- Toast de sucesso/erro ao salvar
-- Usa componentes shadcn/ui existentes: Card, Tabs, Input, Button, Switch, Label
+**Edge Function `process-incoming-emails`:**
+- Parse do header `From` para extrair email (regex para lidar com formato `"Nome" <email@...>`)
+- Parse do `Subject` com decode de MIME encoded-words (=?UTF-8?Q?...?= e =?UTF-8?B?...?=)
+- Corpo do email: priorizar text/plain, fazer strip de HTML basico se necessario
+- Senha provisoria: string aleatoria de 12 caracteres (letras, numeros, simbolos)
+- Email de boas-vindas via SMTP incluindo: senha provisoria, link de login, instrucao para trocar a senha
+
+**Modal de troca de senha:**
+- Campo de nova senha (min 6 caracteres)
+- Campo de confirmacao de senha
+- Validacao com zod
+- Nao permite fechar sem trocar a senha
+
+**Protocolo IMAP usado:**
+- Comandos: LOGIN, SELECT INBOX, SEARCH UNSEEN, FETCH (BODY[HEADER] e BODY[TEXT]), STORE +FLAGS (\Seen), LOGOUT
+- Conexao TLS usando `Deno.connectTls`
 
