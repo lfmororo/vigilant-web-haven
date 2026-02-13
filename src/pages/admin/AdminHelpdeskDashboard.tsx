@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +43,34 @@ const AdminHelpdeskDashboard = () => {
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
+  const ticketCountRef = useRef<number | null>(null);
+  const audioRef = useRef<AudioContext | null>(null);
+
+  const playNotificationSound = useCallback(() => {
+    try {
+      const ctx = audioRef.current || new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioRef.current = ctx;
+
+      // Two-tone chime
+      const playTone = (freq: number, start: number, duration: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.3, ctx.currentTime + start);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+        osc.start(ctx.currentTime + start);
+        osc.stop(ctx.currentTime + start + duration);
+      };
+
+      playTone(880, 0, 0.15);
+      playTone(1175, 0.15, 0.25);
+    } catch (e) {
+      console.warn("Could not play notification sound", e);
+    }
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -55,7 +83,13 @@ const AdminHelpdeskDashboard = () => {
       .select("*, client:profiles!tickets_client_id_fkey(full_name), technician:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name)")
       .order("created_at", { ascending: false })
       .then(({ data }) => {
-        setTickets(data || []);
+        const newTickets = data || [];
+        // Play sound if ticket count increased (new ticket arrived)
+        if (ticketCountRef.current !== null && newTickets.length > ticketCountRef.current) {
+          playNotificationSound();
+        }
+        ticketCountRef.current = newTickets.length;
+        setTickets(newTickets);
         setLoading(false);
       });
   };
@@ -65,7 +99,7 @@ const AdminHelpdeskDashboard = () => {
 
     const channel = supabase
       .channel("dashboard-tickets")
-      .on("postgres_changes", { event: "*", schema: "public", table: "tickets" }, () => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "tickets" }, () => {
         fetchTickets();
       })
       .subscribe();
