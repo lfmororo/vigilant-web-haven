@@ -1,59 +1,48 @@
 
 
-## Respostas de E-mail vinculadas ao Chamado Existente
+## Trocar Logo e Nome para FM TechFlow
 
-### Problema Atual
-Quando um usuario responde a um e-mail de notificacao de ticket (ex: "Re: Atualizacao no Chamado #15 - Problema no sistema"), a funcao `process-incoming-emails` cria um novo chamado em vez de adicionar a resposta ao chamado original.
+### Resumo
+Substituir todas as referencias a "SecureTech" por "FM TechFlow" e usar a logo fornecida em todo o sistema.
 
-### Solucao
+### Alteracoes
 
-Modificar a funcao `process-incoming-emails` para:
+**1. Copiar a logo para o projeto**
+- Copiar `user-uploads://tempImageGmYSZa_-_Editado.png` para `src/assets/fm-techflow-logo.png`
 
-1. **Detectar respostas** - Ao processar cada e-mail, verificar se o assunto contem um numero de ticket (padrao `#NNNN`) que indica uma resposta a uma notificacao existente
-2. **Vincular ao chamado existente** - Se encontrar o numero do ticket, buscar o chamado no banco e adicionar o conteudo do e-mail como nova mensagem no chat do ticket
-3. **Reabrir chamados finalizados** - Se o ticket estiver com status `resolved` ou `closed`, alterar automaticamente para `open`
-4. **Manter comportamento atual** - Se nao for uma resposta (sem numero de ticket no assunto), criar novo chamado normalmente
+**2. Arquivos a serem editados (10 arquivos)**
 
-### Logica de Deteccao
+| Arquivo | O que muda |
+|---|---|
+| `index.html` | Titulo, meta description, og:title, twitter:site - tudo de "SecureTech" para "FM TechFlow" |
+| `src/pages/Index.tsx` | Titulo e meta tags do Helmet |
+| `src/components/Navbar.tsx` | Substituir icone Shield + texto "SecureTech" pela imagem da logo |
+| `src/components/Footer.tsx` | Substituir icone Shield + texto "SecureTech" pela logo; atualizar copyright |
+| `src/components/HeroSection.tsx` | Nenhuma referencia direta a "SecureTech", mas o badge pode ser atualizado se necessario |
+| `src/components/AboutSection.tsx` | Trocar "SecureTech" por "FM TechFlow" no titulo e texto |
+| `src/components/ContactSection.tsx` | Trocar email de "contato@securetech.com.br" para "contato@fmtechflow.com.br" |
+| `src/components/admin/AdminLayout.tsx` | Substituir Shield + "SecureTech" pela logo (sidebar e header mobile) |
+| `src/components/helpdesk/HelpdeskLayout.tsx` | Substituir Shield + "SecureTech" pela logo |
+| `src/pages/Dashboard.tsx` | Substituir Shield + "SecureTech" pela logo |
+| `src/pages/admin/SystemSettings.tsx` | Trocar placeholder "SecureTech Suporte" |
 
-Os assuntos das notificacoes seguem o padrao:
-- "Novo Chamado #15 - Titulo"
-- "Atualizacao no Chamado #15 - Titulo"
-- "Chamado Resolvido #15 - Titulo"
-
-Quando o usuario responde, o assunto fica:
-- "Re: Atualizacao no Chamado #15 - Titulo"
-
-A funcao vai extrair o numero `15` usando regex `#(\d+)` e buscar o ticket com `ticket_number = 15`.
+**3. Como a logo sera usada**
+- Importada como modulo ES6: `import fmLogo from "@/assets/fm-techflow-logo.png"`
+- Renderizada como `<img>` com altura fixa (~32-40px) no lugar do icone Shield + texto
+- A logo ja contem o nome "FM | TECHFLOW", entao em alguns locais o texto separado sera removido
 
 ### Detalhes Tecnicos
 
-| Arquivo | Acao |
-|---|---|
-| `supabase/functions/process-incoming-emails/index.ts` | Modificar - adicionar logica de deteccao de resposta |
+Exemplo de como ficara a Navbar:
+```tsx
+import fmLogo from "@/assets/fm-techflow-logo.png";
 
-**Fluxo modificado dentro do loop de e-mails:**
+// Onde antes era:
+<Shield className="w-7 h-7 text-primary" />
+<span>SecureTech</span>
 
-```text
-Para cada e-mail nao lido:
-  1. Extrair remetente e assunto
-  2. Verificar se assunto contem #NNNN (regex)
-  3. SE contem numero de ticket:
-     a. Buscar ticket por ticket_number
-     b. SE ticket existe E remetente eh o cliente do ticket:
-        - Adicionar mensagem no ticket (ticket_messages)
-        - SE status = 'resolved' ou 'closed': atualizar para 'open'
-        - Notificar admins/tecnico sobre nova mensagem
-        - Contabilizar como "resposta processada"
-        - Marcar e-mail como lido
-        - Pular para proximo e-mail
-  4. SENAO (e-mail novo):
-     - Fluxo atual: criar usuario se necessario, criar ticket, notificar
+// Ficara:
+<img src={fmLogo} alt="FM TechFlow" className="h-10" />
 ```
 
-**Mudancas no codigo:**
-- Nova funcao `extractTicketNumber(subject)` que retorna o numero do ticket ou null
-- Novo bloco condicional antes da criacao de ticket
-- Chamada ao `notify-ticket-update` com tipo `ticket_updated` quando adicionar resposta
-- Novos contadores de retorno: `replies_added` alem de `tickets_created` e `users_created`
-
+Todas as descricoes textuais (meta tags, textos de paragrafo, copyright) serao atualizadas de "SecureTech" para "FM TechFlow".
