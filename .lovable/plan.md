@@ -1,21 +1,48 @@
 
+# Relatorio de Chamados por Cliente, Situacao e Periodo
 
-## Padronizar Template de Novo Chamado com os Demais
+## Objetivo
+Criar uma nova pagina de relatorios no painel administrativo que permita filtrar chamados por cliente, status e periodo de datas, com visualizacao em tabela, metricas resumidas e opcao de exportar/imprimir.
 
-### Resumo
-O email de "Novo Chamado Aberto" ja usa o mesmo layout externo (header com logo, gradiente, footer), porem o conteudo interno e mais simples que os outros tipos. A alteracao vai adicionar a descricao do chamado em um bloco estilizado, igual ao bloco "Nova Mensagem" do template de atualizacao.
+## Funcionalidades
 
-### O que sera feito
+1. **Filtros**
+   - Selecao de cliente (dropdown com todos os clientes)
+   - Selecao de status (todos, aberto, em andamento, aguardando, resolvido, fechado)
+   - Periodo de datas (data inicial e data final com date picker)
+   - Botao para limpar filtros
 
-**Adicionar bloco de descricao ao template `ticket_opened`**
-- Incluir a descricao/mensagem inicial do chamado em um bloco estilizado com borda lateral colorida (igual ao bloco "Nova Mensagem" do tipo `ticket_updated`)
-- O bloco tera o titulo "Descricao do Chamado" com a cor azul (#2563eb) do tema de novo chamado
-- Manter a tabela de informacoes (numero, assunto, categoria, prioridade) que ja existe
+2. **Metricas Resumidas (Cards)**
+   - Total de chamados no periodo
+   - Chamados abertos
+   - Chamados resolvidos/fechados
+   - Tempo medio de resolucao
 
-### Detalhes Tecnicos
+3. **Tabela de Resultados**
+   - Numero do chamado, titulo, cliente, equipamento, tecnico, prioridade, status, data de abertura, data de resolucao
+   - Ordenacao por data
 
-**Arquivo:** `supabase/functions/notify-ticket-update/index.ts`
-- Linhas 60-70: Adicionar apos a tabela de informacoes um bloco `div` com `border-left: 4px solid #2563eb` contendo a mensagem/descricao do chamado
-- O bloco seguira o mesmo padrao visual do bloco "Nova Mensagem" (linhas 108-111) mas com cor azul e titulo "Descricao do Chamado"
+4. **Exportacao**
+   - Botao para imprimir o relatorio (window.print com CSS de impressao)
 
-**Deploy:** A funcao sera re-deployada automaticamente.
+5. **Navegacao**
+   - Nova entrada "Relatorios" no menu lateral do admin com icone BarChart3
+
+## Detalhes Tecnicos
+
+### Arquivos a criar
+- `src/pages/admin/TicketReports.tsx` - Pagina principal do relatorio
+
+### Arquivos a modificar
+- `src/App.tsx` - Adicionar rota `/admin/reports`
+- `src/components/admin/AdminLayout.tsx` - Adicionar item "Relatorios" no menu lateral
+
+### Implementacao
+- Consulta ao Supabase na tabela `tickets` com joins em `profiles` (cliente e tecnico) e `equipment_types`
+- Filtro por `client_id`, `status` e `created_at` entre as datas selecionadas
+- Uso dos componentes existentes: `AdminLayout`, `Card`, `Table`, `Select`, `Button`, `Calendar/Popover` (date picker), `TicketStatusBadge`, `PriorityBadge`
+- Calculo do tempo medio de resolucao comparando `created_at` com `updated_at` dos chamados resolvidos/fechados
+- CSS de impressao com `@media print` para ocultar sidebar e filtros, mostrando apenas o relatorio
+
+### Nao requer alteracoes no banco de dados
+Todos os dados necessarios ja existem nas tabelas `tickets`, `profiles` e `equipment_types`.
