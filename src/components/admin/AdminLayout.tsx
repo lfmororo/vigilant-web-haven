@@ -15,7 +15,8 @@ import {
   Headphones,
   UserCheck,
   Package,
-  Settings } from
+  Settings,
+  BarChart3 } from
 "lucide-react";
 import fmLogo from "@/assets/fm-techflow-logo.png";
 
@@ -32,6 +33,7 @@ const allNavItems = [
 { label: "Dashboard Suporte", href: "/admin/helpdesk", icon: Headphones, roles: ["admin", "technician"] },
 { label: "Chamados", href: "/admin/tickets", icon: TicketCheck, roles: ["admin", "technician"] },
 { label: "Ordens de Serviço", href: "/admin/service-orders", icon: FileText, roles: ["admin", "technician"] },
+{ label: "Relatórios", href: "/admin/reports", icon: BarChart3, roles: ["admin", "technician"] },
 { label: "Configurações", href: "/admin/settings", icon: Settings, roles: ["admin"] }];
 
 
