@@ -108,6 +108,23 @@ function decodeBase64Content(str: string, charset = "utf-8"): string {
   }
 }
 
+function cleanMimeArtifacts(text: string): string {
+  // Remove MIME boundary markers (e.g. --000000000000999ebf064acd25d1)
+  let cleaned = text.replace(/--[a-zA-Z0-9_=]+(--)?\s*/g, " ");
+  // Remove Content-Type / Content-Transfer-Encoding headers embedded in body
+  cleaned = cleaned.replace(/Content-Type:\s*[^\r\n]+/gi, "");
+  cleaned = cleaned.replace(/Content-Transfer-Encoding:\s*[^\r\n]+/gi, "");
+  cleaned = cleaned.replace(/MIME-Version:\s*[^\r\n]+/gi, "");
+  cleaned = cleaned.replace(/charset="?[^"\s;]+"?/gi, "");
+  // Strip any remaining HTML tags
+  cleaned = cleaned.replace(/<[^>]*>/g, "");
+  // Clean HTML entities
+  cleaned = cleaned.replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  // Collapse whitespace
+  cleaned = cleaned.replace(/\s{2,}/g, " ").trim();
+  return cleaned;
+}
+
 function parseMimeBody(rawBody: string): string {
   // Check if it's a multipart message
   const boundaryParamMatch = rawBody.match(/boundary="?([^"\r\n;]+)"?/i);
@@ -473,6 +490,8 @@ Deno.serve(async (req) => {
         const bodyMatch = bodyResp.match(/\{(\d+)\}\r\n([\s\S]*?)(?=\r\n[bc]\d+ |\r\n\))/);
         let rawBody = bodyMatch ? bodyMatch[2] : bodyResp.split("\r\n").slice(1).join("\r\n");
         let bodyText = parseMimeBody(rawBody);
+        // Post-process: strip any remaining MIME artifacts and HTML tags
+        bodyText = cleanMimeArtifacts(bodyText);
         bodyText = bodyText.substring(0, 5000); // limit length
 
         // --- Detect reply to existing ticket ---
