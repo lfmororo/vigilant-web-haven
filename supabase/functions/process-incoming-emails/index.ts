@@ -627,6 +627,29 @@ Deno.serve(async (req) => {
 
         ticketsCreated++;
 
+        // Send Telegram notification for new ticket (fire-and-forget)
+        if (newTicket) {
+          try {
+            const telegramUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-telegram`;
+            const telegramResp = await fetch(telegramUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+              },
+              body: JSON.stringify({
+                ticket_id: newTicket.id,
+                notification_type: "ticket_opened",
+                message: bodyText.substring(0, 500),
+                sender_name: senderName,
+              }),
+            });
+            console.log(`Telegram notify result: ${telegramResp.status}`);
+          } catch (tgErr) {
+            console.error("Error sending Telegram notification:", tgErr);
+          }
+        }
+
         // Notify admins about new ticket via email
         if (newTicket && smtpHost && smtpUser && smtpPassword) {
           try {
