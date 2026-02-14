@@ -298,8 +298,51 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Daily summary sent to ${sent}/${adminProfiles.length} admins`);
-    return new Response(JSON.stringify({ success: true, sent, total: pending.length + open.length + inProgress.length }), {
+    // 7. Send Telegram summary
+    let telegramSent = false;
+    const telegramToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+    const telegramChatId = Deno.env.get("TELEGRAM_CHAT_ID");
+    if (telegramToken && telegramChatId) {
+      try {
+        const dateStr = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+        const totalActive = pending.length + open.length + inProgress.length;
+
+        let tgMsg = `📊 *Resumo Diário de Chamados*\n📅 ${dateStr}\n\n`;
+        tgMsg += `🔢 *Total ativos:* ${totalActive}\n`;
+        tgMsg += `🟠 Pendentes: ${pending.length}\n`;
+        tgMsg += `🔵 Abertos: ${open.length}\n`;
+        tgMsg += `🟢 Em Andamento: ${inProgress.length}\n`;
+
+        if (inProgress.length > 0) {
+          tgMsg += `\n*🟢 Em Andamento:*\n`;
+          inProgress.forEach(t => { tgMsg += `  • #${t.ticket_number} - ${t.title}${t.assigned_name ? ` _(${t.assigned_name})_` : ""}\n`; });
+        }
+        if (pending.length > 0) {
+          tgMsg += `\n*🟠 Pendentes:*\n`;
+          pending.forEach(t => { tgMsg += `  • #${t.ticket_number} - ${t.title}${t.assigned_name ? ` _(${t.assigned_name})_` : ""}\n`; });
+        }
+        if (open.length > 0) {
+          tgMsg += `\n*🔵 Abertos:*\n`;
+          open.forEach(t => { tgMsg += `  • #${t.ticket_number} - ${t.title}\n`; });
+        }
+
+        tgMsg += `\n[Acessar Dashboard](${dashboardUrl})`;
+
+        const tgResp = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: telegramChatId, text: tgMsg, parse_mode: "Markdown", disable_web_page_preview: true }),
+        });
+        const tgResult = await tgResp.json();
+        telegramSent = tgResult.ok === true;
+        if (!telegramSent) console.error("Telegram send failed:", tgResult);
+      } catch (err) {
+        console.error("Telegram summary error:", err);
+      }
+    }
+
+    console.log(`Daily summary sent to ${sent}/${adminProfiles.length} admins, telegram: ${telegramSent}`);
+    return new Response(JSON.stringify({ success: true, sent, telegramSent, total: pending.length + open.length + inProgress.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
