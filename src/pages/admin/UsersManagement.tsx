@@ -50,6 +50,7 @@ interface UserProfile {
   phone: string | null;
   created_at: string;
   role?: string;
+  parent_client_id?: string | null;
 }
 
 const roleLabels: Record<string, string> = {
@@ -99,7 +100,7 @@ const UsersManagement = () => {
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
-  const [editFormData, setEditFormData] = useState({ full_name: "", phone: "", role: "client" });
+  const [editFormData, setEditFormData] = useState({ full_name: "", phone: "", role: "client", parent_client_id: "" });
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
   // Delete state
@@ -173,7 +174,7 @@ const UsersManagement = () => {
 
   const openEditDialog = (user: UserProfile) => {
     setEditingUser(user);
-    setEditFormData({ full_name: user.full_name, phone: user.phone || "", role: user.role || "client" });
+    setEditFormData({ full_name: user.full_name, phone: user.phone || "", role: user.role || "client", parent_client_id: user.parent_client_id || "" });
     setEditErrors({});
     setIsEditDialogOpen(true);
   };
@@ -199,7 +200,11 @@ const UsersManagement = () => {
       // Update profile
       const { error: profileError } = await supabase
         .from("profiles")
-        .update({ full_name: editFormData.full_name, phone: editFormData.phone || null })
+        .update({
+          full_name: editFormData.full_name,
+          phone: editFormData.phone || null,
+          parent_client_id: editFormData.parent_client_id || null,
+        })
         .eq("id", editingUser.id);
 
       if (profileError) throw profileError;
@@ -327,7 +332,21 @@ const UsersManagement = () => {
               <SelectItem value="technician">Técnico</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+              </div>
+              {/* Parent Client */}
+              <div className="space-y-2">
+                <Label>Vinculado ao Cliente</Label>
+                <Select value={editFormData.parent_client_id || "none"} onValueChange={(v) => setEditFormData({ ...editFormData, parent_client_id: v === "none" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum</SelectItem>
+                    {users.filter((u) => u.role === "client" && u.id !== editingUser?.id).map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Vincule este usuário a um cliente principal para agrupar chamados no relatório.</p>
+              </div>
 
         <Card>
           <CardHeader><CardTitle>Lista de Usuários</CardTitle></CardHeader>

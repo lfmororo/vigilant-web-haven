@@ -64,10 +64,24 @@ const TicketReports = () => {
     },
   });
 
-  // Fetch tickets with filters
+  // Fetch tickets with filters (includes linked users when filtering by client)
   const { data: tickets, isLoading } = useQuery({
     queryKey: ["report-tickets", clientId, status, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
+      // If filtering by client, also find users linked to this client
+      let clientIds: string[] = [];
+      if (clientId !== "all") {
+        clientIds = [clientId];
+        // Find users whose parent_client_id matches the selected client
+        const { data: linkedUsers } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("parent_client_id", clientId);
+        if (linkedUsers?.length) {
+          clientIds.push(...linkedUsers.map((u) => u.id));
+        }
+      }
+
       let query = supabase
         .from("tickets")
         .select(`
@@ -78,7 +92,7 @@ const TicketReports = () => {
         `)
         .order("created_at", { ascending: false });
 
-      if (clientId !== "all") query = query.eq("client_id", clientId);
+      if (clientIds.length > 0) query = query.in("client_id", clientIds);
       if (status !== "all") query = query.eq("status", status as any);
       if (startDate) query = query.gte("created_at", startDate.toISOString());
       if (endDate) {

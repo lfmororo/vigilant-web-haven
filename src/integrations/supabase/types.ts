@@ -202,6 +202,7 @@ export type Database = {
           id: string
           must_change_password: boolean | null
           neighborhood: string | null
+          parent_client_id: string | null
           phone: string | null
           updated_at: string
         }
@@ -216,6 +217,7 @@ export type Database = {
           id: string
           must_change_password?: boolean | null
           neighborhood?: string | null
+          parent_client_id?: string | null
           phone?: string | null
           updated_at?: string
         }
@@ -230,10 +232,19 @@ export type Database = {
           id?: string
           must_change_password?: boolean | null
           neighborhood?: string | null
+          parent_client_id?: string | null
           phone?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_parent_client_id_fkey"
+            columns: ["parent_client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       service_orders: {
         Row: {
