@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -27,6 +27,7 @@ import { format, differenceInHours } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarIcon, Printer, RotateCcw, BarChart3, TicketCheck, CheckCircle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import TicketReportPrint from "@/components/admin/TicketReportPrint";
 
 const statusOptions = [
   { value: "all", label: "Todos" },
@@ -42,6 +43,7 @@ const TicketReports = () => {
   const [status, setStatus] = useState<string>("all");
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [showPrint, setShowPrint] = useState(false);
 
   // Fetch clients (profiles with client role)
   const { data: clients } = useQuery({
@@ -118,38 +120,42 @@ const TicketReports = () => {
     return rem > 0 ? `${days}d ${rem}h` : `${days}d`;
   };
 
+  const printFilters = useMemo(() => {
+    const clientName = clientId !== "all" && clients
+      ? clients.find((c) => c.id === clientId)?.full_name || "Todos"
+      : "Todos";
+    return { clientName, status, startDate, endDate };
+  }, [clientId, status, startDate, endDate, clients]);
+
+  if (showPrint && tickets) {
+    return (
+      <TicketReportPrint
+        tickets={tickets as any}
+        filters={printFilters}
+        metrics={metrics}
+        onClose={() => setShowPrint(false)}
+      />
+    );
+  }
+
   return (
     <AdminLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between print:hidden">
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Relatório de Chamados</h1>
             <p className="text-muted-foreground">Filtre por cliente, situação e período</p>
           </div>
-          <Button onClick={() => window.print()} variant="outline" className="gap-2">
+          <Button onClick={() => setShowPrint(true)} variant="outline" className="gap-2" disabled={!tickets?.length}>
             <Printer className="w-4 h-4" /> Imprimir
           </Button>
         </div>
 
-        {/* Print header */}
-        <div className="hidden print:block mb-4">
-          <h1 className="text-xl font-bold">Relatório de Chamados</h1>
-          <p className="text-sm text-muted-foreground">
-            {startDate && endDate
-              ? `Período: ${format(startDate, "dd/MM/yyyy")} a ${format(endDate, "dd/MM/yyyy")}`
-              : "Todos os períodos"}
-            {clientId !== "all" && clients
-              ? ` | Cliente: ${clients.find((c) => c.id === clientId)?.full_name}`
-              : ""}
-            {status !== "all"
-              ? ` | Status: ${statusOptions.find((s) => s.value === status)?.label}`
-              : ""}
-          </p>
-        </div>
+
 
         {/* Filters */}
-        <Card className="print:hidden">
+        <Card>
           <CardContent className="pt-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
               {/* Client */}
