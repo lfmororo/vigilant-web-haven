@@ -348,6 +348,7 @@ const UsersManagement = () => {
                     <TableHead>Nome</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Perfil</TableHead>
+                    <TableHead>Cliente Vinculado</TableHead>
                     <TableHead>Telefone</TableHead>
                     <TableHead>Criado em</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
@@ -362,6 +363,21 @@ const UsersManagement = () => {
                         <Badge variant="outline" className={roleBadgeColors[user.role || "user"] || ""}>
                           {roleLabels[user.role || "user"] || user.role}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {user.parent_client_id
+                          ? (() => {
+                              const client = users.find((u) => u.id === user.parent_client_id);
+                              return client ? (
+                                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-xs">
+                                  {client.full_name}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">-</span>
+                              );
+                            })()
+                          : <span className="text-muted-foreground text-sm">-</span>
+                        }
                       </TableCell>
                       <TableCell>{user.phone || "-"}</TableCell>
                       <TableCell>{new Date(user.created_at).toLocaleDateString("pt-BR")}</TableCell>
