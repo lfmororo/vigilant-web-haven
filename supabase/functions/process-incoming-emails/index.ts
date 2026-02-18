@@ -563,10 +563,20 @@ Deno.serve(async (req) => {
 
         // --- Normal flow: create new ticket ---
 
+        // Extract email domain for auto-linking
+        const emailDomain = senderEmail.split("@")[1];
+
+        // Find client with matching email_domain
+        const { data: domainClient } = await supabaseAdmin
+          .from("profiles")
+          .select("id")
+          .eq("email_domain", emailDomain)
+          .maybeSingle();
+
         // Check if client exists
         const { data: existingProfile } = await supabaseAdmin
           .from("profiles")
-          .select("id")
+          .select("id, parent_client_id")
           .eq("email", senderEmail)
           .maybeSingle();
 
@@ -574,6 +584,13 @@ Deno.serve(async (req) => {
 
         if (existingProfile) {
           clientId = existingProfile.id;
+          // If user exists but has no parent_client_id and we found a domain match, auto-link
+          if (!existingProfile.parent_client_id && domainClient) {
+            await supabaseAdmin
+              .from("profiles")
+              .update({ parent_client_id: domainClient.id })
+              .eq("id", existingProfile.id);
+          }
         } else {
           // Create new user
           const tempPassword = generatePassword();
@@ -590,12 +607,13 @@ Deno.serve(async (req) => {
 
           clientId = newUser.user.id;
 
-          // Create profile
+          // Create profile, auto-linking to client if domain matches
           await supabaseAdmin.from("profiles").insert({
             id: clientId,
             email: senderEmail,
             full_name: senderName,
             must_change_password: true,
+            parent_client_id: domainClient ? domainClient.id : null,
           });
 
           // Assign client role
