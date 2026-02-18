@@ -31,6 +31,7 @@ interface ClientProfile {
   full_name: string;
   email: string;
   phone: string | null;
+  email_domain: string | null;
   created_at: string;
 }
 
@@ -55,6 +56,7 @@ const ClientsManagement = () => {
     email: "",
     password: "",
     phone: "",
+    email_domain: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -116,8 +118,16 @@ const ClientsManagement = () => {
 
     try {
       const response = await supabase.functions.invoke("create-user", {
-        body: { ...formData, role: "client" },
+        body: { full_name: formData.full_name, email: formData.email, password: formData.password, phone: formData.phone, role: "client" },
       });
+
+      // If email_domain provided, update the profile after creation
+      if (response.data?.user?.id && formData.email_domain.trim()) {
+        await supabase
+          .from("profiles")
+          .update({ email_domain: formData.email_domain.trim().toLowerCase() })
+          .eq("id", response.data.user.id);
+      }
 
       if (response.error) throw new Error(response.error.message);
       if (response.data.error) throw new Error(response.data.error);
@@ -127,7 +137,7 @@ const ClientsManagement = () => {
         description: `${formData.full_name} foi criado com sucesso.`,
       });
 
-      setFormData({ full_name: "", email: "", password: "", phone: "" });
+      setFormData({ full_name: "", email: "", password: "", phone: "", email_domain: "" });
       setIsDialogOpen(false);
       fetchClients();
     } catch (error: any) {
@@ -210,6 +220,16 @@ const ClientsManagement = () => {
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email_domain">Domínio de Email (opcional)</Label>
+                  <Input
+                    id="email_domain"
+                    placeholder="Ex: empresa.com.br"
+                    value={formData.email_domain}
+                    onChange={(e) => setFormData({ ...formData, email_domain: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">Usuários com emails deste domínio serão vinculados automaticamente a este cliente.</p>
+                </div>
                 <Button type="submit" className="w-full" disabled={isSubmitting}>
                   {isSubmitting ? (
                     <>
@@ -243,6 +263,7 @@ const ClientsManagement = () => {
                     <TableHead>Nome</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Telefone</TableHead>
+                    <TableHead>Domínio</TableHead>
                     <TableHead>Criado em</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -253,6 +274,7 @@ const ClientsManagement = () => {
                       <TableCell className="font-medium">{client.full_name}</TableCell>
                       <TableCell>{client.email}</TableCell>
                       <TableCell>{client.phone || "-"}</TableCell>
+                      <TableCell>{client.email_domain || "-"}</TableCell>
                       <TableCell>{new Date(client.created_at).toLocaleDateString("pt-BR")}</TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button variant="ghost" size="sm" asChild>

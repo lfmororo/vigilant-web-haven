@@ -198,6 +198,7 @@ export type Database = {
           city: string | null
           created_at: string
           email: string
+          email_domain: string | null
           full_name: string
           id: string
           must_change_password: boolean | null
@@ -213,6 +214,7 @@ export type Database = {
           city?: string | null
           created_at?: string
           email: string
+          email_domain?: string | null
           full_name: string
           id: string
           must_change_password?: boolean | null
@@ -228,6 +230,7 @@ export type Database = {
           city?: string | null
           created_at?: string
           email?: string
+          email_domain?: string | null
           full_name?: string
           id?: string
           must_change_password?: boolean | null

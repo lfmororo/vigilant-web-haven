@@ -323,7 +323,7 @@ const UsersManagement = () => {
 
         {/* Filter */}
         <div className="flex gap-4">
-          <Select value={filterRole} onValueChange={setFilterRole}>
+        <Select value={filterRole} onValueChange={setFilterRole}>
             <SelectTrigger className="w-48"><SelectValue placeholder="Filtrar por perfil" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
@@ -332,21 +332,7 @@ const UsersManagement = () => {
               <SelectItem value="technician">Técnico</SelectItem>
             </SelectContent>
           </Select>
-              </div>
-              {/* Parent Client */}
-              <div className="space-y-2">
-                <Label>Vinculado ao Cliente</Label>
-                <Select value={editFormData.parent_client_id || "none"} onValueChange={(v) => setEditFormData({ ...editFormData, parent_client_id: v === "none" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {users.filter((u) => u.role === "client" && u.id !== editingUser?.id).map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Vincule este usuário a um cliente principal para agrupar chamados no relatório.</p>
-              </div>
+        </div>
 
         <Card>
           <CardHeader><CardTitle>Lista de Usuários</CardTitle></CardHeader>
@@ -426,6 +412,19 @@ const UsersManagement = () => {
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Vinculado ao Cliente</Label>
+                <Select value={editFormData.parent_client_id || "none"} onValueChange={(v) => setEditFormData({ ...editFormData, parent_client_id: v === "none" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum</SelectItem>
+                    {users.filter((u) => u.role === "client" && u.id !== editingUser?.id).map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Vincule este usuário a um cliente principal para agrupar chamados no relatório.</p>
               </div>
               <Button type="submit" className="w-full" disabled={isEditSubmitting}>
                 {isEditSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Salvando...</> : "Salvar Alterações"}
