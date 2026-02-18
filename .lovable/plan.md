@@ -1,48 +1,93 @@
 
-# Relatorio de Chamados por Cliente, Situacao e Periodo
+# Vinculação de Usuário a Cliente + Domínio de Email Automático
 
-## Objetivo
-Criar uma nova pagina de relatorios no painel administrativo que permita filtrar chamados por cliente, status e periodo de datas, com visualizacao em tabela, metricas resumidas e opcao de exportar/imprimir.
+## Problemas identificados
 
-## Funcionalidades
+1. O campo "Vinculado ao Cliente" existe no código mas está **fora do dialog de edição** — ele aparece solto na página principal, entre o filtro e o card de listagem, causando um bug visual.
+2. O dialog de edição **não inclui o campo** de vinculação ao cliente.
+3. Não existe ainda o campo `email_domain` na tabela de perfis dos clientes para vinculação automática por domínio.
+4. O fluxo de criação de usuário via email (`process-incoming-emails`) não verifica domínio para vincular automaticamente ao cliente.
 
-1. **Filtros**
-   - Selecao de cliente (dropdown com todos os clientes)
-   - Selecao de status (todos, aberto, em andamento, aguardando, resolvido, fechado)
-   - Periodo de datas (data inicial e data final com date picker)
-   - Botao para limpar filtros
+---
 
-2. **Metricas Resumidas (Cards)**
-   - Total de chamados no periodo
-   - Chamados abertos
-   - Chamados resolvidos/fechados
-   - Tempo medio de resolucao
+## O que será implementado
 
-3. **Tabela de Resultados**
-   - Numero do chamado, titulo, cliente, equipamento, tecnico, prioridade, status, data de abertura, data de resolucao
-   - Ordenacao por data
+### 1. Corrigir o dialog de edição de usuário (`UsersManagement.tsx`)
+- Remover o bloco "Vinculado ao Cliente" que está solto na página (entre as linhas 336–349)
+- Adicionar corretamente o campo **"Vinculado ao Cliente"** dentro do dialog de edição (após o campo Perfil), com dropdown listando apenas usuários com role `client`
+- A vinculação já funciona na lógica de `handleEditUser` (salva `parent_client_id`) — só precisa do campo no lugar certo
 
-4. **Exportacao**
-   - Botao para imprimir o relatorio (window.print com CSS de impressao)
+### 2. Adicionar campo de domínio de email na gestão de clientes (`ClientsManagement.tsx`)
+- Adicionar campo de banco de dados `email_domain` (text, nullable) na tabela `profiles`
+- No dialog de criação/edição do cliente, exibir o campo **"Domínio de Email"** (ex: `empresa.com.br`)
+- Placeholder e texto de ajuda: "Ex: empresa.com.br — usuários com esse domínio serão vinculados automaticamente"
+- Salvar o valor no campo `email_domain` do perfil do cliente
 
-5. **Navegacao**
-   - Nova entrada "Relatorios" no menu lateral do admin com icone BarChart3
+### 3. Vinculação automática por domínio no fluxo de email (`process-incoming-emails`)
+- Quando um novo email chega e o usuário **ainda não existe**, após criar o perfil, verificar se algum cliente tem `email_domain` igual ao domínio do email do remetente
+- Se encontrar, definir `parent_client_id` no perfil do novo usuário automaticamente
+- Quando o usuário **já existe** mas `parent_client_id` é nulo, fazer a mesma verificação e atualizar
 
-## Detalhes Tecnicos
+---
 
-### Arquivos a criar
-- `src/pages/admin/TicketReports.tsx` - Pagina principal do relatorio
+## Detalhes Técnicos
+
+### Banco de dados — Migration
+Adicionar coluna `email_domain` à tabela `profiles`:
+```sql
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email_domain text;
+```
+Nenhuma outra mudança de schema é necessária — `parent_client_id` já existe.
 
 ### Arquivos a modificar
-- `src/App.tsx` - Adicionar rota `/admin/reports`
-- `src/components/admin/AdminLayout.tsx` - Adicionar item "Relatorios" no menu lateral
 
-### Implementacao
-- Consulta ao Supabase na tabela `tickets` com joins em `profiles` (cliente e tecnico) e `equipment_types`
-- Filtro por `client_id`, `status` e `created_at` entre as datas selecionadas
-- Uso dos componentes existentes: `AdminLayout`, `Card`, `Table`, `Select`, `Button`, `Calendar/Popover` (date picker), `TicketStatusBadge`, `PriorityBadge`
-- Calculo do tempo medio de resolucao comparando `created_at` com `updated_at` dos chamados resolvidos/fechados
-- CSS de impressao com `@media print` para ocultar sidebar e filtros, mostrando apenas o relatorio
+| Arquivo | O que muda |
+|---|---|
+| `supabase/migrations/...` | Adiciona coluna `email_domain` |
+| `src/pages/admin/UsersManagement.tsx` | Corrige posição do campo "Vinculado ao Cliente" no dialog de edição |
+| `src/pages/admin/ClientsManagement.tsx` | Adiciona campo "Domínio de Email" no cadastro/edição do cliente |
+| `supabase/functions/process-incoming-emails/index.ts` | Vinculação automática por domínio ao criar/encontrar usuário |
 
-### Nao requer alteracoes no banco de dados
-Todos os dados necessarios ja existem nas tabelas `tickets`, `profiles` e `equipment_types`.
+### Lógica de vinculação automática (Edge Function)
+```typescript
+// Extrair domínio do email do remetente
+const emailDomain = senderEmail.split("@")[1];
+
+// Buscar cliente com esse domínio cadastrado
+const { data: domainClient } = await supabaseAdmin
+  .from("profiles")
+  .select("id")
+  .eq("email_domain", emailDomain)
+  .maybeSingle();
+
+// Se encontrou, vincular ao criar o perfil
+if (domainClient) {
+  parentClientId = domainClient.id;
+}
+
+// Ao inserir o perfil novo:
+await supabaseAdmin.from("profiles").insert({
+  id: clientId,
+  email: senderEmail,
+  full_name: senderName,
+  must_change_password: true,
+  parent_client_id: parentClientId || null,
+});
+
+// Se usuário já existe sem vínculo, atualizar:
+if (existingProfile && !existingProfile.parent_client_id && domainClient) {
+  await supabaseAdmin.from("profiles")
+    .update({ parent_client_id: domainClient.id })
+    .eq("id", existingProfile.id);
+}
+```
+
+### Comportamento esperado
+- Admin edita um usuário → vê o campo "Vinculado ao Cliente" dentro do modal de edição → seleciona o cliente → salva
+- Admin cadastra cliente e preenche "Domínio: empresa.com.br"
+- Quando um email de `joao@empresa.com.br` chega, o sistema cria o usuário João e já vincula automaticamente ao cliente `empresa.com.br` sem intervenção manual
+- O relatório de chamados filtrado pelo cliente empresa.com.br incluirá todos os chamados de usuários vinculados
+
+### Sem alterações necessárias em
+- Lógica de relatório (`TicketReports.tsx`) — já usa `parent_client_id` corretamente
+- Tabela de permissões (RLS) — `profiles` já permite `update` por admins
