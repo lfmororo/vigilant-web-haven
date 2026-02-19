@@ -13,6 +13,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -21,7 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Eye, EyeOff, Package, TicketCheck, Key } from "lucide-react";
+import { Plus, Loader2, Eye, EyeOff, Package, TicketCheck, Key, Pencil, Trash2 } from "lucide-react";
 import { z } from "zod";
 import { Link } from "react-router-dom";
 import ApiIntegrationDialog from "@/components/admin/ApiIntegrationDialog";
@@ -42,12 +52,20 @@ const createClientSchema = z.object({
   phone: z.string().optional(),
 });
 
+const editClientSchema = z.object({
+  full_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  phone: z.string().optional(),
+  email_domain: z.string().optional(),
+});
+
 const ClientsManagement = () => {
   const [apiDialogClientId, setApiDialogClientId] = useState<string | null>(null);
   const [apiDialogClientName, setApiDialogClientName] = useState("");
   const { toast } = useToast();
   const [clients, setClients] = useState<ClientProfile[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Create dialog
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -60,13 +78,27 @@ const ClientsManagement = () => {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Edit dialog
+  const [editingClient, setEditingClient] = useState<ClientProfile | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    full_name: "",
+    phone: "",
+    email_domain: "",
+  });
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+
+  // Delete dialog
+  const [deletingClient, setDeletingClient] = useState<ClientProfile | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   useEffect(() => {
     fetchClients();
   }, []);
 
   const fetchClients = async () => {
     try {
-      // Get user_ids with role 'client'
       const { data: roleData, error: roleError } = await supabase
         .from("user_roles")
         .select("user_id")
@@ -121,7 +153,6 @@ const ClientsManagement = () => {
         body: { full_name: formData.full_name, email: formData.email, password: formData.password, phone: formData.phone, role: "client" },
       });
 
-      // If email_domain provided, update the profile after creation
       if (response.data?.user?.id && formData.email_domain.trim()) {
         await supabase
           .from("profiles")
@@ -148,6 +179,77 @@ const ClientsManagement = () => {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const openEditDialog = (client: ClientProfile) => {
+    setEditingClient(client);
+    setEditFormData({
+      full_name: client.full_name,
+      phone: client.phone || "",
+      email_domain: client.email_domain || "",
+    });
+    setEditErrors({});
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingClient) return;
+    setEditErrors({});
+
+    const result = editClientSchema.safeParse(editFormData);
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      result.error.errors.forEach((err) => {
+        fieldErrors[err.path[0] as string] = err.message;
+      });
+      setEditErrors(fieldErrors);
+      return;
+    }
+
+    setIsEditSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: editFormData.full_name,
+          phone: editFormData.phone || null,
+          email_domain: editFormData.email_domain.trim().toLowerCase() || null,
+        })
+        .eq("id", editingClient.id);
+
+      if (error) throw error;
+
+      toast({ title: "Cliente atualizado", description: `${editFormData.full_name} foi atualizado com sucesso.` });
+      setIsEditDialogOpen(false);
+      setEditingClient(null);
+      fetchClients();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao atualizar cliente", description: error.message });
+    } finally {
+      setIsEditSubmitting(false);
+    }
+  };
+
+  const handleDeleteClient = async () => {
+    if (!deletingClient) return;
+    setIsDeleting(true);
+    try {
+      const response = await supabase.functions.invoke("delete-user", {
+        body: { user_id: deletingClient.id },
+      });
+
+      if (response.error) throw new Error(response.error.message);
+      if (response.data?.error) throw new Error(response.data.error);
+
+      toast({ title: "Cliente excluído", description: `${deletingClient.full_name} foi excluído com sucesso.` });
+      setDeletingClient(null);
+      fetchClients();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao excluir cliente", description: error.message });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -276,23 +378,36 @@ const ClientsManagement = () => {
                       <TableCell>{client.phone || "-"}</TableCell>
                       <TableCell>{client.email_domain || "-"}</TableCell>
                       <TableCell>{new Date(client.created_at).toLocaleDateString("pt-BR")}</TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/helpdesk/tickets?client=${client.id}`}>
-                            <TicketCheck className="w-4 h-4 mr-1" />
-                            Tickets
-                          </Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/admin/inventory?client=${client.id}`}>
-                            <Package className="w-4 h-4 mr-1" />
-                            Equipamentos
-                          </Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => { setApiDialogClientId(client.id); setApiDialogClientName(client.full_name); }}>
-                          <Key className="w-4 h-4 mr-1" />
-                          API
-                        </Button>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link to={`/helpdesk/tickets?client=${client.id}`}>
+                              <TicketCheck className="w-4 h-4 mr-1" />
+                              Tickets
+                            </Link>
+                          </Button>
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link to={`/admin/inventory?client=${client.id}`}>
+                              <Package className="w-4 h-4 mr-1" />
+                              Equipamentos
+                            </Link>
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => { setApiDialogClientId(client.id); setApiDialogClientName(client.full_name); }}>
+                            <Key className="w-4 h-4 mr-1" />
+                            API
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(client)}>
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => setDeletingClient(client)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -301,6 +416,82 @@ const ClientsManagement = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Edit Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={(open) => { if (!open) { setIsEditDialogOpen(false); setEditingClient(null); } }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar Cliente</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleEditClient} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit_full_name">Nome Completo</Label>
+                <Input
+                  id="edit_full_name"
+                  value={editFormData.full_name}
+                  onChange={(e) => setEditFormData({ ...editFormData, full_name: e.target.value })}
+                  className={editErrors.full_name ? "border-destructive" : ""}
+                />
+                {editErrors.full_name && <p className="text-sm text-destructive">{editErrors.full_name}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input value={editingClient?.email || ""} disabled className="opacity-60" />
+                <p className="text-xs text-muted-foreground">O email não pode ser alterado por aqui.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_phone">Telefone (opcional)</Label>
+                <Input
+                  id="edit_phone"
+                  value={editFormData.phone}
+                  onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_email_domain">Domínio de Email</Label>
+                <Input
+                  id="edit_email_domain"
+                  placeholder="Ex: empresa.com.br"
+                  value={editFormData.email_domain}
+                  onChange={(e) => setEditFormData({ ...editFormData, email_domain: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">Usuários com emails deste domínio serão vinculados automaticamente a este cliente.</p>
+              </div>
+              <Button type="submit" className="w-full" disabled={isEditSubmitting}>
+                {isEditSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  "Salvar Alterações"
+                )}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation */}
+        <AlertDialog open={!!deletingClient} onOpenChange={(open) => { if (!open) setDeletingClient(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir Cliente</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja excluir <strong>{deletingClient?.full_name}</strong>? Esta ação não pode ser desfeita e todos os dados do cliente serão removidos.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteClient}
+                disabled={isDeleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isDeleting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Excluindo...</> : "Excluir"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <ApiIntegrationDialog
           open={!!apiDialogClientId}
