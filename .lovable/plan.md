@@ -1,93 +1,131 @@
 
-# Vinculação de Usuário a Cliente + Domínio de Email Automático
+# Processador, Memória e Disco no Inventário de Equipamentos
+
+## O que será feito
+
+Adicionar campos de hardware (CPU, RAM, Disco — espaço total, usado e livre) e data da última atualização à tabela de inventário. Esses dados serão exibidos na listagem, na tela de detalhe do equipamento e no relatório PDF. O script de sincronização via API também será atualizado para aceitar e gravar esses campos.
+
+---
 
 ## Problemas identificados
 
-1. O campo "Vinculado ao Cliente" existe no código mas está **fora do dialog de edição** — ele aparece solto na página principal, entre o filtro e o card de listagem, causando um bug visual.
-2. O dialog de edição **não inclui o campo** de vinculação ao cliente.
-3. Não existe ainda o campo `email_domain` na tabela de perfis dos clientes para vinculação automática por domínio.
-4. O fluxo de criação de usuário via email (`process-incoming-emails`) não verifica domínio para vincular automaticamente ao cliente.
+- A tabela `equipment_inventory` **não possui** colunas para CPU, memória, disco ou data de atualização de hardware.
+- A tela `/admin/inventory` (listagem) não exibe essas informações.
+- A tela `/admin/inventory/:id` (detalhe) não exibe essas informações.
+- O componente `EquipmentInventoryPrint` (PDF) não inclui essas colunas.
+- A Edge Function `inventory-sync` (usada pelo script PowerShell/Python) não aceita nem grava esses campos.
 
 ---
 
-## O que será implementado
+## 1. Banco de dados — Migration
 
-### 1. Corrigir o dialog de edição de usuário (`UsersManagement.tsx`)
-- Remover o bloco "Vinculado ao Cliente" que está solto na página (entre as linhas 336–349)
-- Adicionar corretamente o campo **"Vinculado ao Cliente"** dentro do dialog de edição (após o campo Perfil), com dropdown listando apenas usuários com role `client`
-- A vinculação já funciona na lógica de `handleEditUser` (salva `parent_client_id`) — só precisa do campo no lugar certo
+Adicionar as seguintes colunas à tabela `equipment_inventory`:
 
-### 2. Adicionar campo de domínio de email na gestão de clientes (`ClientsManagement.tsx`)
-- Adicionar campo de banco de dados `email_domain` (text, nullable) na tabela `profiles`
-- No dialog de criação/edição do cliente, exibir o campo **"Domínio de Email"** (ex: `empresa.com.br`)
-- Placeholder e texto de ajuda: "Ex: empresa.com.br — usuários com esse domínio serão vinculados automaticamente"
-- Salvar o valor no campo `email_domain` do perfil do cliente
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `cpu` | text | Modelo/descrição do processador |
+| `ram_total_gb` | numeric | Memória RAM total (GB) |
+| `disk_total_gb` | numeric | Disco total (GB) |
+| `disk_used_gb` | numeric | Espaço usado em disco (GB) |
+| `disk_free_gb` | numeric | Espaço livre em disco (GB) |
+| `hardware_updated_at` | timestamptz | Data/hora da última atualização de hardware |
 
-### 3. Vinculação automática por domínio no fluxo de email (`process-incoming-emails`)
-- Quando um novo email chega e o usuário **ainda não existe**, após criar o perfil, verificar se algum cliente tem `email_domain` igual ao domínio do email do remetente
-- Se encontrar, definir `parent_client_id` no perfil do novo usuário automaticamente
-- Quando o usuário **já existe** mas `parent_client_id` é nulo, fazer a mesma verificação e atualizar
-
----
-
-## Detalhes Técnicos
-
-### Banco de dados — Migration
-Adicionar coluna `email_domain` à tabela `profiles`:
 ```sql
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email_domain text;
+ALTER TABLE public.equipment_inventory
+  ADD COLUMN IF NOT EXISTS cpu text,
+  ADD COLUMN IF NOT EXISTS ram_total_gb numeric,
+  ADD COLUMN IF NOT EXISTS disk_total_gb numeric,
+  ADD COLUMN IF NOT EXISTS disk_used_gb numeric,
+  ADD COLUMN IF NOT EXISTS disk_free_gb numeric,
+  ADD COLUMN IF NOT EXISTS hardware_updated_at timestamptz;
 ```
-Nenhuma outra mudança de schema é necessária — `parent_client_id` já existe.
 
-### Arquivos a modificar
+---
+
+## 2. Tela de listagem — `EquipmentInventory.tsx`
+
+Adicionar colunas visuais na tabela de equipamentos. Como a tabela já é larga, os dados de hardware serão exibidos de forma compacta em uma coluna "Hardware" com mini-badges ou texto resumido:
+
+```
+CPU: Intel i7  |  RAM: 16 GB  |  Disco: 120/500 GB livre
+```
+
+- A coluna "Hardware" aparece apenas se ao menos um item tiver `cpu` ou `ram_total_gb` preenchidos (para não poluir quando nenhum equipamento tem dados de hardware).
+- Exibir também a "Última atualização" do hardware como tooltip ou linha secundária pequena.
+- Atualizar a interface `Equipment` para incluir os novos campos.
+
+---
+
+## 3. Tela de detalhe — `EquipmentDetail.tsx`
+
+No card "Informações do Equipamento", adicionar uma seção "Recursos de Hardware" com os dados de forma clara:
+
+```
+Processador:   Intel Core i7-10700
+RAM:           16 GB
+Disco Total:   500 GB
+Disco Usado:   380 GB (76%)
+Disco Livre:   120 GB
+Última atualização: 19/02/2026 às 14:30
+```
+
+Exibir uma barra de progresso visual para o disco (vermelho se >80% usado, amarelo se >60%, verde se normal).
+
+---
+
+## 4. Relatório PDF — `EquipmentInventoryPrint.tsx`
+
+Adicionar colunas compactas ao relatório impresso:
+
+| CPU | RAM (GB) | Disco Usado/Total (GB) | Última Atualização |
+|---|---|---|---|
+
+Atualizar a interface `Equipment` interna do componente para incluir os novos campos.
+
+---
+
+## 5. Edge Function `inventory-sync` — aceitação dos dados via API
+
+Atualizar o `POST` da Edge Function para aceitar os novos campos vindos do script PowerShell/Python:
+
+```json
+{
+  "client_id": "...",
+  "api_key": "...",
+  "equipment": [
+    {
+      "name": "Servidor-01",
+      "serial_number": "SRV-001",
+      "cpu": "Intel Xeon E5-2670",
+      "ram_total_gb": 32,
+      "disk_total_gb": 1000,
+      "disk_used_gb": 450,
+      "disk_free_gb": 550,
+      "hardware_updated_at": "2026-02-19T14:30:00Z"
+    }
+  ]
+}
+```
+
+Ao gravar, se `hardware_updated_at` não for enviado, o sistema define automaticamente como `now()`.
+
+---
+
+## Arquivos a modificar
 
 | Arquivo | O que muda |
 |---|---|
-| `supabase/migrations/...` | Adiciona coluna `email_domain` |
-| `src/pages/admin/UsersManagement.tsx` | Corrige posição do campo "Vinculado ao Cliente" no dialog de edição |
-| `src/pages/admin/ClientsManagement.tsx` | Adiciona campo "Domínio de Email" no cadastro/edição do cliente |
-| `supabase/functions/process-incoming-emails/index.ts` | Vinculação automática por domínio ao criar/encontrar usuário |
+| `supabase/migrations/...` | Adiciona 6 novas colunas à tabela |
+| `src/pages/admin/EquipmentInventory.tsx` | Interface + coluna "Hardware" na tabela |
+| `src/pages/admin/EquipmentDetail.tsx` | Seção de hardware com barra de progresso de disco |
+| `src/components/admin/EquipmentInventoryPrint.tsx` | Colunas de hardware no PDF |
+| `supabase/functions/inventory-sync/index.ts` | Aceitar e gravar campos de hardware no POST |
 
-### Lógica de vinculação automática (Edge Function)
-```typescript
-// Extrair domínio do email do remetente
-const emailDomain = senderEmail.split("@")[1];
+---
 
-// Buscar cliente com esse domínio cadastrado
-const { data: domainClient } = await supabaseAdmin
-  .from("profiles")
-  .select("id")
-  .eq("email_domain", emailDomain)
-  .maybeSingle();
+## Comportamento esperado
 
-// Se encontrou, vincular ao criar o perfil
-if (domainClient) {
-  parentClientId = domainClient.id;
-}
-
-// Ao inserir o perfil novo:
-await supabaseAdmin.from("profiles").insert({
-  id: clientId,
-  email: senderEmail,
-  full_name: senderName,
-  must_change_password: true,
-  parent_client_id: parentClientId || null,
-});
-
-// Se usuário já existe sem vínculo, atualizar:
-if (existingProfile && !existingProfile.parent_client_id && domainClient) {
-  await supabaseAdmin.from("profiles")
-    .update({ parent_client_id: domainClient.id })
-    .eq("id", existingProfile.id);
-}
-```
-
-### Comportamento esperado
-- Admin edita um usuário → vê o campo "Vinculado ao Cliente" dentro do modal de edição → seleciona o cliente → salva
-- Admin cadastra cliente e preenche "Domínio: empresa.com.br"
-- Quando um email de `joao@empresa.com.br` chega, o sistema cria o usuário João e já vincula automaticamente ao cliente `empresa.com.br` sem intervenção manual
-- O relatório de chamados filtrado pelo cliente empresa.com.br incluirá todos os chamados de usuários vinculados
-
-### Sem alterações necessárias em
-- Lógica de relatório (`TicketReports.tsx`) — já usa `parent_client_id` corretamente
-- Tabela de permissões (RLS) — `profiles` já permite `update` por admins
+- Equipamentos sem dados de hardware mostram "-" nos campos (nada quebra).
+- Scripts PowerShell/Python já existentes podem ser atualizados para enviar os novos campos — o sistema aceita com ou sem eles.
+- A barra de progresso do disco no detalhe oferece visibilidade rápida de equipamentos com pouco espaço livre.
+- O `hardware_updated_at` indica quando o script fez a última coleta, facilitando identificar máquinas desatualizadas.
