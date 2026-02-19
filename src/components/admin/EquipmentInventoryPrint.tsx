@@ -11,6 +11,12 @@ interface Equipment {
   serial_number: string | null;
   location: string | null;
   status: string;
+  cpu: string | null;
+  ram_total_gb: number | null;
+  disk_total_gb: number | null;
+  disk_used_gb: number | null;
+  disk_free_gb: number | null;
+  hardware_updated_at: string | null;
   client?: { full_name: string } | null;
   equipment_type?: { name: string } | null;
 }
@@ -96,12 +102,15 @@ const EquipmentInventoryPrint = ({ equipment, filters, onClose }: EquipmentInven
               <thead>
                 <tr className="border-b border-black bg-gray-100">
                   <th className="border-r border-black px-2 py-1 text-left">Nome</th>
-                  <th className="border-r border-black px-2 py-1 text-left w-24">Tipo</th>
-                  <th className="border-r border-black px-2 py-1 text-left w-28">Marca/Modelo</th>
-                  <th className="border-r border-black px-2 py-1 text-left w-24">Série</th>
-                  <th className="border-r border-black px-2 py-1 text-left w-28">Cliente</th>
-                  <th className="border-r border-black px-2 py-1 text-left w-24">Localização</th>
-                  <th className="px-2 py-1 text-left w-20">Status</th>
+                  <th className="border-r border-black px-2 py-1 text-left w-20">Tipo</th>
+                  <th className="border-r border-black px-2 py-1 text-left w-24">Marca/Modelo</th>
+                  <th className="border-r border-black px-2 py-1 text-left w-20">Série</th>
+                  <th className="border-r border-black px-2 py-1 text-left w-24">Cliente</th>
+                  <th className="border-r border-black px-2 py-1 text-left w-32">CPU</th>
+                  <th className="border-r border-black px-2 py-1 text-center w-16">RAM (GB)</th>
+                  <th className="border-r border-black px-2 py-1 text-center w-24">Disco Us./Tot.</th>
+                  <th className="border-r border-black px-2 py-1 text-left w-24">Últ. Atualiz.</th>
+                  <th className="px-2 py-1 text-left w-16">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -112,7 +121,14 @@ const EquipmentInventoryPrint = ({ equipment, filters, onClose }: EquipmentInven
                     <td className="border-r border-black px-2 py-1">{[item.brand, item.model].filter(Boolean).join(" ") || "-"}</td>
                     <td className="border-r border-black px-2 py-1 font-mono">{item.serial_number || "-"}</td>
                     <td className="border-r border-black px-2 py-1">{item.client?.full_name || "-"}</td>
-                    <td className="border-r border-black px-2 py-1">{item.location || "-"}</td>
+                    <td className="border-r border-black px-2 py-1">{item.cpu || "-"}</td>
+                    <td className="border-r border-black px-2 py-1 text-center">{item.ram_total_gb ?? "-"}</td>
+                    <td className="border-r border-black px-2 py-1 text-center">
+                      {item.disk_used_gb != null && item.disk_total_gb != null ? `${item.disk_used_gb}/${item.disk_total_gb}` : "-"}
+                    </td>
+                    <td className="border-r border-black px-2 py-1">
+                      {item.hardware_updated_at ? format(new Date(item.hardware_updated_at), "dd/MM/yy HH:mm", { locale: ptBR }) : "-"}
+                    </td>
                     <td className="px-2 py-1">{statusLabels[item.status] || item.status}</td>
                   </tr>
                 ))}

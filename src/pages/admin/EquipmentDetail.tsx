@@ -5,7 +5,10 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { ArrowLeft, Loader2, Cpu, MemoryStick, HardDrive } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import {
   Table,
   TableBody,
@@ -124,6 +127,71 @@ const EquipmentDetail = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Hardware Resources */}
+        {(equipment.cpu || equipment.ram_total_gb || equipment.disk_total_gb) && (() => {
+          const diskPct = equipment.disk_total_gb > 0
+            ? Math.round((equipment.disk_used_gb / equipment.disk_total_gb) * 100)
+            : null;
+          const diskColor = diskPct == null ? "" : diskPct > 80 ? "[&>div]:bg-destructive" : diskPct > 60 ? "[&>div]:bg-yellow-500" : "[&>div]:bg-green-500";
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Cpu className="w-4 h-4" /> Recursos de Hardware
+                  {equipment.hardware_updated_at && (
+                    <span className="text-xs text-muted-foreground font-normal ml-auto">
+                      Última atualização: {format(new Date(equipment.hardware_updated_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {equipment.cpu && (
+                    <div className="flex items-start gap-2">
+                      <Cpu className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+                      <div>
+                        <p className="text-muted-foreground text-xs">Processador</p>
+                        <p className="font-medium">{equipment.cpu}</p>
+                      </div>
+                    </div>
+                  )}
+                  {equipment.ram_total_gb && (
+                    <div className="flex items-start gap-2">
+                      <MemoryStick className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+                      <div>
+                        <p className="text-muted-foreground text-xs">Memória RAM</p>
+                        <p className="font-medium">{equipment.ram_total_gb} GB</p>
+                      </div>
+                    </div>
+                  )}
+                  {equipment.disk_total_gb && (
+                    <div className="flex items-start gap-2">
+                      <HardDrive className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+                      <div>
+                        <p className="text-muted-foreground text-xs">Disco Total</p>
+                        <p className="font-medium">{equipment.disk_total_gb} GB</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {equipment.disk_total_gb > 0 && diskPct !== null && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>
+                        Usado: {equipment.disk_used_gb ?? "-"} GB
+                        {diskPct !== null && <span className={diskPct > 80 ? " text-destructive font-bold" : diskPct > 60 ? " text-yellow-500 font-medium" : " text-green-500 font-medium"}> ({diskPct}%)</span>}
+                      </span>
+                      <span>Livre: {equipment.disk_free_gb ?? "-"} GB</span>
+                    </div>
+                    <Progress value={diskPct} className={`h-2 ${diskColor}`} />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* Tickets relacionados */}
         <Card>

@@ -148,6 +148,12 @@ Deno.serve(async (req) => {
             notes: item.notes || null,
             client_id: client_id,
             status: "active",
+            cpu: item.cpu || null,
+            ram_total_gb: item.ram_total_gb ?? null,
+            disk_total_gb: item.disk_total_gb ?? null,
+            disk_used_gb: item.disk_used_gb ?? null,
+            disk_free_gb: item.disk_free_gb ?? null,
+            hardware_updated_at: item.hardware_updated_at || new Date().toISOString(),
           };
           if (equipmentTypeId) record.equipment_type_id = equipmentTypeId;
 
