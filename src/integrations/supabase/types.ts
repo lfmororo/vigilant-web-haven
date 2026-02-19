@@ -69,14 +69,20 @@ export type Database = {
         Row: {
           brand: string | null
           client_id: string | null
+          cpu: string | null
           created_at: string
+          disk_free_gb: number | null
+          disk_total_gb: number | null
+          disk_used_gb: number | null
           equipment_type_id: string | null
+          hardware_updated_at: string | null
           id: string
           location: string | null
           model: string | null
           name: string
           notes: string | null
           purchase_date: string | null
+          ram_total_gb: number | null
           serial_number: string | null
           status: Database["public"]["Enums"]["equipment_status"]
           updated_at: string
@@ -85,14 +91,20 @@ export type Database = {
         Insert: {
           brand?: string | null
           client_id?: string | null
+          cpu?: string | null
           created_at?: string
+          disk_free_gb?: number | null
+          disk_total_gb?: number | null
+          disk_used_gb?: number | null
           equipment_type_id?: string | null
+          hardware_updated_at?: string | null
           id?: string
           location?: string | null
           model?: string | null
           name: string
           notes?: string | null
           purchase_date?: string | null
+          ram_total_gb?: number | null
           serial_number?: string | null
           status?: Database["public"]["Enums"]["equipment_status"]
           updated_at?: string
@@ -101,14 +113,20 @@ export type Database = {
         Update: {
           brand?: string | null
           client_id?: string | null
+          cpu?: string | null
           created_at?: string
+          disk_free_gb?: number | null
+          disk_total_gb?: number | null
+          disk_used_gb?: number | null
           equipment_type_id?: string | null
+          hardware_updated_at?: string | null
           id?: string
           location?: string | null
           model?: string | null
           name?: string
           notes?: string | null
           purchase_date?: string | null
+          ram_total_gb?: number | null
           serial_number?: string | null
           status?: Database["public"]["Enums"]["equipment_status"]
           updated_at?: string
