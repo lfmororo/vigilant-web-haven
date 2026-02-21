@@ -248,9 +248,12 @@ const SystemSettings = () => {
           description: statusText,
         });
       } else {
+        const errText = typeof result === "object"
+          ? (result.error ? String(result.error) : result.message ? String(result.message) : `Status: ${res.status}`)
+          : String(result);
         toast({
           title: "Falha na conexão WhatsApp",
-          description: result.error || result.message || `Status: ${res.status}`,
+          description: errText,
           variant: "destructive",
         });
       }
