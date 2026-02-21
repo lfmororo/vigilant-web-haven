@@ -204,6 +204,84 @@ function buildEmailHtml(p: EmailParams): string {
 </body></html>`;
 }
 
+// ---------- Business Hours Check ----------
+
+function isWithinBusinessHours(): boolean {
+  // Get current time in Brasília (America/Sao_Paulo)
+  const now = new Date();
+  const brasiliaStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+  const brasilia = new Date(brasiliaStr);
+  const day = brasilia.getDay(); // 0=Sun, 6=Sat
+  const hour = brasilia.getHours();
+  const isWeekday = day >= 1 && day <= 5;
+  const isDuringHours = hour >= 8 && hour < 18;
+  return isWeekday && isDuringHours;
+}
+
+function getNextBusinessDay(): string {
+  const now = new Date();
+  const brasiliaStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+  const brasilia = new Date(brasiliaStr);
+  const day = brasilia.getDay();
+  let daysToAdd = 1;
+  if (day === 5) daysToAdd = 3; // Friday -> Monday
+  else if (day === 6) daysToAdd = 2; // Saturday -> Monday
+  else if (day === 0) daysToAdd = 1; // Sunday -> Monday
+  // If after 18h on weekday, next business day is tomorrow (or Monday if Friday)
+  brasilia.setDate(brasilia.getDate() + daysToAdd);
+  return brasilia.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+}
+
+function buildOutOfHoursEmailHtml(recipientName: string, ticketNumber: number, title: string, companyName: string, ticketLink: string, nextBusinessDay: string): string {
+  const logoUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/email-assets/fm-techflow-logo.png`;
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Sao_Paulo" });
+  const timeStr = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 0;">
+<tr><td align="center">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+  <tr><td style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);padding:28px 32px;text-align:center;">
+    <img src="${logoUrl}" alt="${companyName}" style="height:44px;max-width:200px;" />
+    <p style="margin:8px 0 0;color:#94a3b8;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;">Sistema de Suporte</p>
+  </td></tr>
+  <tr><td style="background:#fffbeb;padding:20px 32px;text-align:center;border-bottom:1px solid #e2e8f0;">
+    <span style="font-size:40px;line-height:1;">🕐</span>
+    <h1 style="margin:8px 0 0;font-size:22px;color:#d97706;font-weight:800;">Fora do Horário de Atendimento</h1>
+  </td></tr>
+  <tr><td style="padding:16px 32px 0;text-align:right;">
+    <p style="margin:0;color:#94a3b8;font-size:12px;">📅 ${dateStr} às ${timeStr}</p>
+  </td></tr>
+  <tr><td style="padding:16px 32px 24px;">
+    <p style="margin:0 0 8px;color:#334155;font-size:15px;line-height:1.6;">Olá <strong>${recipientName}</strong>,</p>
+    <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">Recebemos seu chamado <strong>#${ticketNumber} - ${title}</strong> com sucesso!</p>
+    <div style="background:#fffbeb;border-left:4px solid #d97706;border-radius:0 8px 8px 0;padding:20px;margin-bottom:20px;">
+      <p style="margin:0 0 12px;font-weight:700;color:#d97706;font-size:14px;">⏰ Horário de Atendimento</p>
+      <p style="margin:0 0 8px;color:#334155;font-size:14px;line-height:1.6;"><strong>Segunda a Sexta:</strong> 08:00 às 18:00</p>
+      <p style="margin:0 0 0;color:#334155;font-size:14px;line-height:1.6;"><strong>Fuso:</strong> Horário de Brasília (GMT-3)</p>
+    </div>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
+      <p style="margin:0;color:#15803d;font-size:14px;line-height:1.6;">📋 Seu chamado já está na fila e será atendido no próximo dia útil: <strong>${nextBusinessDay}</strong>.</p>
+    </div>
+    <p style="margin:0;color:#475569;font-size:14px;line-height:1.6;">Se for uma emergência, entre em contato pelos canais de urgência da empresa.</p>
+  </td></tr>
+  <tr><td style="padding:0 32px;"><div style="height:1px;background:linear-gradient(to right,transparent,#e2e8f0,transparent);"></div></td></tr>
+  <tr><td style="padding:24px 32px 32px;text-align:center;">
+    <a href="${ticketLink}" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;box-shadow:0 4px 14px rgba(37,99,235,0.35);">Acompanhar Chamado</a>
+  </td></tr>
+  <tr><td style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);padding:20px 32px;text-align:center;">
+    <p style="margin:0 0 6px;color:#e2e8f0;font-size:13px;font-weight:600;">${companyName}</p>
+    <p style="margin:0;color:#64748b;font-size:11px;font-style:italic;">Este email foi enviado automaticamente.</p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`;
+}
+
 // ---------- Helpers ----------
 
 function encodeRFC2047(str: string): string {
@@ -518,8 +596,55 @@ Deno.serve(async (req) => {
       }
     })() : Promise.resolve();
 
+    // Send out-of-hours notification for new tickets
+    const outOfHoursPromise = (emailType === "ticket_opened" && !isWithinBusinessHours()) ? (async () => {
+      try {
+        const nextDay = getNextBusinessDay();
+        // Send to ticket creator only
+        if (ticket.created_by) {
+          const creator = recipients.find(r => r.id === ticket.created_by);
+          if (creator) {
+            const { data: creatorRoles } = await supabaseAdmin
+              .from("user_roles")
+              .select("role")
+              .eq("user_id", creator.id);
+            const isAdminOrTech = creatorRoles?.some(r => r.role === "admin" || r.role === "technician");
+            const ticketLink = isAdminOrTech
+              ? `${baseUrl}/admin/tickets/${ticket_id}`
+              : `${baseUrl}/helpdesk/tickets/${ticket_id}`;
+            
+            const outOfHoursHtml = buildOutOfHoursEmailHtml(
+              creator.full_name, ticket.ticket_number, ticket.title,
+              smtpFromName, ticketLink, nextDay
+            );
+            const outOfHoursSubject = `⏰ Fora do horário - Chamado #${ticket.ticket_number} na fila`;
+            await sendSmtpEmail(smtpHost, smtpPort, smtpUser, smtpPassword, smtpFromName, creator.email, outOfHoursSubject, outOfHoursHtml, true);
+            console.log(`Out-of-hours email sent to ${creator.email}`);
+          }
+        }
+
+        // Also send WhatsApp out-of-hours notification
+        const whatsappUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-whatsapp`;
+        await fetch(whatsappUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            ticket_id,
+            notification_type: "out_of_hours",
+            message: `⏰ *Fora do Horário de Atendimento*\n\nRecebemos seu chamado #${ticket.ticket_number} - ${ticket.title}.\n\n📅 Horário de atendimento: *Segunda a Sexta, 08:00 às 18:00* (Horário de Brasília)\n\n📋 Seu chamado está na fila e será atendido no próximo dia útil: *${nextDay}*.\n\nSe for uma emergência, entre em contato pelos canais de urgência.`,
+            sender_name: "Sistema",
+          }),
+        });
+      } catch (err) {
+        console.error("Out-of-hours notification failed:", err);
+      }
+    })() : Promise.resolve();
+
     // Wait for all to finish (best-effort)
-    await Promise.all([telegramPromise, whatsappPromise, surveyPromise]);
+    await Promise.all([telegramPromise, whatsappPromise, surveyPromise, outOfHoursPromise]);
 
     return new Response(JSON.stringify({ success: true, sent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

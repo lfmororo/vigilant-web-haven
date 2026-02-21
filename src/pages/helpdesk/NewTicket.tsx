@@ -155,6 +155,23 @@ const NewTicket = () => {
       toast({ variant: "destructive", title: "Erro ao criar chamado", description: error.message });
     } else {
       toast({ title: incidentMatch?.match ? "Chamado vinculado ao incidente!" : "Chamado criado com sucesso!" });
+
+      // Check if outside business hours (Brasília time)
+      const now = new Date();
+      const brasiliaStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+      const brasilia = new Date(brasiliaStr);
+      const day = brasilia.getDay();
+      const hour = brasilia.getHours();
+      const isWeekday = day >= 1 && day <= 5;
+      const isDuringHours = hour >= 8 && hour < 18;
+      if (!isWeekday || !isDuringHours) {
+        toast({
+          title: "⏰ Fora do horário de atendimento",
+          description: "Nosso horário é de Segunda a Sexta, das 08:00 às 18:00 (Horário de Brasília). Seu chamado entrará na fila do próximo dia útil.",
+          duration: 10000,
+        });
+      }
+
       if (insertedTicket?.id) {
         supabase.functions.invoke("notify-ticket-update", {
           body: {
