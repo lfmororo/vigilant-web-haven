@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     const { data: ticket } = await supabaseAdmin
       .from("tickets")
       .select(
-        "ticket_number, title, client_id, assigned_to, priority, equipment_type_id"
+        "ticket_number, title, client_id, assigned_to, created_by, priority, equipment_type_id"
       )
       .eq("id", ticket_id)
       .single();
@@ -167,8 +167,9 @@ Deno.serve(async (req) => {
     };
     const priority = priorityLabels[ticket.priority] || "Média";
 
-    // Only send to assigned technician (individual) + client group
-    let assignedPhone = "";
+    // Collect individual phones: assigned technician + ticket creator
+    const individualPhones = new Set<string>();
+
     if (ticket.assigned_to) {
       const { data: assignedProfile } = await supabaseAdmin
         .from("profiles")
@@ -176,7 +177,18 @@ Deno.serve(async (req) => {
         .eq("id", ticket.assigned_to)
         .single();
       if (assignedProfile?.phone) {
-        assignedPhone = cleanPhone(assignedProfile.phone);
+        individualPhones.add(cleanPhone(assignedProfile.phone));
+      }
+    }
+
+    if (ticket.created_by && ticket.created_by !== ticket.assigned_to) {
+      const { data: creatorProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("phone")
+        .eq("id", ticket.created_by)
+        .single();
+      if (creatorProfile?.phone) {
+        individualPhones.add(cleanPhone(creatorProfile.phone));
       }
     }
 
@@ -250,9 +262,11 @@ Deno.serve(async (req) => {
       }
     };
 
-    // Send to assigned technician only
-    if (assignedPhone && assignedPhone.length >= 10) {
-      await sendToNumber(assignedPhone);
+    // Send to assigned technician and ticket creator
+    for (const phone of individualPhones) {
+      if (phone.length >= 10) {
+        await sendToNumber(phone);
+      }
     }
 
     // Send to client's WhatsApp group
