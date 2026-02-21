@@ -134,6 +134,9 @@ const ApiIntegrationDialog = ({ open, onOpenChange, clientId, clientName }: ApiI
 # Compatível com PowerShell 5.1+ e 7+
 # ------------------------------
 
+# Força TLS 1.2 (necessário no PowerShell 5.1)
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 # Config
 $ClientId = "${cId}"
 $BodyApiKey = "${key}"
