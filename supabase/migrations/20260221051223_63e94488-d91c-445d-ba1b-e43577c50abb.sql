@@ -1,0 +1,1 @@
+ALTER TABLE public.equipment_inventory ADD COLUMN asset_tag text;
