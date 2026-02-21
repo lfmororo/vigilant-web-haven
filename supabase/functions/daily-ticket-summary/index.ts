@@ -341,8 +341,80 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Daily summary sent to ${sent}/${adminProfiles.length} admins, telegram: ${telegramSent}`);
-    return new Response(JSON.stringify({ success: true, sent, telegramSent, total: pending.length + open.length + inProgress.length }), {
+    // 8. Send WhatsApp summary to admins
+    let whatsappSent = 0;
+    const whatsappEnabled = settings.whatsapp_enabled === "true";
+    const whatsappApiUrl = settings.whatsapp_api_url;
+    const whatsappApiToken = settings.whatsapp_api_token;
+
+    if (whatsappEnabled && whatsappApiUrl && whatsappApiToken) {
+      try {
+        const dateStr = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+        const totalActive = pending.length + open.length + inProgress.length;
+
+        let waMsg = `📊 *Resumo Diário de Chamados*\n📅 ${dateStr}\n\n`;
+        waMsg += `🔢 *Total ativos:* ${totalActive}\n`;
+        waMsg += `🟠 Pendentes: ${pending.length}\n`;
+        waMsg += `🔵 Abertos: ${open.length}\n`;
+        waMsg += `🟢 Em Andamento: ${inProgress.length}\n`;
+
+        if (inProgress.length > 0) {
+          waMsg += `\n*🟢 Em Andamento:*\n`;
+          inProgress.forEach(t => { waMsg += `  • #${t.ticket_number} - ${t.title}${t.assigned_name ? ` _(${t.assigned_name})_` : ""}\n`; });
+        }
+        if (pending.length > 0) {
+          waMsg += `\n*🟠 Pendentes:*\n`;
+          pending.forEach(t => { waMsg += `  • #${t.ticket_number} - ${t.title}${t.assigned_name ? ` _(${t.assigned_name})_` : ""}\n`; });
+        }
+        if (open.length > 0) {
+          waMsg += `\n*🔵 Abertos:*\n`;
+          open.forEach(t => { waMsg += `  • #${t.ticket_number} - ${t.title}\n`; });
+        }
+
+        waMsg += `\n🔗 ${dashboardUrl}`;
+
+        const sendTextUrl = `${whatsappApiUrl.replace(/\/+$/, "")}/send/text`;
+
+        // Fetch admin phones
+        const { data: adminProfilesWithPhone } = await supabaseAdmin
+          .from("profiles")
+          .select("id, phone")
+          .in("id", adminRoles.map(r => r.user_id));
+
+        const adminPhones = new Set<string>();
+        adminProfilesWithPhone?.forEach(p => {
+          if (p.phone) {
+            adminPhones.add(p.phone.replace(/[\s\-\(\)\+]/g, ""));
+          }
+        });
+
+        for (const phone of adminPhones) {
+          if (phone.length >= 10) {
+            try {
+              const resp = await fetch(sendTextUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", token: whatsappApiToken },
+                body: JSON.stringify({ number: phone, text: waMsg, linkPreview: false }),
+              });
+              if (resp.ok) {
+                whatsappSent++;
+                console.log(`WhatsApp daily summary sent to ${phone}`);
+              } else {
+                const errBody = await resp.text();
+                console.error(`WhatsApp failed for ${phone}: ${resp.status} ${errBody}`);
+              }
+            } catch (err) {
+              console.error(`WhatsApp error for ${phone}:`, err);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("WhatsApp summary error:", err);
+      }
+    }
+
+    console.log(`Daily summary sent to ${sent}/${adminProfiles.length} admins, telegram: ${telegramSent}, whatsapp: ${whatsappSent}`);
+    return new Response(JSON.stringify({ success: true, sent, telegramSent, whatsappSent, total: pending.length + open.length + inProgress.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
