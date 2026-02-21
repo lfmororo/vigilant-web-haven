@@ -102,7 +102,7 @@ const AdminTicketsManagement = () => {
                   <TableRow>
                     <TableHead>#</TableHead>
                     <TableHead>Título</TableHead>
-                    <TableHead>Cliente</TableHead>
+                    <TableHead>Clieste</TableHead>
                     <TableHead>Equipamento</TableHead>
                     <TableHead>Técnico</TableHead>
                     <TableHead>Prioridade</TableHead>
