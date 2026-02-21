@@ -255,7 +255,7 @@ Deno.serve(async (req) => {
   try {
     const {
       ticket_id, sender_id, message, is_internal,
-      notification_type, priority_label, resolution_summary,
+      notification_type, priority_label, resolution_summary, pdf_url,
     } = await req.json();
 
     // Don't notify for internal notes
@@ -458,6 +458,7 @@ Deno.serve(async (req) => {
             message,
             sender_name: senderName,
             resolution_summary,
+            pdf_url,
           }),
         });
       } catch (err) {

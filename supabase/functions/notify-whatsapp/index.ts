@@ -101,6 +101,7 @@ Deno.serve(async (req) => {
       message,
       sender_name,
       resolution_summary,
+      pdf_url,
     } = await req.json();
 
     const supabaseAdmin = createClient(
@@ -227,59 +228,61 @@ Deno.serve(async (req) => {
     }
 
     let sent = 0;
-    const sendUrl = `${apiUrl.replace(/\/+$/, "")}/send/text`;
+    const sendTextUrl = `${apiUrl.replace(/\/+$/, "")}/send/text`;
+    const sendDocUrl = `${apiUrl.replace(/\/+$/, "")}/send/document`;
+
+    // Helper to send text + optional PDF document
+    const sendToNumber = async (number: string) => {
+      try {
+        // Send text message
+        const textResp = await fetch(sendTextUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", token: apiToken },
+          body: JSON.stringify({ number, text }),
+        });
+        if (textResp.ok) {
+          sent++;
+          console.log(`WhatsApp text sent to ${number}`);
+        } else {
+          const errBody = await textResp.text();
+          console.error(`WhatsApp text failed for ${number}: ${textResp.status} ${errBody}`);
+        }
+
+        // Send PDF document if available (only for resolved tickets)
+        if (pdf_url && (notification_type === "ticket_resolved" || notification_type === "ticket_closed")) {
+          const docResp = await fetch(sendDocUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", token: apiToken },
+            body: JSON.stringify({
+              number,
+              url: pdf_url,
+              fileName: `chamado-${ticket.ticket_number}.pdf`,
+              caption: `📄 Relatório do Chamado #${ticket.ticket_number}`,
+            }),
+          });
+          if (docResp.ok) {
+            console.log(`WhatsApp PDF sent to ${number}`);
+          } else {
+            const errBody = await docResp.text();
+            console.error(`WhatsApp PDF failed for ${number}: ${docResp.status} ${errBody}`);
+          }
+        }
+      } catch (err) {
+        console.error(`WhatsApp error for ${number}:`, err);
+      }
+    };
 
     // Send to individual recipients
     for (const recipient of recipients || []) {
       if (!recipient.phone) continue;
-
       const phone = cleanPhone(recipient.phone);
       if (!phone || phone.length < 10) continue;
-
-      try {
-        const resp = await fetch(sendUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            token: apiToken,
-          },
-          body: JSON.stringify({ number: phone, text }),
-        });
-
-        if (resp.ok) {
-          sent++;
-          console.log(`WhatsApp sent to ${phone}`);
-        } else {
-          const errBody = await resp.text();
-          console.error(`WhatsApp failed for ${phone}: ${resp.status} ${errBody}`);
-        }
-      } catch (err) {
-        console.error(`WhatsApp error for ${phone}:`, err);
-      }
+      await sendToNumber(phone);
     }
 
     // Send to client's WhatsApp group
     if (groupId) {
-      try {
-        const resp = await fetch(sendUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            token: apiToken,
-          },
-          body: JSON.stringify({ number: groupId, text }),
-        });
-
-        if (resp.ok) {
-          sent++;
-          console.log(`WhatsApp sent to group ${groupId}`);
-        } else {
-          const errBody = await resp.text();
-          console.error(`WhatsApp group failed for ${groupId}: ${resp.status} ${errBody}`);
-        }
-      } catch (err) {
-        console.error(`WhatsApp group error for ${groupId}:`, err);
-      }
+      await sendToNumber(groupId);
     }
 
     return new Response(JSON.stringify({ success: true, sent }), {
