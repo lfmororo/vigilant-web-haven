@@ -5,6 +5,7 @@ import HelpdeskLayout from "@/components/helpdesk/HelpdeskLayout";
 import TicketStatusBadge from "@/components/helpdesk/TicketStatusBadge";
 import PriorityBadge from "@/components/helpdesk/PriorityBadge";
 import TicketChat from "@/components/helpdesk/TicketChat";
+import SignaturePad from "@/components/helpdesk/SignaturePad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2 } from "lucide-react";
@@ -59,6 +60,25 @@ const ClientTicketDetail = () => {
                 {ticket.equipment_type?.name && <div><span className="text-muted-foreground">Equipamento:</span><p className="mt-1">{ticket.equipment_type.name}</p></div>}
                 {ticket.equipment_info && <div><span className="text-muted-foreground">Info:</span><p className="mt-1">{ticket.equipment_info}</p></div>}
                 <div><span className="text-muted-foreground">Criado em:</span><p className="mt-1">{new Date(ticket.created_at).toLocaleString("pt-BR")}</p></div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Assinaturas</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <SignaturePad
+                  label="Assinatura do Técnico"
+                  value={ticket.technician_signature}
+                  disabled
+                />
+                <SignaturePad
+                  label="Assinatura do Cliente"
+                  value={ticket.client_signature}
+                  onChange={async (dataUrl) => {
+                    await supabase.from("tickets").update({ client_signature: dataUrl } as any).eq("id", id!);
+                    setTicket((prev: any) => ({ ...prev, client_signature: dataUrl }));
+                  }}
+                />
               </CardContent>
             </Card>
           </div>
