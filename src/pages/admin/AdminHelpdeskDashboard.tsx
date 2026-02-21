@@ -51,22 +51,53 @@ const AdminHelpdeskDashboard = () => {
       const ctx = audioRef.current || new (window.AudioContext || (window as any).webkitAudioContext)();
       audioRef.current = ctx;
 
-      // Two-tone chime
-      const playTone = (freq: number, start: number, duration: number) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = "sine";
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.3, ctx.currentTime + start);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
-        osc.start(ctx.currentTime + start);
-        osc.stop(ctx.currentTime + start + duration);
-      };
+      const now = ctx.currentTime;
+      const duration = 2.5;
 
-      playTone(880, 0, 0.15);
-      playTone(1175, 0.15, 0.25);
+      // Main deep foghorn tone
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = "sawtooth";
+      osc1.frequency.setValueAtTime(80, now);
+      osc1.frequency.linearRampToValueAtTime(75, now + duration);
+      gain1.gain.setValueAtTime(0, now);
+      gain1.gain.linearRampToValueAtTime(0.35, now + 0.3);
+      gain1.gain.setValueAtTime(0.35, now + duration - 0.8);
+      gain1.gain.linearRampToValueAtTime(0, now + duration);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + duration);
+
+      // Sub-bass layer for depth
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(55, now);
+      osc2.frequency.linearRampToValueAtTime(50, now + duration);
+      gain2.gain.setValueAtTime(0, now);
+      gain2.gain.linearRampToValueAtTime(0.25, now + 0.3);
+      gain2.gain.setValueAtTime(0.25, now + duration - 0.8);
+      gain2.gain.linearRampToValueAtTime(0, now + duration);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now);
+      osc2.stop(now + duration);
+
+      // Higher harmonic for realism
+      const osc3 = ctx.createOscillator();
+      const gain3 = ctx.createGain();
+      osc3.type = "triangle";
+      osc3.frequency.setValueAtTime(160, now);
+      osc3.frequency.linearRampToValueAtTime(150, now + duration);
+      gain3.gain.setValueAtTime(0, now);
+      gain3.gain.linearRampToValueAtTime(0.1, now + 0.4);
+      gain3.gain.setValueAtTime(0.1, now + duration - 0.8);
+      gain3.gain.linearRampToValueAtTime(0, now + duration);
+      osc3.connect(gain3);
+      gain3.connect(ctx.destination);
+      osc3.start(now);
+      osc3.stop(now + duration);
     } catch (e) {
       console.warn("Could not play notification sound", e);
     }
