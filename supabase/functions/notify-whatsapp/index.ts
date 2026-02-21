@@ -167,41 +167,18 @@ Deno.serve(async (req) => {
     };
     const priority = priorityLabels[ticket.priority] || "Média";
 
-    // Collect profile recipient IDs (users, not clients)
-    const recipientIds = new Set<string>();
-    if (ticket.assigned_to) recipientIds.add(ticket.assigned_to);
-
-    // Add users linked to this client (profiles with parent_client_id = ticket.client_id)
-    if (ticket.client_id) {
-      const { data: clientUsers } = await supabaseAdmin
+    // Only send to assigned technician (individual) + client group
+    let assignedPhone = "";
+    if (ticket.assigned_to) {
+      const { data: assignedProfile } = await supabaseAdmin
         .from("profiles")
-        .select("id")
-        .eq("parent_client_id", ticket.client_id);
-      clientUsers?.forEach((u: any) => recipientIds.add(u.id));
-    }
-
-    const { data: adminRoles } = await supabaseAdmin
-      .from("user_roles")
-      .select("user_id")
-      .eq("role", "admin");
-
-    if (adminRoles) {
-      for (const r of adminRoles) {
-        recipientIds.add(r.user_id);
+        .select("phone")
+        .eq("id", ticket.assigned_to)
+        .single();
+      if (assignedProfile?.phone) {
+        assignedPhone = cleanPhone(assignedProfile.phone);
       }
     }
-
-    if (recipientIds.size === 0) {
-      return new Response(JSON.stringify({ success: true, sent: 0 }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Fetch recipient phones from profiles
-    const { data: recipients } = await supabaseAdmin
-      .from("profiles")
-      .select("id, phone, full_name")
-      .in("id", Array.from(recipientIds));
 
     const senderName = sender_name || "Sistema";
 
@@ -272,12 +249,9 @@ Deno.serve(async (req) => {
       }
     };
 
-    // Send to individual recipients
-    for (const recipient of recipients || []) {
-      if (!recipient.phone) continue;
-      const phone = cleanPhone(recipient.phone);
-      if (!phone || phone.length < 10) continue;
-      await sendToNumber(phone);
+    // Send to assigned technician only
+    if (assignedPhone && assignedPhone.length >= 10) {
+      await sendToNumber(assignedPhone);
     }
 
     // Send to client's WhatsApp group
