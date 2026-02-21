@@ -22,7 +22,7 @@ const AdminTicketDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { isAdmin, isTechnician, user } = useAuth();
+  const { isAdmin, isTechnician, user, loading: authLoading } = useAuth();
   const [ticket, setTicket] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [technicians, setTechnicians] = useState<any[]>([]);
@@ -46,7 +46,11 @@ const AdminTicketDetail = () => {
     supabase.from("tickets")
       .select("*, client:profiles!tickets_client_id_fkey(full_name, email), assigned:profiles!tickets_assigned_to_fkey(full_name), creator:profiles!tickets_created_by_fkey(full_name, email), equipment_type:equipment_types(name)")
       .eq("id", id).maybeSingle()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        console.log("fetchTicket result:", { data, error, id });
+        if (error) {
+          console.error("fetchTicket error:", error);
+        }
         setTicket(data);
         if (data) {
           setPendingStatus(data.status);
@@ -59,6 +63,7 @@ const AdminTicketDetail = () => {
   };
 
   useEffect(() => {
+    if (authLoading || !user) return;
     fetchTicket();
     if (isAdmin) {
       // Fetch technicians
@@ -80,7 +85,7 @@ const AdminTicketDetail = () => {
           }
         });
     }
-  }, [id, isAdmin]);
+  }, [id, isAdmin, authLoading, user]);
 
   const hasChanges = ticket && (
     pendingStatus !== ticket.status ||
@@ -165,7 +170,7 @@ const AdminTicketDetail = () => {
     else { toast({ title: "OS criada!" }); navigate(`/admin/service-orders/${data.id}`); }
   };
 
-  if (loading) return <AdminLayout><div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></AdminLayout>;
+  if (loading || authLoading) return <AdminLayout><div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></AdminLayout>;
   if (!ticket) return <AdminLayout><p className="text-center text-muted-foreground py-12">Ticket não encontrado</p></AdminLayout>;
 
   return (
