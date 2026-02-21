@@ -157,6 +157,14 @@ Deno.serve(async (req) => {
 
     await emailPromise;
 
+    // Register in ticket chat history
+    await supabaseAdmin.from("ticket_messages").insert({
+      ticket_id,
+      sender_id: sender_id || ticket.created_by,
+      message: `🖥️ Solicitação de Acesso Remoto enviada por ${senderName}.\n\n${REMOTE_ACCESS_MESSAGE}`,
+      is_internal: false,
+    });
+
     return new Response(JSON.stringify({ success: true, whatsapp_sent: whatsappSent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
