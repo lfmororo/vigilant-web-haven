@@ -18,6 +18,7 @@ function buildMessage(
   priority: string,
   message: string,
   senderName: string,
+  ticketLink: string,
   resolutionSummary?: string
 ): string {
   const priorityEmojis: Record<string, string> = {
@@ -27,6 +28,8 @@ function buildMessage(
     Urgente: "🔴 Urgente",
   };
   const priText = priorityEmojis[priority] || `⚪ ${priority}`;
+
+  const linkLine = ticketLink ? `\n\n🔗 ${ticketLink}` : "";
 
   if (type === "ticket_opened") {
     return [
@@ -42,7 +45,7 @@ function buildMessage(
       message,
     ]
       .filter(Boolean)
-      .join("\n");
+      .join("\n") + linkLine;
   }
 
   if (type === "ticket_updated") {
@@ -55,7 +58,7 @@ function buildMessage(
       ``,
       `💬 *Mensagem:*`,
       message,
-    ].join("\n");
+    ].join("\n") + linkLine;
   }
 
   if (type === "ticket_resolved") {
@@ -69,7 +72,7 @@ function buildMessage(
     if (resolutionSummary) {
       lines.push("", `📄 *Resumo da Resolução:*`, resolutionSummary);
     }
-    return lines.join("\n");
+    return lines.join("\n") + linkLine;
   }
 
   if (type === "ticket_closed") {
@@ -83,7 +86,7 @@ function buildMessage(
     if (resolutionSummary) {
       lines.push("", `📄 *Resumo:*`, resolutionSummary);
     }
-    return lines.join("\n");
+    return lines.join("\n") + linkLine;
   }
 
   if (type === "signature_requested") {
@@ -96,10 +99,10 @@ function buildMessage(
       ``,
       `O técnico finalizou o atendimento e registrou sua assinatura.`,
       `Por favor, acesse o chamado para assinar e encerrar o atendimento.`,
-    ].join("\n");
+    ].join("\n") + linkLine;
   }
 
-  return `🔔 *Notificação do Chamado #${ticketNumber}*\n\n${message}`;
+  return `🔔 *Notificação do Chamado #${ticketNumber}*\n\n${message}` + linkLine;
 }
 
 Deno.serve(async (req) => {
@@ -207,6 +210,10 @@ Deno.serve(async (req) => {
 
     const senderName = sender_name || "Sistema";
 
+    // Build ticket link using app_base_url from settings
+    const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
+    const ticketLink = `${baseUrl}/helpdesk/tickets/${ticket_id}`;
+
     const text = buildMessage(
       notification_type || "ticket_updated",
       ticket.ticket_number,
@@ -215,6 +222,7 @@ Deno.serve(async (req) => {
       priority,
       message || `${senderName} enviou uma atualização.`,
       senderName,
+      ticketLink,
       resolution_summary
     );
 
