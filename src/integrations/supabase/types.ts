@@ -608,6 +608,7 @@ export type Database = {
         Row: {
           assigned_to: string | null
           client_id: string
+          client_signature: string | null
           created_at: string
           created_by: string | null
           description: string
@@ -617,6 +618,7 @@ export type Database = {
           id: string
           priority: Database["public"]["Enums"]["ticket_priority"]
           status: Database["public"]["Enums"]["ticket_status"]
+          technician_signature: string | null
           ticket_number: number
           title: string
           updated_at: string
@@ -624,6 +626,7 @@ export type Database = {
         Insert: {
           assigned_to?: string | null
           client_id: string
+          client_signature?: string | null
           created_at?: string
           created_by?: string | null
           description: string
@@ -633,6 +636,7 @@ export type Database = {
           id?: string
           priority?: Database["public"]["Enums"]["ticket_priority"]
           status?: Database["public"]["Enums"]["ticket_status"]
+          technician_signature?: string | null
           ticket_number?: number
           title: string
           updated_at?: string
@@ -640,6 +644,7 @@ export type Database = {
         Update: {
           assigned_to?: string | null
           client_id?: string
+          client_signature?: string | null
           created_at?: string
           created_by?: string | null
           description?: string
@@ -649,6 +654,7 @@ export type Database = {
           id?: string
           priority?: Database["public"]["Enums"]["ticket_priority"]
           status?: Database["public"]["Enums"]["ticket_status"]
+          technician_signature?: string | null
           ticket_number?: number
           title?: string
           updated_at?: string
