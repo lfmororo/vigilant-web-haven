@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.notify-whatsapp]
 verify_jwt = false
+
+[functions.stale-ticket-alert]
+verify_jwt = false
