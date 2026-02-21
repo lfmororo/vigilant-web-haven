@@ -96,6 +96,7 @@ const emptyForm = {
   purchase_date: "",
   warranty_until: "",
   notes: "",
+  asset_tag: "",
 };
 
 const EquipmentInventory = () => {
@@ -173,6 +174,7 @@ const EquipmentInventory = () => {
         purchase_date: formData.purchase_date || null,
         warranty_until: formData.warranty_until || null,
         notes: formData.notes || null,
+        asset_tag: (formData as any).asset_tag || null,
       };
 
       const { error } = await supabase.from("equipment_inventory").insert(insertData);
@@ -207,6 +209,7 @@ const EquipmentInventory = () => {
         purchase_date: formData.purchase_date || null,
         warranty_until: formData.warranty_until || null,
         notes: formData.notes || null,
+        asset_tag: (formData as any).asset_tag || null,
       };
 
       const { error } = await supabase.from("equipment_inventory").update(updateData).eq("id", editTarget.id);
@@ -236,6 +239,7 @@ const EquipmentInventory = () => {
       purchase_date: item.purchase_date || "",
       warranty_until: item.warranty_until || "",
       notes: item.notes || "",
+      asset_tag: (item as any).asset_tag || "",
     });
     setEditTarget(item);
   };
@@ -293,7 +297,10 @@ const EquipmentInventory = () => {
         <div className="space-y-2"><Label>Marca</Label><Input value={formData.brand} onChange={(e) => setFormData({ ...formData, brand: e.target.value })} /></div>
         <div className="space-y-2"><Label>Modelo</Label><Input value={formData.model} onChange={(e) => setFormData({ ...formData, model: e.target.value })} /></div>
       </div>
-      <div className="space-y-2"><Label>Número de Série</Label><Input value={formData.serial_number} onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })} /></div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2"><Label>Número de Série</Label><Input value={formData.serial_number} onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })} /></div>
+        <div className="space-y-2"><Label>Tombamento</Label><Input value={(formData as any).asset_tag} onChange={(e) => setFormData({ ...formData, asset_tag: e.target.value } as any)} /></div>
+      </div>
       <div className="space-y-2">
         <Label>Cliente</Label>
         <Select value={formData.client_id} onValueChange={(v) => setFormData({ ...formData, client_id: v })}>

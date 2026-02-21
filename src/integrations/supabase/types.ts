@@ -126,6 +126,7 @@ export type Database = {
       }
       equipment_inventory: {
         Row: {
+          asset_tag: string | null
           brand: string | null
           client_id: string | null
           cpu: string | null
@@ -149,6 +150,7 @@ export type Database = {
           warranty_until: string | null
         }
         Insert: {
+          asset_tag?: string | null
           brand?: string | null
           client_id?: string | null
           cpu?: string | null
@@ -172,6 +174,7 @@ export type Database = {
           warranty_until?: string | null
         }
         Update: {
+          asset_tag?: string | null
           brand?: string | null
           client_id?: string | null
           cpu?: string | null
