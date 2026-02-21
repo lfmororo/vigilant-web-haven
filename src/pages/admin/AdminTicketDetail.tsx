@@ -326,7 +326,7 @@ const AdminTicketDetail = () => {
                       <SelectItem value="none">Nenhum</SelectItem>
                       {clientEquipments.map((eq) => (
                         <SelectItem key={eq.id} value={eq.id}>
-                          {eq.name} {eq.brand ? `- ${eq.brand}` : ""} {eq.model ? eq.model : ""} {eq.serial_number ? `(${eq.serial_number})` : ""}
+                          {eq.name}{eq.brand ? ` - ${eq.brand}` : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
