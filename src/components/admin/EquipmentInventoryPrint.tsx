@@ -9,6 +9,8 @@ interface Equipment {
   brand: string | null;
   model: string | null;
   serial_number: string | null;
+  asset_tag: string | null;
+  logged_in_user: string | null;
   location: string | null;
   status: string;
   cpu: string | null;
@@ -103,9 +105,9 @@ const EquipmentInventoryPrint = ({ equipment, filters, onClose }: EquipmentInven
               <thead>
                 <tr className="border-b border-black bg-gray-100">
                   <th className="border-r border-black px-2 py-1 text-left">Nome</th>
-                  <th className="border-r border-black px-2 py-1 text-left w-20">Tipo</th>
+                  <th className="border-r border-black px-2 py-1 text-left w-20">Tombamento</th>
                   <th className="border-r border-black px-2 py-1 text-left w-24">Marca/Modelo</th>
-                  <th className="border-r border-black px-2 py-1 text-left w-20">Série</th>
+                  <th className="border-r border-black px-2 py-1 text-left w-24">Usuário</th>
                   <th className="border-r border-black px-2 py-1 text-left w-24">Cliente</th>
                   <th className="border-r border-black px-2 py-1 text-left w-32">CPU</th>
                   <th className="border-r border-black px-2 py-1 text-center w-16">RAM (GB)</th>
@@ -118,9 +120,9 @@ const EquipmentInventoryPrint = ({ equipment, filters, onClose }: EquipmentInven
                 {equipment.map((item) => (
                   <tr key={item.id} className="border-b border-black">
                     <td className="border-r border-black px-2 py-1">{item.name}</td>
-                    <td className="border-r border-black px-2 py-1">{item.equipment_type?.name || "-"}</td>
+                    <td className="border-r border-black px-2 py-1">{item.asset_tag || "-"}</td>
                     <td className="border-r border-black px-2 py-1">{[item.brand, item.model].filter(Boolean).join(" ") || "-"}</td>
-                    <td className="border-r border-black px-2 py-1 font-mono">{item.serial_number || "-"}</td>
+                    <td className="border-r border-black px-2 py-1">{item.logged_in_user || "-"}</td>
                     <td className="border-r border-black px-2 py-1">{item.client?.full_name || "-"}</td>
                     <td className="border-r border-black px-2 py-1">{item.cpu || "-"}</td>
                     <td className="border-r border-black px-2 py-1 text-center">{item.ram_total_gb ?? "-"}</td>

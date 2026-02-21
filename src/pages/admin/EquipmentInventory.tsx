@@ -51,6 +51,7 @@ interface Equipment {
   brand: string | null;
   model: string | null;
   serial_number: string | null;
+  asset_tag: string | null;
   location: string | null;
   status: string;
   client_id: string | null;
