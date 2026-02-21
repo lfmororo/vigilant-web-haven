@@ -8,7 +8,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import AuthGuard from "@/components/auth/AuthGuard";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
+
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import UsersManagement from "./pages/admin/UsersManagement";
 import ClientsManagement from "./pages/admin/ClientsManagement";
@@ -41,7 +41,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
-              <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
+              
               <Route path="/helpdesk" element={<AuthGuard><HelpdeskDashboard /></AuthGuard>} />
               <Route path="/helpdesk/tickets" element={<AuthGuard><ClientTicketsList /></AuthGuard>} />
               <Route path="/helpdesk/tickets/new" element={<AuthGuard><NewTicket /></AuthGuard>} />
