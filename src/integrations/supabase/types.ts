@@ -277,6 +277,7 @@ export type Database = {
           parent_client_id: string | null
           phone: string | null
           updated_at: string
+          whatsapp_group_id: string | null
         }
         Insert: {
           address?: string | null
@@ -293,6 +294,7 @@ export type Database = {
           parent_client_id?: string | null
           phone?: string | null
           updated_at?: string
+          whatsapp_group_id?: string | null
         }
         Update: {
           address?: string | null
@@ -309,6 +311,7 @@ export type Database = {
           parent_client_id?: string | null
           phone?: string | null
           updated_at?: string
+          whatsapp_group_id?: string | null
         }
         Relationships: [
           {

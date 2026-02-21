@@ -207,9 +207,21 @@ Deno.serve(async (req) => {
       resolution_summary
     );
 
+    // Fetch client's WhatsApp group ID
+    let groupId = "";
+    if (ticket.client_id) {
+      const { data: clientProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("whatsapp_group_id")
+        .eq("id", ticket.client_id)
+        .single();
+      groupId = clientProfile?.whatsapp_group_id || "";
+    }
+
     let sent = 0;
     const sendUrl = `${apiUrl.replace(/\/+$/, "")}/send/text`;
 
+    // Send to individual recipients
     for (const recipient of recipients || []) {
       if (!recipient.phone) continue;
 
@@ -235,6 +247,30 @@ Deno.serve(async (req) => {
         }
       } catch (err) {
         console.error(`WhatsApp error for ${phone}:`, err);
+      }
+    }
+
+    // Send to client's WhatsApp group
+    if (groupId) {
+      try {
+        const resp = await fetch(sendUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            token: apiToken,
+          },
+          body: JSON.stringify({ number: groupId, text }),
+        });
+
+        if (resp.ok) {
+          sent++;
+          console.log(`WhatsApp sent to group ${groupId}`);
+        } else {
+          const errBody = await resp.text();
+          console.error(`WhatsApp group failed for ${groupId}: ${resp.status} ${errBody}`);
+        }
+      } catch (err) {
+        console.error(`WhatsApp group error for ${groupId}:`, err);
       }
     }
 
