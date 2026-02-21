@@ -41,25 +41,41 @@ const AdminTicketDetail = () => {
   };
   const priorityLabels: Record<string, string> = { low: "Baixa", medium: "Média", high: "Alta", urgent: "Urgente" };
 
-  const fetchTicket = () => {
+  const fetchTicket = async () => {
     if (!id) return;
-    supabase.from("tickets")
-      .select("*, client:profiles!tickets_client_id_fkey(full_name, email), assigned:profiles!tickets_assigned_to_fkey(full_name), creator:profiles!tickets_created_by_fkey(full_name, email), equipment_type:equipment_types(name)")
-      .eq("id", id).maybeSingle()
-      .then(({ data, error }) => {
-        console.log("fetchTicket result:", { data, error, id });
-        if (error) {
-          console.error("fetchTicket error:", error);
-        }
-        setTicket(data);
-        if (data) {
-          setPendingStatus(data.status);
-          setPendingPriority(data.priority);
-          setPendingAssignedTo(data.assigned_to || "");
-          setPendingClientId(data.client_id || "");
-        }
+    try {
+      const { data, error } = await supabase.from("tickets")
+        .select("*, client:profiles!tickets_client_id_fkey(full_name, email), assigned:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name)")
+        .eq("id", id).maybeSingle();
+      
+      if (error) {
+        console.error("fetchTicket error:", error);
         setLoading(false);
-      });
+        return;
+      }
+
+      if (data) {
+        // Fetch creator separately to avoid join issues
+        let creatorData = null;
+        if (data.created_by) {
+          const { data: creator } = await supabase.from("profiles")
+            .select("full_name, email")
+            .eq("id", data.created_by)
+            .maybeSingle();
+          creatorData = creator;
+        }
+        setTicket({ ...data, creator: creatorData });
+        setPendingStatus(data.status);
+        setPendingPriority(data.priority);
+        setPendingAssignedTo(data.assigned_to || "");
+        setPendingClientId(data.client_id || "");
+      } else {
+        setTicket(null);
+      }
+    } catch (err) {
+      console.error("fetchTicket exception:", err);
+    }
+    setLoading(false);
   };
 
   useEffect(() => {
