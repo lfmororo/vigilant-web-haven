@@ -414,7 +414,8 @@ response = requests.post("${functionsUrl}/inventory-sync", json=data, headers=he
 print(response.json())`;
 
   const exampleClientId = clientId || selectedClientId || "SEU_CLIENT_ID";
-  const activeKeys = apiKeys.filter(k => k.is_active);
+  const targetClientId = clientId || selectedClientId;
+  const activeKeys = apiKeys.filter(k => k.is_active && (!targetClientId || k.client_id === targetClientId));
   const exampleKey = selectedKeyForScript || newlyCreatedKey || "SUA_API_KEY";
 
   return (
