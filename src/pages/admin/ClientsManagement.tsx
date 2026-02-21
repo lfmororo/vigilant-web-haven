@@ -42,6 +42,7 @@ interface ClientProfile {
   email: string;
   phone: string | null;
   email_domain: string | null;
+  whatsapp_group_id: string | null;
   created_at: string;
 }
 
@@ -86,6 +87,7 @@ const ClientsManagement = () => {
     full_name: "",
     phone: "",
     email_domain: "",
+    whatsapp_group_id: "",
   });
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
@@ -188,6 +190,7 @@ const ClientsManagement = () => {
       full_name: client.full_name,
       phone: client.phone || "",
       email_domain: client.email_domain || "",
+      whatsapp_group_id: client.whatsapp_group_id || "",
     });
     setEditErrors({});
     setIsEditDialogOpen(true);
@@ -216,7 +219,8 @@ const ClientsManagement = () => {
           full_name: editFormData.full_name,
           phone: editFormData.phone || null,
           email_domain: editFormData.email_domain.trim().toLowerCase() || null,
-        })
+          whatsapp_group_id: editFormData.whatsapp_group_id.trim() || null,
+        } as any)
         .eq("id", editingClient.id);
 
       if (error) throw error;
@@ -456,6 +460,16 @@ const ClientsManagement = () => {
                   onChange={(e) => setEditFormData({ ...editFormData, email_domain: e.target.value })}
                 />
                 <p className="text-xs text-muted-foreground">Usuários com emails deste domínio serão vinculados automaticamente a este cliente.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_whatsapp_group_id">Grupo WhatsApp (opcional)</Label>
+                <Input
+                  id="edit_whatsapp_group_id"
+                  placeholder="Ex: 5511999999999-1234567890@g.us"
+                  value={editFormData.whatsapp_group_id}
+                  onChange={(e) => setEditFormData({ ...editFormData, whatsapp_group_id: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">ID do grupo WhatsApp para notificações deste cliente (formato: [id]@g.us).</p>
               </div>
               <Button type="submit" className="w-full" disabled={isEditSubmitting}>
                 {isEditSubmitting ? (

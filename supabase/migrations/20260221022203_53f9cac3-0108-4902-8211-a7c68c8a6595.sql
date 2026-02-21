@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN whatsapp_group_id text DEFAULT NULL;
