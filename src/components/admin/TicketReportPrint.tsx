@@ -11,6 +11,7 @@ interface Ticket {
   priority: string;
   created_at: string;
   updated_at: string;
+  creator_name?: string;
   client: { full_name: string } | null;
   technician: { full_name: string } | null;
   equipment_types: { name: string } | null;
@@ -147,6 +148,7 @@ const TicketReportPrint = ({ tickets, filters, metrics, onClose }: TicketReportP
                 <tr className="border-b border-black bg-gray-100">
                   <th className="border-r border-black px-2 py-1 text-left w-12">#</th>
                   <th className="border-r border-black px-2 py-1 text-left">Título</th>
+                  <th className="border-r border-black px-2 py-1 text-left w-24">Criador</th>
                   <th className="border-r border-black px-2 py-1 text-left w-28">Cliente</th>
                   <th className="border-r border-black px-2 py-1 text-left w-20">Equipamento</th>
                   <th className="border-r border-black px-2 py-1 text-left w-24">Técnico</th>
@@ -161,6 +163,7 @@ const TicketReportPrint = ({ tickets, filters, metrics, onClose }: TicketReportP
                   <tr key={t.id} className="border-b border-black">
                     <td className="border-r border-black px-2 py-1 font-mono">{t.ticket_number}</td>
                     <td className="border-r border-black px-2 py-1">{t.title}</td>
+                    <td className="border-r border-black px-2 py-1">{t.creator_name || "-"}</td>
                     <td className="border-r border-black px-2 py-1">{(t.client as any)?.full_name || "-"}</td>
                     <td className="border-r border-black px-2 py-1">{(t.equipment_types as any)?.name || "-"}</td>
                     <td className="border-r border-black px-2 py-1">{(t.technician as any)?.full_name || "-"}</td>
