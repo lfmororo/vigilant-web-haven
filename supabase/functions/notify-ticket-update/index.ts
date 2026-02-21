@@ -300,7 +300,7 @@ Deno.serve(async (req) => {
     const priorityLabels: Record<string, string> = { low: "Baixa", medium: "Média", high: "Alta", urgent: "Urgente" };
     const priority = priority_label || priorityLabels[ticket.priority] || "Média";
 
-    // Collect recipient IDs: only admins, assigned technician, and ticket creator (excluding sender)
+    // Collect recipient IDs: admins, assigned technician, ticket creator, and client users (excluding sender)
     const recipientIds = new Set<string>();
 
     // Add ticket creator
@@ -322,6 +322,20 @@ Deno.serve(async (req) => {
     if (adminRoles) {
       for (const r of adminRoles) {
         if (r.user_id !== sender_id) recipientIds.add(r.user_id);
+      }
+    }
+
+    // Add client-linked users (users whose parent_client_id matches the ticket's client_id)
+    if (ticket.client_id) {
+      const { data: clientUsers } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("parent_client_id", ticket.client_id);
+
+      if (clientUsers) {
+        for (const u of clientUsers) {
+          if (u.id !== sender_id) recipientIds.add(u.id);
+        }
       }
     }
 
