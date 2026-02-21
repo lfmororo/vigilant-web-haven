@@ -35,6 +35,7 @@ const statusOptions = [
 const TicketReports = () => {
   const [clientId, setClientId] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
+  const [technicianId, setTechnicianId] = useState<string>("all");
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [showPrint, setShowPrint] = useState(false);
@@ -48,9 +49,21 @@ const TicketReports = () => {
     },
   });
 
+  // Fetch technicians
+  const { data: technicians } = useQuery({
+    queryKey: ["report-technicians"],
+    queryFn: async () => {
+      const { data: techRoles } = await supabase.from("user_roles").select("user_id").in("role", ["admin", "technician"]);
+      if (!techRoles?.length) return [];
+      const ids = techRoles.map(r => r.user_id);
+      const { data } = await supabase.from("profiles").select("id, full_name").in("id", ids).order("full_name");
+      return data || [];
+    },
+  });
+
   // Fetch tickets with filters
   const { data: tickets, isLoading } = useQuery({
-    queryKey: ["report-tickets", clientId, status, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["report-tickets", clientId, status, technicianId, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       let clientIds: string[] = [];
       if (clientId !== "all") {
@@ -68,6 +81,7 @@ const TicketReports = () => {
 
       if (clientIds.length > 0) query = query.in("client_id", clientIds);
       if (status !== "all") query = query.eq("status", status as any);
+      if (technicianId !== "all") query = query.eq("assigned_to", technicianId);
       if (startDate) query = query.gte("created_at", startDate.toISOString());
       if (endDate) {
         const end = new Date(endDate);
@@ -83,6 +97,7 @@ const TicketReports = () => {
   const clearFilters = () => {
     setClientId("all");
     setStatus("all");
+    setTechnicianId("all");
     setStartDate(undefined);
     setEndDate(undefined);
   };
@@ -145,7 +160,7 @@ const TicketReports = () => {
             {/* Filters */}
             <Card>
               <CardContent className="pt-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Cliente</label>
                     <Select value={clientId} onValueChange={setClientId}>
@@ -165,6 +180,18 @@ const TicketReports = () => {
                       <SelectContent>
                         {statusOptions.map((s) => (
                           <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Técnico</label>
+                    <Select value={technicianId} onValueChange={setTechnicianId}>
+                      <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        {technicians?.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
