@@ -218,13 +218,25 @@ try { $cpu = (Get-CimInstance -ClassName Win32_Processor | Select-Object -First 
 try { $ramBytes = (Get-CimInstance -ClassName Win32_ComputerSystem).TotalPhysicalMemory; $ramGB = if ($ramBytes) { [math]::Round($ramBytes / 1GB, 1) } else { $null } } catch { $ramGB = $null; Write-Log "Falha ao coletar RAM: $($_.Exception.Message)" "WARN" }
 
 try {
-    $disk = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='C:'"
-    if ($disk) {
-        $diskTotalGB = [math]::Round($disk.Size / 1GB, 1)
-        $diskFreeGB  = [math]::Round($disk.FreeSpace / 1GB, 1)
-        $diskUsedGB  = [math]::Round(($disk.Size - $disk.FreeSpace) / 1GB, 1)
-    } else { $diskTotalGB = $diskFreeGB = $diskUsedGB = $null }
-} catch { $diskTotalGB = $diskFreeGB = $diskUsedGB = $null; Write-Log "Falha ao coletar disco: $($_.Exception.Message)" "WARN" }
+    $allDisks = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3"
+    $disksArray = @()
+    $diskTotalGB = 0; $diskUsedGB = 0; $diskFreeGB = 0
+    foreach ($d in $allDisks) {
+        $dTotal = [math]::Round($d.Size / 1GB, 1)
+        $dFree  = [math]::Round($d.FreeSpace / 1GB, 1)
+        $dUsed  = [math]::Round(($d.Size - $d.FreeSpace) / 1GB, 1)
+        $diskTotalGB += $dTotal; $diskUsedGB += $dUsed; $diskFreeGB += $dFree
+        $disksArray += [PSCustomObject]@{
+            drive_letter  = $d.DeviceID
+            label         = $d.VolumeName
+            disk_total_gb = $dTotal
+            disk_used_gb  = $dUsed
+            disk_free_gb  = $dFree
+            file_system   = $d.FileSystem
+        }
+    }
+    if ($allDisks.Count -eq 0) { $diskTotalGB = $diskFreeGB = $diskUsedGB = $null; $disksArray = @() }
+} catch { $diskTotalGB = $diskFreeGB = $diskUsedGB = $null; $disksArray = @(); Write-Log "Falha ao coletar discos: $($_.Exception.Message)" "WARN" }
 
 $computerName = $env:COMPUTERNAME
 try { $serial = (Get-CimInstance -ClassName Win32_BIOS).SerialNumber } catch { $serial = $null }
@@ -249,7 +261,7 @@ try {
 } catch { Write-Log "Não foi possível detectar usuário interativo: $($_.Exception.Message)" "WARN" }
 Write-Log "Usuário logado detectado: $loggedInUser"
 
-Write-Log ("Hardware: CPU={0} | RAM={1}GB | Disco Total={2}GB Usado={3}GB Livre={4}GB" -f $cpu, $ramGB, $diskTotalGB, $diskUsedGB, $diskFreeGB)
+Write-Log ("Hardware: CPU={0} | RAM={1}GB | Discos={2} | Total={3}GB Usado={4}GB Livre={5}GB" -f $cpu, $ramGB, $disksArray.Count, $diskTotalGB, $diskUsedGB, $diskFreeGB)
 
 $equipment = [PSCustomObject]@{
     name = $computerName
@@ -263,6 +275,7 @@ $equipment = [PSCustomObject]@{
     disk_total_gb = $diskTotalGB
     disk_used_gb = $diskUsedGB
     disk_free_gb = $diskFreeGB
+    disks = $disksArray
     hardware_updated_at = $hardwareUpdatedAt
     logged_in_user = $loggedInUser
     notes = "OS: $osInfo ($osVersion); IP: $ip"

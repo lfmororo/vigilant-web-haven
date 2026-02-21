@@ -124,6 +124,50 @@ export type Database = {
           },
         ]
       }
+      equipment_disks: {
+        Row: {
+          disk_free_gb: number | null
+          disk_total_gb: number | null
+          disk_used_gb: number | null
+          drive_letter: string | null
+          equipment_id: string
+          file_system: string | null
+          id: string
+          label: string | null
+          updated_at: string
+        }
+        Insert: {
+          disk_free_gb?: number | null
+          disk_total_gb?: number | null
+          disk_used_gb?: number | null
+          drive_letter?: string | null
+          equipment_id: string
+          file_system?: string | null
+          id?: string
+          label?: string | null
+          updated_at?: string
+        }
+        Update: {
+          disk_free_gb?: number | null
+          disk_total_gb?: number | null
+          disk_used_gb?: number | null
+          drive_letter?: string | null
+          equipment_id?: string
+          file_system?: string | null
+          id?: string
+          label?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_disks_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment_inventory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       equipment_inventory: {
         Row: {
           asset_tag: string | null
