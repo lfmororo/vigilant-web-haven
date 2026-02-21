@@ -73,7 +73,7 @@ const TicketReports = () => {
       }
 
       let query = supabase.from("tickets").select(`
-        id, ticket_number, title, status, priority, created_at, updated_at,
+        id, ticket_number, title, status, priority, created_at, updated_at, created_by,
         client:clients!tickets_client_id_fkey(full_name),
         technician:profiles!tickets_assigned_to_fkey(full_name),
         equipment_types(name)
@@ -90,7 +90,17 @@ const TicketReports = () => {
       }
 
       const { data } = await query;
-      return data || [];
+      if (!data?.length) return [];
+
+      // Fetch creator names
+      const creatorIds = [...new Set(data.map(t => t.created_by).filter(Boolean))] as string[];
+      const creatorMap: Record<string, string> = {};
+      if (creatorIds.length) {
+        const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", creatorIds);
+        profiles?.forEach(p => { creatorMap[p.id] = p.full_name; });
+      }
+
+      return data.map(t => ({ ...t, creator_name: t.created_by ? creatorMap[t.created_by] || "-" : "-" }));
     },
   });
 
@@ -274,8 +284,9 @@ const TicketReports = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>#</TableHead>
+                         <TableHead>#</TableHead>
                         <TableHead>Título</TableHead>
+                        <TableHead>Criador</TableHead>
                         <TableHead>Cliente</TableHead>
                         <TableHead>Equipamento</TableHead>
                         <TableHead>Técnico</TableHead>
@@ -290,6 +301,7 @@ const TicketReports = () => {
                         <TableRow key={t.id}>
                           <TableCell className="font-mono">{t.ticket_number}</TableCell>
                           <TableCell className="max-w-[200px] truncate">{t.title}</TableCell>
+                          <TableCell>{(t as any).creator_name || "-"}</TableCell>
                           <TableCell>{(t.client as any)?.full_name || "-"}</TableCell>
                           <TableCell>{(t.equipment_types as any)?.name || "-"}</TableCell>
                           <TableCell>{(t.technician as any)?.full_name || "-"}</TableCell>
