@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import TicketReportPrint from "@/components/admin/TicketReportPrint";
 import EquipmentRankingReport from "@/components/admin/reports/EquipmentRankingReport";
 import UserRankingReport from "@/components/admin/reports/UserRankingReport";
+import SatisfactionRankingReport from "@/components/admin/reports/SatisfactionRankingReport";
 
 const statusOptions = [
   { value: "all", label: "Todos" },
@@ -157,6 +158,7 @@ const TicketReports = () => {
             <TabsTrigger value="tickets">Chamados</TabsTrigger>
             <TabsTrigger value="equipment">Ranking Equipamentos</TabsTrigger>
             <TabsTrigger value="users">Ranking Usuários</TabsTrigger>
+            <TabsTrigger value="satisfaction">Satisfação</TabsTrigger>
           </TabsList>
 
           <TabsContent value="tickets" className="space-y-6">
@@ -324,6 +326,10 @@ const TicketReports = () => {
 
           <TabsContent value="users">
             <UserRankingReport />
+          </TabsContent>
+
+          <TabsContent value="satisfaction">
+            <SatisfactionRankingReport />
           </TabsContent>
         </Tabs>
       </div>

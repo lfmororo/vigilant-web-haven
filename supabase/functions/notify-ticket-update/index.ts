@@ -501,8 +501,25 @@ Deno.serve(async (req) => {
       }
     })();
 
-    // Wait for both to finish (best-effort)
-    await Promise.all([telegramPromise, whatsappPromise]);
+    // Send satisfaction survey when ticket is closed (fire-and-forget)
+    const surveyPromise = emailType === "ticket_closed" ? (async () => {
+      try {
+        const surveyUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-satisfaction-survey`;
+        await fetch(surveyUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({ ticket_id }),
+        });
+      } catch (err) {
+        console.error("Satisfaction survey failed:", err);
+      }
+    })() : Promise.resolve();
+
+    // Wait for all to finish (best-effort)
+    await Promise.all([telegramPromise, whatsappPromise, surveyPromise]);
 
     return new Response(JSON.stringify({ success: true, sent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
