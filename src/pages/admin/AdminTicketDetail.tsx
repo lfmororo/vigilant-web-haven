@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,6 +10,7 @@ import TicketChat from "@/components/helpdesk/TicketChat";
 import SignaturePad from "@/components/helpdesk/SignaturePad";
 import TicketPrint from "@/components/admin/TicketPrint";
 import { generateAndUploadTicketPdf } from "@/lib/generateTicketPdf";
+import AiSuggestionsPanel from "@/components/admin/AiSuggestionsPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -41,6 +42,24 @@ const AdminTicketDetail = () => {
   const [clientEquipments, setClientEquipments] = useState<any[]>([]);
   const [showPrint, setShowPrint] = useState(false);
   const [requestingAccess, setRequestingAccess] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{ sender_name: string; message: string }>>([]);
+
+  const fetchChatMessages = useCallback(async () => {
+    if (!id) return;
+    const { data } = await supabase
+      .from("ticket_messages")
+      .select("message, sender:profiles!ticket_messages_sender_id_fkey(full_name)")
+      .eq("ticket_id", id)
+      .eq("is_internal", false)
+      .order("created_at", { ascending: true })
+      .limit(20);
+    if (data) {
+      setChatMessages(data.map((m: any) => ({
+        sender_name: m.sender?.full_name || "Sistema",
+        message: m.message,
+      })));
+    }
+  }, [id]);
 
   const isStaff = isAdmin || isTechnician;
 
@@ -92,6 +111,7 @@ const AdminTicketDetail = () => {
   useEffect(() => {
     if (authLoading || !user) return;
     fetchTicket();
+    fetchChatMessages();
     if (isAdmin) {
       // Fetch technicians
       supabase.from("user_roles").select("user_id").in("role", ["technician", "admin"] as any)
@@ -435,6 +455,17 @@ const AdminTicketDetail = () => {
                 />
               </CardContent>
             </Card>
+
+            {isStaff && (
+              <AiSuggestionsPanel
+                ticketId={ticket.id}
+                ticketTitle={ticket.title}
+                ticketDescription={ticket.description}
+                ticketCategory={ticket.equipment_type?.name}
+                ticketPriority={ticket.priority}
+                messages={chatMessages}
+              />
+            )}
           </div>
         </div>
       </div>
