@@ -28,14 +28,18 @@ Deno.serve(async (req) => {
     const smtpPassword = settings.smtp_password;
     const smtpFromName = settings.smtp_from_name || "Sistema";
     const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
+    const smtpConfigured = !!(smtpHost && smtpUser && smtpPassword);
 
-    if (!smtpHost || !smtpUser || !smtpPassword) {
-      console.error("SMTP not configured");
-      return new Response(JSON.stringify({ error: "SMTP not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Telegram config
+    const telegramToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+    const telegramChatId = Deno.env.get("TELEGRAM_CHAT_ID");
+    const telegramEnabled = !!(telegramToken && telegramChatId);
+
+    // WhatsApp config
+    const whatsappEnabled = settings.whatsapp_enabled === "true";
+    const waApiUrl = settings.whatsapp_api_url;
+    const waApiToken = settings.whatsapp_api_token;
+    const waConfigured = whatsappEnabled && waApiUrl && waApiToken;
 
     // Fetch all clients
     const { data: clientRoles } = await supabaseAdmin
@@ -53,7 +57,7 @@ Deno.serve(async (req) => {
 
     const { data: clientProfiles } = await supabaseAdmin
       .from("profiles")
-      .select("id, full_name, email")
+      .select("id, full_name, email, phone, whatsapp_group_id")
       .in("id", clientIds);
 
     if (!clientProfiles?.length) {
@@ -124,6 +128,11 @@ Deno.serve(async (req) => {
     };
 
     let emailsSent = 0;
+    let telegramSent = 0;
+    let whatsappSent = 0;
+
+    // Build a summary for Telegram (all clients combined)
+    let telegramSummary = `📊 *Relatório Semanal de Chamados*\n📅 ${dateStr}\n\n`;
 
     for (const client of clientProfiles) {
       // Get tickets for this client + linked users
@@ -145,6 +154,85 @@ Deno.serve(async (req) => {
           new Date(t.created_at).getTime() < cutoff24h
       );
 
+      const totalActive = myTickets.filter(t => ["open", "in_progress", "waiting_client"].includes(t.status)).length;
+      const totalResolved = myTickets.filter(t => ["resolved", "closed"].includes(t.status)).length;
+
+      // ---- TELEGRAM SUMMARY (per client) ----
+      telegramSummary += `👤 *${client.full_name}*\n`;
+      telegramSummary += `   📋 Total: ${myTickets.length} | 🔓 Abertos: ${totalActive} | ✅ Resolvidos: ${totalResolved}\n`;
+      if (staleTickets.length > 0) {
+        telegramSummary += `   ⚠️ *${staleTickets.length} chamado(s) há +24h*\n`;
+      }
+      for (const status of statusOrder) {
+        const group = grouped[status];
+        if (!group || group.length === 0) continue;
+        telegramSummary += `   ${statusLabels[status]}: ${group.length}\n`;
+      }
+      telegramSummary += `\n`;
+
+      // ---- WHATSAPP (per client - to their group or phone) ----
+      if (waConfigured) {
+        let waMsg = `📊 *Relatório Semanal de Chamados*\n📅 ${dateStr}\n\n`;
+        waMsg += `👤 *${client.full_name}*\n`;
+        waMsg += `📋 Total: ${myTickets.length} | 🔓 Abertos: ${totalActive} | ✅ Resolvidos: ${totalResolved}\n\n`;
+
+        if (staleTickets.length > 0) {
+          waMsg += `⚠️ *Atenção: ${staleTickets.length} chamado(s) aberto(s) há mais de 24h:*\n`;
+          for (const t of staleTickets) {
+            const hoursOpen = Math.floor((now - new Date(t.created_at).getTime()) / (1000 * 60 * 60));
+            const daysOpen = Math.floor(hoursOpen / 24);
+            waMsg += `   🔴 #${t.ticket_number} - ${t.title} (${daysOpen}d ${hoursOpen % 24}h)\n`;
+          }
+          waMsg += `\n`;
+        }
+
+        for (const status of statusOrder) {
+          const group = grouped[status];
+          if (!group || group.length === 0) continue;
+          waMsg += `*${statusLabels[status]} (${group.length}):*\n`;
+          for (const t of group) {
+            const pri = priorityEmoji[t.priority] || "⚪";
+            waMsg += `   ${pri} #${t.ticket_number} - ${t.title}\n`;
+          }
+          waMsg += `\n`;
+        }
+
+        waMsg += `🔗 ${baseUrl}/helpdesk`;
+
+        const sendUrl = `${waApiUrl.replace(/\/+$/, "")}/send/text`;
+
+        // Send to WhatsApp group if configured
+        if (client.whatsapp_group_id) {
+          try {
+            const resp = await fetch(sendUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", token: waApiToken },
+              body: JSON.stringify({ number: client.whatsapp_group_id, text: waMsg }),
+            });
+            if (resp.ok) whatsappSent++;
+          } catch (err) {
+            console.error(`WhatsApp group error for ${client.full_name}:`, err);
+          }
+        } else if (client.phone) {
+          const phone = client.phone.replace(/[\s\-\(\)\+]/g, "");
+          if (phone.length >= 10) {
+            try {
+              const resp = await fetch(sendUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", token: waApiToken },
+                body: JSON.stringify({ number: phone, text: waMsg }),
+              });
+              if (resp.ok) whatsappSent++;
+            } catch (err) {
+              console.error(`WhatsApp error for ${client.full_name}:`, err);
+            }
+          }
+        }
+      }
+
+      // ---- EMAIL ----
+      if (!smtpConfigured) continue;
+
       // Build email HTML
       let html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
@@ -160,10 +248,6 @@ Deno.serve(async (req) => {
     <h1 style="margin:0;font-size:22px;color:#1e293b;font-weight:800;">📊 Relatório Semanal</h1>
     <p style="margin:6px 0 0;color:#64748b;font-size:14px;">Olá <strong>${client.full_name}</strong>, confira o resumo dos seus chamados — ${dateStr}</p>
   </td></tr>`;
-
-      // Summary cards
-      const totalActive = myTickets.filter(t => ["open", "in_progress", "waiting_client"].includes(t.status)).length;
-      const totalResolved = myTickets.filter(t => ["resolved", "closed"].includes(t.status)).length;
 
       html += `
   <tr><td style="padding:16px 32px;">
@@ -191,7 +275,6 @@ Deno.serve(async (req) => {
     </table>
   </td></tr>`;
 
-      // Stale tickets alert
       if (staleTickets.length > 0) {
         html += `
   <tr><td style="padding:8px 32px 16px;">
@@ -216,11 +299,9 @@ Deno.serve(async (req) => {
         html += `</table></div></td></tr>`;
       }
 
-      // Tickets grouped by status
       for (const status of statusOrder) {
         const group = grouped[status];
         if (!group || group.length === 0) continue;
-
         const color = statusColors[status] || "#64748b";
         const label = statusLabels[status] || status;
 
@@ -242,7 +323,6 @@ Deno.serve(async (req) => {
           const pri = priorityEmoji[t.priority] || "⚪";
           const tech = t.assigned_to ? (techNames[t.assigned_to] || "N/A") : '<span style="color:#94a3b8;font-style:italic;">Não atribuído</span>';
           const created = new Date(t.created_at).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-
           html += `
       <tr>
         <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:12px;font-weight:600;color:#334155;">#${t.ticket_number}</td>
@@ -255,7 +335,6 @@ Deno.serve(async (req) => {
         html += `</table></td></tr>`;
       }
 
-      // Footer
       html += `
   <tr><td style="padding:20px 32px 32px;text-align:center;">
     <a href="${baseUrl}/helpdesk" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;padding:14px 40px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;box-shadow:0 4px 14px rgba(37,99,235,0.35);">Acessar Portal de Suporte</a>
@@ -278,8 +357,30 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Weekly client report: ${emailsSent} emails sent`);
-    return new Response(JSON.stringify({ success: true, emails_sent: emailsSent }), {
+    // ---- SEND TELEGRAM SUMMARY (to admins) ----
+    if (telegramEnabled) {
+      telegramSummary += `🔗 [Acessar Dashboard](${baseUrl}/admin/helpdesk)`;
+      try {
+        const resp = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: telegramChatId,
+            text: telegramSummary,
+            parse_mode: "Markdown",
+            disable_web_page_preview: true,
+          }),
+        });
+        const result = await resp.json();
+        if (result.ok) telegramSent = 1;
+        else console.error("Telegram weekly report failed:", result);
+      } catch (err) {
+        console.error("Telegram weekly report error:", err);
+      }
+    }
+
+    console.log(`Weekly client report: email=${emailsSent}, telegram=${telegramSent}, whatsapp=${whatsappSent}`);
+    return new Response(JSON.stringify({ success: true, emails_sent: emailsSent, telegram: telegramSent, whatsapp: whatsappSent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
