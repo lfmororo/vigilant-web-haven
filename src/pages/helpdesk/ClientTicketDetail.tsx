@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import HelpdeskLayout from "@/components/helpdesk/HelpdeskLayout";
 import TicketStatusBadge from "@/components/helpdesk/TicketStatusBadge";
 import PriorityBadge from "@/components/helpdesk/PriorityBadge";
@@ -9,13 +11,16 @@ import SignaturePad from "@/components/helpdesk/SignaturePad";
 import TicketPrint from "@/components/admin/TicketPrint";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Printer } from "lucide-react";
+import { ArrowLeft, Loader2, Printer, Monitor } from "lucide-react";
 
 const ClientTicketDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [ticket, setTicket] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showPrint, setShowPrint] = useState(false);
+  const [requestingAccess, setRequestingAccess] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -44,6 +49,27 @@ const ClientTicketDetail = () => {
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={() => setShowPrint(true)} title="Exportar PDF"><Printer className="w-4 h-4" /></Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={requestingAccess}
+              onClick={async () => {
+                setRequestingAccess(true);
+                try {
+                  const { error } = await supabase.functions.invoke("request-remote-access", {
+                    body: { ticket_id: id, sender_id: user?.id },
+                  });
+                  if (error) throw error;
+                  toast({ title: "Solicitação enviada!", description: "Notificação de acesso remoto enviada." });
+                } catch (err: any) {
+                  toast({ variant: "destructive", title: "Erro", description: err.message || "Erro ao enviar solicitação" });
+                }
+                setRequestingAccess(false);
+              }}
+            >
+              {requestingAccess ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Monitor className="w-4 h-4 mr-2" />}
+              Acesso Remoto
+            </Button>
             <PriorityBadge priority={ticket.priority} />
             <TicketStatusBadge status={ticket.status} />
           </div>
