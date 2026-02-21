@@ -373,13 +373,27 @@ const AdminTicketDetail = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 space-y-4">
             <Card>
               <CardHeader><CardTitle>Mensagens</CardTitle></CardHeader>
               <CardContent className="p-0">
                 <TicketChat ticketId={ticket.id} isStaff={isStaff} />
               </CardContent>
             </Card>
+
+            {isStaff && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <AiSuggestionsPanel
+                  ticketId={ticket.id}
+                  ticketTitle={ticket.title}
+                  ticketDescription={ticket.description}
+                  ticketCategory={ticket.equipment_type?.name}
+                  ticketPriority={ticket.priority}
+                  messages={chatMessages}
+                />
+                <RecurrencePanel ticketId={ticket.id} />
+              </div>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -565,19 +579,6 @@ const AdminTicketDetail = () => {
               </CardContent>
             </Card>
 
-            {isStaff && (
-              <>
-                <AiSuggestionsPanel
-                  ticketId={ticket.id}
-                  ticketTitle={ticket.title}
-                  ticketDescription={ticket.description}
-                  ticketCategory={ticket.equipment_type?.name}
-                  ticketPriority={ticket.priority}
-                  messages={chatMessages}
-                />
-                <RecurrencePanel ticketId={ticket.id} />
-              </>
-            )}
           </div>
         </div>
       </div>
