@@ -42,6 +42,12 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // Load base URL from settings
+    const { data: settingsData } = await supabaseAdmin.from("system_settings").select("key, value");
+    const settings: Record<string, string> = {};
+    settingsData?.forEach((s: any) => { settings[s.key] = s.value || ""; });
+    const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
+
     const { data: ticket } = await supabaseAdmin
       .from("tickets")
       .select("ticket_number, title, priority, status, equipment_type_id")
@@ -103,6 +109,10 @@ Deno.serve(async (req) => {
     } else if ((notification_type === "ticket_resolved" || notification_type === "ticket_closed") && safeResolution) {
       text += `\n📋 *Resolução:*\n${safeResolution}`;
     }
+
+    // Add ticket link
+    const ticketLink = `${baseUrl}/admin/tickets/${ticket_id}`;
+    text += `\n\n🔗 [Abrir Chamado](${escapeMarkdown(ticketLink).replace(/\\\//g, "/")})`;
 
     const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
     const resp = await fetch(telegramUrl, {
