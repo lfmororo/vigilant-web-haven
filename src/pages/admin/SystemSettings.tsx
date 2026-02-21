@@ -240,9 +240,12 @@ const SystemSettings = () => {
       });
       const result = await res.json();
       if (res.ok) {
+        const statusText = typeof result === "object"
+          ? (result.status ? String(result.status) : result.message ? String(result.message) : JSON.stringify(result))
+          : String(result);
         toast({
           title: "Conexão WhatsApp OK",
-          description: result.status || result.message || JSON.stringify(result),
+          description: statusText,
         });
       } else {
         toast({
