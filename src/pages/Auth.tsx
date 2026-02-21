@@ -49,9 +49,8 @@ const Auth = () => {
         navigate("/admin");
       } else if (role === "technician") {
         navigate("/admin/helpdesk");
-      } else if (role === "client") {
-        navigate("/helpdesk");
       } else {
+        // Regular users go to dashboard (cameras); users linked to a client can access helpdesk from there
         navigate("/dashboard");
       }
     }

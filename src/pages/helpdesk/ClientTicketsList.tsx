@@ -8,7 +8,7 @@ import PriorityBadge from "@/components/helpdesk/PriorityBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Search, Loader2 } from "lucide-react";
 import { formatTimeAgo } from "@/lib/formatTimeAgo";
@@ -20,28 +20,36 @@ const ClientTicketsList = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("open");
+  const [parentClientId, setParentClientId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("tickets").select("*, equipment_type:equipment_types(name)")
-      .eq("client_id", user.id).order("created_at", { ascending: false })
-      .then(async ({ data }) => {
-        const tks = data || [];
-        setTickets(tks);
-        if (tks.length > 0) {
-          const ids = tks.map((t: any) => t.id);
-          const { data: msgs } = await supabase
-            .from("ticket_messages")
-            .select("ticket_id, created_at")
-            .in("ticket_id", ids)
-            .order("created_at", { ascending: false });
-          const map: Record<string, string> = {};
-          (msgs || []).forEach((m: any) => {
-            if (!map[m.ticket_id]) map[m.ticket_id] = m.created_at;
+    supabase.from("profiles").select("parent_client_id").eq("id", user.id).maybeSingle()
+      .then(({ data }) => {
+        const clientId = data?.parent_client_id;
+        setParentClientId(clientId);
+        if (!clientId) { setLoading(false); return; }
+
+        supabase.from("tickets").select("*, equipment_type:equipment_types(name)")
+          .eq("client_id", clientId).order("created_at", { ascending: false })
+          .then(async ({ data: ticketData }) => {
+            const tks = ticketData || [];
+            setTickets(tks);
+            if (tks.length > 0) {
+              const ids = tks.map((t: any) => t.id);
+              const { data: msgs } = await supabase
+                .from("ticket_messages")
+                .select("ticket_id, created_at")
+                .in("ticket_id", ids)
+                .order("created_at", { ascending: false });
+              const map: Record<string, string> = {};
+              (msgs || []).forEach((m: any) => {
+                if (!map[m.ticket_id]) map[m.ticket_id] = m.created_at;
+              });
+              setLastMessages(map);
+            }
+            setLoading(false);
           });
-          setLastMessages(map);
-        }
-        setLoading(false);
       });
   }, [user]);
 
@@ -56,7 +64,9 @@ const ClientTicketsList = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-display font-bold">Meus Chamados</h1>
-          <Link to="/helpdesk/tickets/new"><Button><Plus className="w-4 h-4 mr-2" />Novo Chamado</Button></Link>
+          {parentClientId && (
+            <Link to="/helpdesk/tickets/new"><Button><Plus className="w-4 h-4 mr-2" />Novo Chamado</Button></Link>
+          )}
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
@@ -81,6 +91,8 @@ const ClientTicketsList = () => {
           <CardContent className="p-0">
             {loading ? (
               <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+            ) : !parentClientId ? (
+              <p className="text-center text-muted-foreground py-8">Seu usuário não está vinculado a nenhum cliente.</p>
             ) : (
               <Table>
                 <TableHeader>

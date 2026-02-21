@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import HelpdeskLayout from "@/components/helpdesk/HelpdeskLayout";
 import EquipmentTypeSelect from "@/components/helpdesk/EquipmentTypeSelect";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +18,8 @@ const NewTicket = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [parentClientId, setParentClientId] = useState<string | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -26,9 +28,18 @@ const NewTicket = () => {
     priority: "medium",
   });
 
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("profiles").select("parent_client_id").eq("id", user.id).maybeSingle()
+      .then(({ data }) => {
+        setParentClientId(data?.parent_client_id || null);
+        setLoadingProfile(false);
+      });
+  }, [user]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.title.trim() || !form.description.trim() || !user) {
+    if (!form.title.trim() || !form.description.trim() || !user || !parentClientId) {
       toast({ variant: "destructive", title: "Preencha todos os campos obrigatórios" });
       return;
     }
@@ -39,14 +50,13 @@ const NewTicket = () => {
       equipment_type_id: form.equipment_type_id || null,
       equipment_info: form.equipment_info || null,
       priority: form.priority as any,
-      client_id: user.id,
+      client_id: parentClientId,
       created_by: user.id,
     }).select("id").single();
     if (error) {
       toast({ variant: "destructive", title: "Erro ao criar chamado", description: error.message });
     } else {
       toast({ title: "Chamado criado com sucesso!" });
-      // Fire-and-forget notification for new ticket
       if (insertedTicket?.id) {
         supabase.functions.invoke("notify-ticket-update", {
           body: {
@@ -62,6 +72,21 @@ const NewTicket = () => {
     }
     setLoading(false);
   };
+
+  if (loadingProfile) {
+    return <HelpdeskLayout><div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></HelpdeskLayout>;
+  }
+
+  if (!parentClientId) {
+    return (
+      <HelpdeskLayout>
+        <div className="max-w-2xl mx-auto text-center py-12">
+          <p className="text-muted-foreground">Seu usuário não está vinculado a nenhum cliente. Solicite ao administrador para vincular sua conta.</p>
+          <Button variant="outline" className="mt-4" onClick={() => navigate(-1)}>Voltar</Button>
+        </div>
+      </HelpdeskLayout>
+    );
+  }
 
   return (
     <HelpdeskLayout>

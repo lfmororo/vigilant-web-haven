@@ -11,7 +11,7 @@ interface CreateUserRequest {
   password: string;
   full_name: string;
   phone?: string;
-  role?: "client" | "technician" | "admin";
+  role?: "user" | "technician" | "admin";
 }
 
 Deno.serve(async (req) => {
@@ -74,8 +74,8 @@ Deno.serve(async (req) => {
 
     // Parse request body
     const { email, password, full_name, phone, role: requestedRole }: CreateUserRequest = await req.json();
-    const validRoles = ["client", "technician", "admin"];
-    const userRole = requestedRole && validRoles.includes(requestedRole) ? requestedRole : "client";
+    const validRoles = ["user", "technician", "admin"];
+    const userRole = requestedRole && validRoles.includes(requestedRole) ? requestedRole : "user";
 
     if (!email || !password || !full_name) {
       return new Response(

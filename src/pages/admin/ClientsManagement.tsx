@@ -21,16 +21,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   Table,
   TableBody,
   TableCell,
@@ -39,25 +29,29 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Eye, EyeOff, Package, TicketCheck, Key, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { Plus, Loader2, Package, TicketCheck, Key, Pencil, Trash2, AlertTriangle } from "lucide-react";
 import { z } from "zod";
 import { Link } from "react-router-dom";
 import ApiIntegrationDialog from "@/components/admin/ApiIntegrationDialog";
 
-interface ClientProfile {
+interface Client {
   id: string;
   full_name: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   email_domain: string | null;
   whatsapp_group_id: string | null;
+  address: string | null;
+  address_number: string | null;
+  address_complement: string | null;
+  neighborhood: string | null;
+  city: string | null;
   created_at: string;
 }
 
 const createClientSchema = z.object({
   full_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-  email: z.string().email("Email inválido"),
-  password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+  email: z.string().email("Email inválido").optional().or(z.literal("")),
   phone: z.string().optional(),
 });
 
@@ -71,24 +65,22 @@ const ClientsManagement = () => {
   const [apiDialogClientId, setApiDialogClientId] = useState<string | null>(null);
   const [apiDialogClientName, setApiDialogClientName] = useState("");
   const { toast } = useToast();
-  const [clients, setClients] = useState<ClientProfile[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Create dialog
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
-    password: "",
     phone: "",
     email_domain: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Edit dialog
-  const [editingClient, setEditingClient] = useState<ClientProfile | null>(null);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [editFormData, setEditFormData] = useState({
@@ -100,7 +92,7 @@ const ClientsManagement = () => {
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
   // Delete dialog
-  const [deletingClient, setDeletingClient] = useState<ClientProfile | null>(null);
+  const [deletingClient, setDeletingClient] = useState<Client | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [linkedTickets, setLinkedTickets] = useState<any[]>([]);
   const [linkedOrders, setLinkedOrders] = useState<any[]>([]);
@@ -115,34 +107,15 @@ const ClientsManagement = () => {
 
   const fetchClients = async () => {
     try {
-      const { data: roleData, error: roleError } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .eq("role", "client" as any);
-
-      if (roleError) throw roleError;
-
-      if (!roleData || roleData.length === 0) {
-        setClients([]);
-        setLoading(false);
-        return;
-      }
-
-      const clientIds = roleData.map((r) => r.user_id);
       const { data, error } = await supabase
-        .from("profiles")
+        .from("clients")
         .select("*")
-        .in("id", clientIds)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       setClients(data || []);
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao carregar clientes",
-        description: error.message,
-      });
+      toast({ variant: "destructive", title: "Erro ao carregar clientes", description: error.message });
     } finally {
       setLoading(false);
     }
@@ -163,42 +136,28 @@ const ClientsManagement = () => {
     }
 
     setIsSubmitting(true);
-
     try {
-      const response = await supabase.functions.invoke("create-user", {
-        body: { full_name: formData.full_name, email: formData.email, password: formData.password, phone: formData.phone, role: "client" },
+      const { error } = await supabase.from("clients").insert({
+        full_name: formData.full_name,
+        email: formData.email || null,
+        phone: formData.phone || null,
+        email_domain: formData.email_domain.trim().toLowerCase() || null,
       });
 
-      if (response.data?.user?.id && formData.email_domain.trim()) {
-        await supabase
-          .from("profiles")
-          .update({ email_domain: formData.email_domain.trim().toLowerCase() })
-          .eq("id", response.data.user.id);
-      }
+      if (error) throw error;
 
-      if (response.error) throw new Error(response.error.message);
-      if (response.data.error) throw new Error(response.data.error);
-
-      toast({
-        title: "Cliente criado",
-        description: `${formData.full_name} foi criado com sucesso.`,
-      });
-
-      setFormData({ full_name: "", email: "", password: "", phone: "", email_domain: "" });
+      toast({ title: "Cliente criado", description: `${formData.full_name} foi criado com sucesso.` });
+      setFormData({ full_name: "", email: "", phone: "", email_domain: "" });
       setIsDialogOpen(false);
       fetchClients();
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao criar cliente",
-        description: error.message,
-      });
+      toast({ variant: "destructive", title: "Erro ao criar cliente", description: error.message });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const openEditDialog = (client: ClientProfile) => {
+  const openEditDialog = (client: Client) => {
     setEditingClient(client);
     setEditFormData({
       full_name: client.full_name,
@@ -228,13 +187,13 @@ const ClientsManagement = () => {
     setIsEditSubmitting(true);
     try {
       const { error } = await supabase
-        .from("profiles")
+        .from("clients")
         .update({
           full_name: editFormData.full_name,
           phone: editFormData.phone || null,
           email_domain: editFormData.email_domain.trim().toLowerCase() || null,
           whatsapp_group_id: editFormData.whatsapp_group_id.trim() || null,
-        } as any)
+        })
         .eq("id", editingClient.id);
 
       if (error) throw error;
@@ -250,7 +209,7 @@ const ClientsManagement = () => {
     }
   };
 
-  const openDeleteDialog = async (client: ClientProfile) => {
+  const openDeleteDialog = async (client: Client) => {
     setDeletingClient(client);
     setDeleteStep("check");
     setLinkedTickets([]);
@@ -279,7 +238,6 @@ const ClientsManagement = () => {
     if (!deletingClient || !reassignClientId) return;
     setIsReassigning(true);
     try {
-      // Reassign tickets
       if (linkedTickets.length > 0) {
         const { error: tErr } = await supabase
           .from("tickets")
@@ -287,7 +245,6 @@ const ClientsManagement = () => {
           .eq("client_id", deletingClient.id);
         if (tErr) throw tErr;
       }
-      // Reassign service orders
       if (linkedOrders.length > 0) {
         const { error: oErr } = await supabase
           .from("service_orders")
@@ -295,11 +252,10 @@ const ClientsManagement = () => {
           .eq("client_id", deletingClient.id);
         if (oErr) throw oErr;
       }
-      toast({ title: "Dados reatribuídos", description: "Chamados e OS foram transferidos. Prosseguindo com a exclusão..." });
+      toast({ title: "Dados reatribuídos", description: "Chamados e OS foram transferidos." });
       setLinkedTickets([]);
       setLinkedOrders([]);
       setDeleteStep("confirm");
-      // Now actually delete
       await handleDeleteClient();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro ao reatribuir", description: error.message });
@@ -312,12 +268,17 @@ const ClientsManagement = () => {
     if (!deletingClient) return;
     setIsDeleting(true);
     try {
-      const response = await supabase.functions.invoke("delete-user", {
-        body: { user_id: deletingClient.id },
-      });
+      // Delete related data
+      await supabase.from("equipment_inventory").delete().eq("client_id", deletingClient.id);
+      await supabase.from("inventory_api_keys").delete().eq("client_id", deletingClient.id);
+      await supabase.from("imap_accounts").delete().eq("client_id", deletingClient.id);
+      
+      // Unlink profiles referencing this client
+      await supabase.from("profiles").update({ parent_client_id: null } as any).eq("parent_client_id", deletingClient.id);
 
-      if (response.error) throw new Error(response.error.message);
-      if (response.data?.error) throw new Error(response.data.error);
+      // Delete the client record
+      const { error } = await supabase.from("clients").delete().eq("id", deletingClient.id);
+      if (error) throw error;
 
       toast({ title: "Cliente excluído", description: `${deletingClient.full_name} foi excluído com sucesso.` });
       setDeletingClient(null);
@@ -339,84 +300,31 @@ const ClientsManagement = () => {
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Novo Cliente
-              </Button>
+              <Button><Plus className="w-4 h-4 mr-2" />Novo Cliente</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Criar Novo Cliente</DialogTitle>
-              </DialogHeader>
+              <DialogHeader><DialogTitle>Criar Novo Cliente</DialogTitle></DialogHeader>
               <form onSubmit={handleCreateClient} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="full_name">Nome Completo</Label>
-                  <Input
-                    id="full_name"
-                    value={formData.full_name}
-                    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                    className={errors.full_name ? "border-destructive" : ""}
-                  />
+                  <Label htmlFor="full_name">Nome Completo *</Label>
+                  <Input id="full_name" value={formData.full_name} onChange={(e) => setFormData({ ...formData, full_name: e.target.value })} className={errors.full_name ? "border-destructive" : ""} />
                   {errors.full_name && <p className="text-sm text-destructive">{errors.full_name}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className={errors.email ? "border-destructive" : ""}
-                  />
-                  {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Senha</Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className={errors.password ? "border-destructive pr-10" : "pr-10"}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
+                  <Label htmlFor="email">Email (opcional)</Label>
+                  <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Telefone (opcional)</Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  />
+                  <Input id="phone" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email_domain">Domínio de Email (opcional)</Label>
-                  <Input
-                    id="email_domain"
-                    placeholder="Ex: empresa.com.br"
-                    value={formData.email_domain}
-                    onChange={(e) => setFormData({ ...formData, email_domain: e.target.value })}
-                  />
+                  <Input id="email_domain" placeholder="Ex: empresa.com.br" value={formData.email_domain} onChange={(e) => setFormData({ ...formData, email_domain: e.target.value })} />
                   <p className="text-xs text-muted-foreground">Usuários com emails deste domínio serão vinculados automaticamente a este cliente.</p>
                 </div>
                 <Button type="submit" className="w-full" disabled={isSubmitting}>
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Criando...
-                    </>
-                  ) : (
-                    "Criar Cliente"
-                  )}
+                  {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Criando...</> : "Criar Cliente"}
                 </Button>
               </form>
             </DialogContent>
@@ -424,14 +332,10 @@ const ClientsManagement = () => {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Lista de Clientes</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Lista de Clientes</CardTitle></CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              </div>
+              <div className="flex items-center justify-center py-8"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
             ) : clients.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">Nenhum cliente cadastrado</p>
             ) : (
@@ -450,37 +354,23 @@ const ClientsManagement = () => {
                   {clients.map((client) => (
                     <TableRow key={client.id}>
                       <TableCell className="font-medium">{client.full_name}</TableCell>
-                      <TableCell>{client.email}</TableCell>
+                      <TableCell>{client.email || "-"}</TableCell>
                       <TableCell>{client.phone || "-"}</TableCell>
                       <TableCell>{client.email_domain || "-"}</TableCell>
                       <TableCell>{new Date(client.created_at).toLocaleDateString("pt-BR")}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button variant="ghost" size="sm" asChild>
-                            <Link to={`/helpdesk/tickets?client=${client.id}`}>
-                              <TicketCheck className="w-4 h-4 mr-1" />
-                              Tickets
-                            </Link>
+                            <Link to={`/admin/tickets?client=${client.id}`}><TicketCheck className="w-4 h-4 mr-1" />Tickets</Link>
                           </Button>
                           <Button variant="ghost" size="sm" asChild>
-                            <Link to={`/admin/inventory?client=${client.id}`}>
-                              <Package className="w-4 h-4 mr-1" />
-                              Equipamentos
-                            </Link>
+                            <Link to={`/admin/inventory?client=${client.id}`}><Package className="w-4 h-4 mr-1" />Equipamentos</Link>
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => { setApiDialogClientId(client.id); setApiDialogClientName(client.full_name); }}>
-                            <Key className="w-4 h-4 mr-1" />
-                            API
+                            <Key className="w-4 h-4 mr-1" />API
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(client)}>
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => openDeleteDialog(client)}
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(client)}><Pencil className="w-4 h-4" /></Button>
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => openDeleteDialog(client)}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
@@ -496,68 +386,38 @@ const ClientsManagement = () => {
         {/* Edit Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={(open) => { if (!open) { setIsEditDialogOpen(false); setEditingClient(null); } }}>
           <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Editar Cliente</DialogTitle>
-            </DialogHeader>
+            <DialogHeader><DialogTitle>Editar Cliente</DialogTitle></DialogHeader>
             <form onSubmit={handleEditClient} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="edit_full_name">Nome Completo</Label>
-                <Input
-                  id="edit_full_name"
-                  value={editFormData.full_name}
-                  onChange={(e) => setEditFormData({ ...editFormData, full_name: e.target.value })}
-                  className={editErrors.full_name ? "border-destructive" : ""}
-                />
+                <Input id="edit_full_name" value={editFormData.full_name} onChange={(e) => setEditFormData({ ...editFormData, full_name: e.target.value })} className={editErrors.full_name ? "border-destructive" : ""} />
                 {editErrors.full_name && <p className="text-sm text-destructive">{editErrors.full_name}</p>}
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>
                 <Input value={editingClient?.email || ""} disabled className="opacity-60" />
-                <p className="text-xs text-muted-foreground">O email não pode ser alterado por aqui.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit_phone">Telefone (opcional)</Label>
-                <Input
-                  id="edit_phone"
-                  value={editFormData.phone}
-                  onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
-                />
+                <Input id="edit_phone" value={editFormData.phone} onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit_email_domain">Domínio de Email</Label>
-                <Input
-                  id="edit_email_domain"
-                  placeholder="Ex: empresa.com.br"
-                  value={editFormData.email_domain}
-                  onChange={(e) => setEditFormData({ ...editFormData, email_domain: e.target.value })}
-                />
+                <Input id="edit_email_domain" placeholder="Ex: empresa.com.br" value={editFormData.email_domain} onChange={(e) => setEditFormData({ ...editFormData, email_domain: e.target.value })} />
                 <p className="text-xs text-muted-foreground">Usuários com emails deste domínio serão vinculados automaticamente a este cliente.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit_whatsapp_group_id">Grupo WhatsApp (opcional)</Label>
-                <Input
-                  id="edit_whatsapp_group_id"
-                  placeholder="Ex: 5511999999999-1234567890@g.us"
-                  value={editFormData.whatsapp_group_id}
-                  onChange={(e) => setEditFormData({ ...editFormData, whatsapp_group_id: e.target.value })}
-                />
-                <p className="text-xs text-muted-foreground">ID do grupo WhatsApp para notificações deste cliente (formato: [id]@g.us).</p>
+                <Input id="edit_whatsapp_group_id" placeholder="Ex: 5511999999999-1234567890@g.us" value={editFormData.whatsapp_group_id} onChange={(e) => setEditFormData({ ...editFormData, whatsapp_group_id: e.target.value })} />
               </div>
               <Button type="submit" className="w-full" disabled={isEditSubmitting}>
-                {isEditSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  "Salvar Alterações"
-                )}
+                {isEditSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Salvando...</> : "Salvar Alterações"}
               </Button>
             </form>
           </DialogContent>
         </Dialog>
 
-        {/* Delete Confirmation with linked data */}
+        {/* Delete Confirmation */}
         <Dialog open={!!deletingClient} onOpenChange={(open) => { if (!open) { setDeletingClient(null); setDeleteStep("check"); } }}>
           <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
             <DialogHeader>
@@ -566,37 +426,25 @@ const ClientsManagement = () => {
                 Excluir Cliente
               </DialogTitle>
             </DialogHeader>
-
             {loadingLinked ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-              </div>
+              <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
             ) : (linkedTickets.length > 0 || linkedOrders.length > 0) && deleteStep === "check" ? (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
                   <strong>{deletingClient?.full_name}</strong> possui dados vinculados que precisam ser reatribuídos antes da exclusão:
                 </p>
-
                 {linkedTickets.length > 0 && (
                   <div className="space-y-2">
                     <h4 className="text-sm font-semibold">Chamados ({linkedTickets.length})</h4>
                     <div className="border rounded-md max-h-40 overflow-y-auto">
                       <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">#</TableHead>
-                            <TableHead className="text-xs">Título</TableHead>
-                            <TableHead className="text-xs">Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
+                        <TableHeader><TableRow><TableHead className="text-xs">#</TableHead><TableHead className="text-xs">Título</TableHead><TableHead className="text-xs">Status</TableHead></TableRow></TableHeader>
                         <TableBody>
                           {linkedTickets.map((t) => (
                             <TableRow key={t.id}>
                               <TableCell className="text-xs py-1">{t.ticket_number}</TableCell>
                               <TableCell className="text-xs py-1 max-w-[180px] truncate">{t.title}</TableCell>
-                              <TableCell className="text-xs py-1">
-                                <Badge variant="outline" className="text-[10px]">{t.status}</Badge>
-                              </TableCell>
+                              <TableCell className="text-xs py-1"><Badge variant="outline" className="text-[10px]">{t.status}</Badge></TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -604,25 +452,17 @@ const ClientsManagement = () => {
                     </div>
                   </div>
                 )}
-
                 {linkedOrders.length > 0 && (
                   <div className="space-y-2">
                     <h4 className="text-sm font-semibold">Ordens de Serviço ({linkedOrders.length})</h4>
                     <div className="border rounded-md max-h-32 overflow-y-auto">
                       <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">#</TableHead>
-                            <TableHead className="text-xs">Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
+                        <TableHeader><TableRow><TableHead className="text-xs">#</TableHead><TableHead className="text-xs">Status</TableHead></TableRow></TableHeader>
                         <TableBody>
                           {linkedOrders.map((o) => (
                             <TableRow key={o.id}>
                               <TableCell className="text-xs py-1">{o.order_number}</TableCell>
-                              <TableCell className="text-xs py-1">
-                                <Badge variant="outline" className="text-[10px]">{o.status}</Badge>
-                              </TableCell>
+                              <TableCell className="text-xs py-1"><Badge variant="outline" className="text-[10px]">{o.status}</Badge></TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -630,32 +470,20 @@ const ClientsManagement = () => {
                     </div>
                   </div>
                 )}
-
                 <div className="space-y-2 pt-2 border-t">
                   <Label>Reatribuir para outro cliente:</Label>
                   <Select value={reassignClientId} onValueChange={setReassignClientId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um cliente..." />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Selecione um cliente..." /></SelectTrigger>
                     <SelectContent>
-                      {clients
-                        .filter((c) => c.id !== deletingClient?.id)
-                        .map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
-                        ))}
+                      {clients.filter((c) => c.id !== deletingClient?.id).map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="flex gap-2 justify-end pt-2">
-                  <Button variant="outline" onClick={() => { setDeletingClient(null); setDeleteStep("check"); }}>
-                    Cancelar
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    disabled={!reassignClientId || isReassigning}
-                    onClick={handleReassignAndDelete}
-                  >
+                  <Button variant="outline" onClick={() => { setDeletingClient(null); setDeleteStep("check"); }}>Cancelar</Button>
+                  <Button variant="destructive" disabled={!reassignClientId || isReassigning} onClick={handleReassignAndDelete}>
                     {isReassigning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Reatribuindo...</> : "Reatribuir e Excluir"}
                   </Button>
                 </div>
