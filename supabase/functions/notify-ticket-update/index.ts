@@ -253,10 +253,12 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const body = await req.json();
+    console.log("notify-ticket-update called:", JSON.stringify({ ticket_id: body.ticket_id, type: body.notification_type }));
     const {
       ticket_id, sender_id, message, is_internal,
       notification_type, priority_label, resolution_summary, pdf_url,
-    } = await req.json();
+    } = body;
 
     // Don't notify for internal notes
     if (is_internal) {
@@ -328,10 +330,12 @@ Deno.serve(async (req) => {
     }
 
     if (recipientIds.size === 0) {
+      console.log("No recipients found, skipping");
       return new Response(JSON.stringify({ success: true, sent: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    console.log("Recipients:", Array.from(recipientIds));
 
     // Fetch sender name
     const { data: senderProfile } = await supabaseAdmin
@@ -349,10 +353,12 @@ Deno.serve(async (req) => {
       .in("id", Array.from(recipientIds));
 
     if (!recipients || recipients.length === 0) {
+      console.log("No recipients with emails found");
       return new Response(JSON.stringify({ success: true, sent: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    console.log("Sending emails to:", recipients.map(r => r.email));
 
     // Load SMTP settings
     const { data: settingsData } = await supabaseAdmin.from("system_settings").select("key, value");
@@ -435,7 +441,9 @@ Deno.serve(async (req) => {
           resolutionSummary: resolution_summary,
         });
 
+        console.log(`Sending SMTP email to ${recipient.email}...`);
         await sendSmtpEmail(smtpHost, smtpPort, smtpUser, smtpPassword, smtpFromName, recipient.email, subject, html, true);
+        console.log(`Email sent successfully to ${recipient.email}`);
         sent++;
       } catch (err) {
         console.error(`Failed to send to ${recipient.email}:`, err);
