@@ -303,9 +303,11 @@ Deno.serve(async (req) => {
     // Collect recipient IDs: only admins, assigned technician, and ticket creator (excluding sender)
     const recipientIds = new Set<string>();
 
-    // Add ticket creator
-    if (ticket.created_by && ticket.created_by !== sender_id) {
-      recipientIds.add(ticket.created_by);
+    // Add ticket creator (always include for ticket_opened so they get confirmation)
+    if (ticket.created_by) {
+      if (notification_type === "ticket_opened" || ticket.created_by !== sender_id) {
+        recipientIds.add(ticket.created_by);
+      }
     }
 
     // Add assigned technician
