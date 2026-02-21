@@ -36,24 +36,61 @@ Deno.serve(async (req) => {
       );
     }
 
-    const groupsUrl = `${apiUrl.replace(/\/+$/, "")}/groups`;
-    const resp = await fetch(groupsUrl, {
-      method: "GET",
-      headers: { token: apiToken },
-    });
+    const baseUrl = apiUrl.replace(/\/+$/, "");
 
-    if (!resp.ok) {
-      const errBody = await resp.text();
-      return new Response(
-        JSON.stringify({ error: `Erro ao buscar grupos: ${resp.status} ${errBody}` }),
-        { status: resp.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Try multiple common endpoints for listing groups
+    const endpoints = [
+      "/chat/fetchAllGroups",
+      "/chat/groups",
+      "/group/fetchAllGroups",
+      "/groups",
+      "/chats",
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        const resp = await fetch(`${baseUrl}${endpoint}`, {
+          method: "GET",
+          headers: { token: apiToken },
+        });
+
+        if (resp.ok) {
+          const data = await resp.json();
+          console.log(`WhatsApp groups found via ${endpoint}`);
+          
+          // Normalize the response - extract groups array from various formats
+          let groups: Array<{ id: string; name: string }> = [];
+          
+          const rawList = Array.isArray(data) ? data : (data?.groups || data?.data || data?.chats || []);
+          
+          for (const item of rawList) {
+            // Only include groups (id ends with @g.us)
+            const id = item.id?._serialized || item.id || item.jid || "";
+            const name = item.name || item.subject || item.groupName || id;
+            if (typeof id === "string" && id.includes("@g.us")) {
+              groups.push({ id, name });
+            }
+          }
+
+          return new Response(JSON.stringify({ groups }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        } else {
+          const text = await resp.text();
+          console.log(`Endpoint ${endpoint} returned ${resp.status}: ${text}`);
+        }
+      } catch (err) {
+        console.log(`Endpoint ${endpoint} failed:`, err);
+      }
     }
 
-    const data = await resp.json();
-    return new Response(JSON.stringify(data), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ 
+        error: "Não foi possível listar os grupos. Nenhum endpoint compatível encontrado na API WhatsApp. Verifique a URL da API nas configurações.",
+        tried: endpoints.map(e => `${baseUrl}${e}`)
+      }),
+      { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (error) {
     console.error("list-whatsapp-groups error:", error);
     return new Response(
