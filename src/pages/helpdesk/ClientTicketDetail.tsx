@@ -6,14 +6,16 @@ import TicketStatusBadge from "@/components/helpdesk/TicketStatusBadge";
 import PriorityBadge from "@/components/helpdesk/PriorityBadge";
 import TicketChat from "@/components/helpdesk/TicketChat";
 import SignaturePad from "@/components/helpdesk/SignaturePad";
+import TicketPrint from "@/components/admin/TicketPrint";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Printer } from "lucide-react";
 
 const ClientTicketDetail = () => {
   const { id } = useParams<{ id: string }>();
   const [ticket, setTicket] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showPrint, setShowPrint] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -24,6 +26,10 @@ const ClientTicketDetail = () => {
 
   if (loading) return <HelpdeskLayout><div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></HelpdeskLayout>;
   if (!ticket) return <HelpdeskLayout><p className="text-center text-muted-foreground py-12">Chamado não encontrado</p></HelpdeskLayout>;
+
+  if (showPrint) {
+    return <TicketPrint ticketId={ticket.id} onClose={() => setShowPrint(false)} />;
+  }
 
   return (
     <HelpdeskLayout>
@@ -37,6 +43,7 @@ const ClientTicketDetail = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={() => setShowPrint(true)} title="Exportar PDF"><Printer className="w-4 h-4" /></Button>
             <PriorityBadge priority={ticket.priority} />
             <TicketStatusBadge status={ticket.status} />
           </div>

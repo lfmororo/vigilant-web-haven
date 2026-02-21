@@ -8,13 +8,14 @@ import TicketStatusBadge from "@/components/helpdesk/TicketStatusBadge";
 import PriorityBadge from "@/components/helpdesk/PriorityBadge";
 import TicketChat from "@/components/helpdesk/TicketChat";
 import SignaturePad from "@/components/helpdesk/SignaturePad";
+import TicketPrint from "@/components/admin/TicketPrint";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, FileText, Trash2, Save } from "lucide-react";
+import { ArrowLeft, Loader2, FileText, Trash2, Save, Printer } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -37,6 +38,7 @@ const AdminTicketDetail = () => {
   const [pendingClientId, setPendingClientId] = useState<string>("");
   const [pendingEquipmentId, setPendingEquipmentId] = useState<string>("");
   const [clientEquipments, setClientEquipments] = useState<any[]>([]);
+  const [showPrint, setShowPrint] = useState(false);
 
   const isStaff = isAdmin || isTechnician;
 
@@ -210,6 +212,10 @@ const AdminTicketDetail = () => {
   if (loading || authLoading) return <AdminLayout><div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></AdminLayout>;
   if (!ticket) return <AdminLayout><p className="text-center text-muted-foreground py-12">Ticket não encontrado</p></AdminLayout>;
 
+  if (showPrint) {
+    return <TicketPrint ticketId={ticket.id} onClose={() => setShowPrint(false)} />;
+  }
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -222,6 +228,7 @@ const AdminTicketDetail = () => {
             </div>
             <p className="text-sm text-muted-foreground">Cliente: {ticket.client?.full_name} ({ticket.client?.email})</p>
           </div>
+          <Button variant="outline" size="icon" onClick={() => setShowPrint(true)} title="Exportar PDF"><Printer className="w-4 h-4" /></Button>
           <Button variant="outline" onClick={createServiceOrder}><FileText className="w-4 h-4 mr-2" />Criar OS</Button>
           {isAdmin && (
             <AlertDialog>
