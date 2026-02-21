@@ -202,6 +202,7 @@ $osVersion = [System.Environment]::OSVersion.VersionString
 $ip = Get-PrimaryIPv4
 if (-not $ip) { $ip = "" }
 $hardwareUpdatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+$loggedInUser = "$env:USERDOMAIN\\$env:USERNAME"
 
 $equipment = [PSCustomObject]@{
     name = $computerName
@@ -216,6 +217,7 @@ $equipment = [PSCustomObject]@{
     disk_used_gb = $diskUsedGB
     disk_free_gb = $diskFreeGB
     hardware_updated_at = $hardwareUpdatedAt
+    logged_in_user = $loggedInUser
     notes = "OS: $osInfo ($osVersion); IP: $ip"
 }
 
@@ -318,11 +320,7 @@ if ($success) {
 }`;
 
   const pythonScript = (cId: string, key: string) =>
-    `import requests
-import platform
-import subprocess
-import socket
-import psutil
+    `import requests, platform, subprocess, socket, psutil, os, getpass
 from datetime import datetime, timezone
 
 def get_serial():
@@ -349,6 +347,7 @@ data = {
         "disk_used_gb": round(disk.used / (1024**3), 1),
         "disk_free_gb": round(disk.free / (1024**3), 1),
         "hardware_updated_at": datetime.now(timezone.utc).isoformat(),
+        "logged_in_user": f"{os.environ.get('USERDOMAIN', '')}{chr(92)}{os.environ.get('USERNAME', '')}".strip(chr(92)) or __import__('getpass').getpass.__module__ and __import__('getpass').getuser(),
         "notes": f"OS: {platform.platform()}, IP: {socket.gethostbyname(socket.gethostname())}"
     }]
 }
