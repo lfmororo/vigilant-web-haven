@@ -372,6 +372,18 @@ const AdminTicketDetail = () => {
                   value={ticket.technician_signature}
                   onChange={async (dataUrl) => {
                     await supabase.from("tickets").update({ technician_signature: dataUrl } as any).eq("id", id!);
+                    // Notify client to sign
+                    if (dataUrl) {
+                      supabase.functions.invoke("notify-ticket-update", {
+                        body: {
+                          ticket_id: id,
+                          sender_id: user?.id,
+                          message: "O técnico assinou este chamado. Por favor, acesse o chamado para realizar sua assinatura.",
+                          is_internal: false,
+                          notification_type: "signature_requested",
+                        },
+                      }).catch((err) => console.error("Signature notification error:", err));
+                    }
                     fetchTicket();
                   }}
                 />

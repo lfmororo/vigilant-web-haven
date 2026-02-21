@@ -9,7 +9,7 @@ const corsHeaders = {
 // ---------- HTML Email Builder ----------
 
 interface EmailParams {
-  type: "ticket_opened" | "ticket_updated" | "ticket_resolved" | "ticket_closed";
+  type: "ticket_opened" | "ticket_updated" | "ticket_resolved" | "ticket_closed" | "signature_requested";
   recipientName: string;
   ticketNumber: number;
   title: string;
@@ -24,10 +24,11 @@ interface EmailParams {
 
 function buildEmailHtml(p: EmailParams): string {
   const themes: Record<string, { heading: string; emoji: string; color: string; bgLight: string }> = {
-    ticket_opened:   { heading: "Novo Chamado Aberto",  emoji: "🎫", color: "#2563eb", bgLight: "#eff6ff" },
-    ticket_updated:  { heading: "Chamado Atualizado",   emoji: "🔄", color: "#7c3aed", bgLight: "#f5f3ff" },
-    ticket_resolved: { heading: "Chamado Resolvido",    emoji: "✅", color: "#16a34a", bgLight: "#f0fdf4" },
-    ticket_closed:   { heading: "Chamado Encerrado",    emoji: "📁", color: "#6b7280", bgLight: "#f9fafb" },
+    ticket_opened:        { heading: "Novo Chamado Aberto",       emoji: "🎫", color: "#2563eb", bgLight: "#eff6ff" },
+    ticket_updated:       { heading: "Chamado Atualizado",        emoji: "🔄", color: "#7c3aed", bgLight: "#f5f3ff" },
+    ticket_resolved:      { heading: "Chamado Resolvido",         emoji: "✅", color: "#16a34a", bgLight: "#f0fdf4" },
+    ticket_closed:        { heading: "Chamado Encerrado",         emoji: "📁", color: "#6b7280", bgLight: "#f9fafb" },
+    signature_requested:  { heading: "Assinatura Solicitada",     emoji: "✍️", color: "#d97706", bgLight: "#fffbeb" },
   };
 
   const theme = themes[p.type] || themes.ticket_updated;
@@ -380,6 +381,7 @@ Deno.serve(async (req) => {
       ticket_updated: `Atualização no Chamado #${ticket.ticket_number} - ${ticket.title}`,
       ticket_resolved: `Chamado Resolvido #${ticket.ticket_number} - ${ticket.title}`,
       ticket_closed: `Chamado Encerrado #${ticket.ticket_number} - ${ticket.title}`,
+      signature_requested: `Assinatura Solicitada - Chamado #${ticket.ticket_number}`,
     };
     const subject = subjectMap[emailType] || subjectMap.ticket_updated;
 
