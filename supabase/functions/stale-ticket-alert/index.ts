@@ -50,15 +50,15 @@ Deno.serve(async (req) => {
       profiles?.forEach(p => { techNames[p.id] = p.full_name; });
     }
 
-    // Fetch client names
+    // Fetch client names from clients table (not profiles)
     const clientIds = [...new Set(staleTickets.filter(t => t.client_id).map(t => t.client_id!))];
     const clientNames: Record<string, string> = {};
     if (clientIds.length > 0) {
-      const { data: profiles } = await supabaseAdmin
-        .from("profiles")
+      const { data: clients } = await supabaseAdmin
+        .from("clients")
         .select("id, full_name")
         .in("id", clientIds);
-      profiles?.forEach(p => { clientNames[p.id] = p.full_name; });
+      clients?.forEach(c => { clientNames[c.id] = c.full_name; });
     }
 
     // Load settings

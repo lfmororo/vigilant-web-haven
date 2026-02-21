@@ -498,8 +498,9 @@ async function processImapAccount(
       // If account is linked to a client, use that; otherwise auto-detect via domain
       let defaultClientId = account.client_id;
 
+      // Find client by email_domain in clients table (not profiles)
       const { data: domainClient } = await supabaseAdmin
-        .from("profiles")
+        .from("clients")
         .select("id")
         .eq("email_domain", emailDomain)
         .maybeSingle();
@@ -510,10 +511,10 @@ async function processImapAccount(
         .eq("email", senderEmail)
         .maybeSingle();
 
-      let clientId: string;
+      let senderId: string;
 
       if (existingProfile) {
-        clientId = existingProfile.id;
+        senderId = existingProfile.id;
         if (!existingProfile.parent_client_id && (domainClient || defaultClientId)) {
           await supabaseAdmin
             .from("profiles")
@@ -534,18 +535,20 @@ async function processImapAccount(
           continue;
         }
 
-        clientId = newUser.user.id;
+        senderId = newUser.user.id;
+
+        const parentClientId = domainClient ? domainClient.id : defaultClientId;
 
         await supabaseAdmin.from("profiles").insert({
-          id: clientId,
+          id: senderId,
           email: senderEmail,
           full_name: senderName,
           must_change_password: true,
-          parent_client_id: domainClient ? domainClient.id : defaultClientId,
+          parent_client_id: parentClientId,
         });
 
         await supabaseAdmin.from("user_roles").insert({
-          user_id: clientId,
+          user_id: senderId,
           role: "user",
         });
 
@@ -568,12 +571,20 @@ async function processImapAccount(
         }
       }
 
-      // Use parent client as ticket owner if available, otherwise use sender's own ID
-      const ticketClientId = (existingProfile?.parent_client_id) || (domainClient?.id) || defaultClientId || clientId;
+      // ticket client_id references the clients table
+      // Priority: existing profile's parent_client_id > domain match > account default
+      const ticketClientId = (existingProfile?.parent_client_id) || (domainClient?.id) || defaultClientId;
+      
+      if (!ticketClientId) {
+        console.error(`No client found for email ${senderEmail} - skipping ticket creation`);
+        result.errors++;
+        await imapCommand(conn, `d${num}`, `STORE ${num} +FLAGS (\\Seen)`);
+        continue;
+      }
 
       const { data: newTicket } = await supabaseAdmin.from("tickets").insert({
         client_id: ticketClientId,
-        created_by: clientId,
+        created_by: senderId,
         title: subject,
         description: bodyText,
         priority: "medium",
@@ -583,7 +594,7 @@ async function processImapAccount(
       if (newTicket) {
         await supabaseAdmin.from("ticket_messages").insert({
           ticket_id: newTicket.id,
-          sender_id: clientId,
+          sender_id: senderId,
           message: bodyText,
           is_internal: false,
         });
