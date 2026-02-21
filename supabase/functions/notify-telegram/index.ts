@@ -8,7 +8,7 @@ const corsHeaders = {
 
 interface TelegramPayload {
   ticket_id: string;
-  notification_type: "ticket_opened" | "ticket_updated" | "ticket_resolved" | "ticket_closed";
+  notification_type: "ticket_opened" | "ticket_updated" | "ticket_resolved" | "ticket_closed" | "signature_requested";
   message?: string;
   sender_name?: string;
   resolution_summary?: string;
@@ -83,7 +83,8 @@ Deno.serve(async (req) => {
       ticket_opened:   { emoji: "🆕", heading: "Novo Chamado" },
       ticket_updated:  { emoji: "🔄", heading: "Chamado Atualizado" },
       ticket_resolved: { emoji: "✅", heading: "Chamado Resolvido" },
-      ticket_closed:   { emoji: "📁", heading: "Chamado Encerrado" },
+      ticket_closed:        { emoji: "📁", heading: "Chamado Encerrado" },
+      signature_requested:  { emoji: "✍️", heading: "Assinatura Solicitada" },
     };
 
     const config = typeConfig[notification_type] || typeConfig.ticket_updated;
@@ -108,6 +109,9 @@ Deno.serve(async (req) => {
       text += `\n💬 *Mensagem:*\n${safeMessage}`;
     } else if ((notification_type === "ticket_resolved" || notification_type === "ticket_closed") && safeResolution) {
       text += `\n📋 *Resolução:*\n${safeResolution}`;
+    } else if (notification_type === "signature_requested") {
+      text += `\n${escapeMarkdown("O técnico finalizou o atendimento e registrou sua assinatura.")}`;
+      text += `\n${escapeMarkdown("Aguardando assinatura do cliente para encerramento.")}`;
     }
 
     // Add ticket link
