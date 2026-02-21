@@ -199,7 +199,18 @@ $osVersion = [System.Environment]::OSVersion.VersionString
 $ip = Get-PrimaryIPv4
 if (-not $ip) { $ip = "" }
 $hardwareUpdatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+# Detecta o usuário logado interativamente (funciona mesmo quando executado como SYSTEM/Agendador)
 $loggedInUser = "$env:USERDOMAIN\\$env:USERNAME"
+try {
+    $explorerProc = Get-CimInstance -ClassName Win32_Process -Filter "Name='explorer.exe'" -ErrorAction Stop | Select-Object -First 1
+    if ($explorerProc) {
+        $owner = Invoke-CimMethod -InputObject $explorerProc -MethodName GetOwner -ErrorAction Stop
+        if ($owner -and $owner.User) {
+            $loggedInUser = "$($owner.Domain)\\$($owner.User)"
+        }
+    }
+} catch { }
 
 $equipment = [PSCustomObject]@{
     name = $computerName
