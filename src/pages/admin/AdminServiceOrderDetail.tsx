@@ -53,7 +53,7 @@ const AdminServiceOrderDetail = () => {
   const fetchOrder = () => {
     if (!id) return;
     supabase.from("service_orders")
-      .select("*, client:profiles!service_orders_client_id_fkey(full_name, email, phone, address, address_number, address_complement, neighborhood, city), technician:profiles!service_orders_technician_id_fkey(full_name)")
+      .select("*, client:clients!service_orders_client_id_fkey(full_name, email, phone, address, address_number, address_complement, neighborhood, city), technician:profiles!service_orders_technician_id_fkey(full_name)")
       .eq("id", id).single()
       .then(({ data }) => {
         if (data) {

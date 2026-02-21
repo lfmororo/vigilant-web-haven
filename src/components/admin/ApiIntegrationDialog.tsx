@@ -61,12 +61,8 @@ const ApiIntegrationDialog = ({ open, onOpenChange, clientId, clientName }: ApiI
   }, [open, clientId]);
 
   const fetchClients = async () => {
-    const { data: roleData } = await supabase.from("user_roles").select("user_id").eq("role", "client" as any);
-    if (roleData && roleData.length > 0) {
-      const ids = roleData.map((r) => r.user_id);
-      const { data } = await supabase.from("profiles").select("id, full_name").in("id", ids);
-      setClients(data || []);
-    }
+    const { data } = await supabase.from("clients").select("id, full_name").order("full_name");
+    setClients(data || []);
   };
 
   const fetchApiKeys = async () => {

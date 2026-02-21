@@ -45,20 +45,13 @@ const TicketReports = () => {
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [showPrint, setShowPrint] = useState(false);
 
-  // Fetch clients (profiles with client role)
+  // Fetch clients
   const { data: clients } = useQuery({
     queryKey: ["report-clients"],
     queryFn: async () => {
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .eq("role", "client");
-      if (!roles?.length) return [];
-      const clientIds = roles.map((r) => r.user_id);
       const { data } = await supabase
-        .from("profiles")
+        .from("clients")
         .select("id, full_name")
-        .in("id", clientIds)
         .order("full_name");
       return data || [];
     },
@@ -86,7 +79,7 @@ const TicketReports = () => {
         .from("tickets")
         .select(`
           id, ticket_number, title, status, priority, created_at, updated_at,
-          client:profiles!tickets_client_id_fkey(full_name),
+          client:clients!tickets_client_id_fkey(full_name),
           technician:profiles!tickets_assigned_to_fkey(full_name),
           equipment_types(name)
         `)

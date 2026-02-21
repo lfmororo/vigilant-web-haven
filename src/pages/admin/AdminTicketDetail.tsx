@@ -45,7 +45,7 @@ const AdminTicketDetail = () => {
     if (!id) return;
     try {
       const { data, error } = await supabase.from("tickets")
-        .select("*, client:profiles!tickets_client_id_fkey(full_name, email), assigned:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name)")
+        .select("*, client:clients!tickets_client_id_fkey(full_name, email), assigned:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name)")
         .eq("id", id).maybeSingle();
       
       if (error) {
@@ -92,13 +92,9 @@ const AdminTicketDetail = () => {
           }
         });
       // Fetch clients
-      supabase.from("user_roles").select("user_id").eq("role", "client" as any)
-        .then(async ({ data: roleData }) => {
-          if (roleData && roleData.length > 0) {
-            const ids = roleData.map(r => r.user_id);
-            const { data: profiles } = await supabase.from("profiles").select("id, full_name, email").in("id", ids);
-            setClients(profiles || []);
-          }
+      supabase.from("clients").select("id, full_name, email").order("full_name")
+        .then(({ data }) => {
+          setClients(data || []);
         });
     }
   }, [id, isAdmin, authLoading, user]);

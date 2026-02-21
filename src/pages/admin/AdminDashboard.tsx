@@ -22,7 +22,7 @@ const TechnicianDashboard = ({ userId }: { userId?: string }) => {
   useEffect(() => {
     if (!userId) return;
     supabase.from("tickets")
-      .select("*, client:profiles!tickets_client_id_fkey(full_name), equipment_type:equipment_types(name)")
+      .select("*, client:clients!tickets_client_id_fkey(full_name), equipment_type:equipment_types(name)")
       .eq("assigned_to", userId)
       .order("created_at", { ascending: false })
       .limit(10)
