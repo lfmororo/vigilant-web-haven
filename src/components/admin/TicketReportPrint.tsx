@@ -84,13 +84,15 @@ const TicketReportPrint = ({ tickets, filters, metrics, onClose }: TicketReportP
   if (filters.endDate) activeFilters.push(`Até: ${format(filters.endDate, "dd/MM/yyyy")}`);
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-white text-black overflow-auto print:static">
+    <>
+      <style>{`@media print { @page { size: landscape; margin: 8mm; } }`}</style>
+      <div className="fixed inset-0 z-[9999] bg-white text-black overflow-auto print:static">
       <div className="print:hidden fixed top-4 right-4 z-50 flex gap-2">
         <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Imprimir</button>
         <button onClick={onClose} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Voltar</button>
       </div>
 
-      <div className="p-8 max-w-[210mm] mx-auto">
+      <div className="p-8 mx-auto">
         <div className="border-2 border-black">
           {/* Header */}
           <div className="flex items-center border-b-2 border-black p-3 gap-3">
@@ -179,6 +181,7 @@ const TicketReportPrint = ({ tickets, filters, metrics, onClose }: TicketReportP
         </div>
       </div>
     </div>
+    </>
   );
 };
 
