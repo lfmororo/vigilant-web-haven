@@ -30,7 +30,7 @@ const SignaturePad = ({ value, onChange, label = "Assinatura", disabled = false 
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.lineWidth = 2;
-    ctx.strokeStyle = "hsl(var(--foreground))";
+    ctx.strokeStyle = "#1a1a1a";
   }, []);
 
   useEffect(() => {
@@ -128,7 +128,7 @@ const SignaturePad = ({ value, onChange, label = "Assinatura", disabled = false 
       <div className="border rounded-md overflow-hidden bg-background touch-none">
         <canvas
           ref={canvasRef}
-          className="w-full h-32 cursor-crosshair"
+          className="w-full h-32 cursor-crosshair bg-white rounded"
           onMouseDown={startDraw}
           onMouseMove={draw}
           onMouseUp={endDraw}
