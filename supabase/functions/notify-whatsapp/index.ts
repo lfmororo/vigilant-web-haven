@@ -19,7 +19,8 @@ function buildMessage(
   message: string,
   senderName: string,
   ticketLink: string,
-  resolutionSummary?: string
+  resolutionSummary?: string,
+  surveyLink?: string
 ): string {
   const priorityEmojis: Record<string, string> = {
     Baixa: "🟢 Baixa",
@@ -86,6 +87,19 @@ function buildMessage(
     ];
     if (resolutionSummary) {
       lines.push("", `📄 *Resumo:*`, resolutionSummary);
+    }
+    if (surveyLink) {
+      lines.push(
+        "",
+        `━━━━━━━━━━━━━━━━━━━━━`,
+        `⭐ *Avalie nosso atendimento!*`,
+        `━━━━━━━━━━━━━━━━━━━━━`,
+        ``,
+        `Sua opinião é muito importante para nós.`,
+        `Clique no link abaixo para avaliar:`,
+        ``,
+        `👉 ${surveyLink}`
+      );
     }
     return lines.join("\n") + linkLine;
   }
@@ -236,6 +250,20 @@ Deno.serve(async (req) => {
     const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
     const ticketLink = `${baseUrl}/helpdesk/tickets/${ticket_id}`;
 
+    // Fetch satisfaction survey link for closed tickets
+    let surveyLink = "";
+    if ((notification_type || "ticket_updated") === "ticket_closed") {
+      const { data: ratingRecord } = await supabaseAdmin
+        .from("ticket_ratings")
+        .select("rating_token")
+        .eq("ticket_id", ticket_id)
+        .is("rating", null)
+        .maybeSingle();
+      if (ratingRecord?.rating_token) {
+        surveyLink = `${Deno.env.get("SUPABASE_URL")}/functions/v1/submit-rating?token=${ratingRecord.rating_token}`;
+      }
+    }
+
     const text = buildMessage(
       notification_type || "ticket_updated",
       ticket.ticket_number,
@@ -245,7 +273,8 @@ Deno.serve(async (req) => {
       message || `${senderName} enviou uma atualização.`,
       senderName,
       ticketLink,
-      resolution_summary
+      resolution_summary,
+      surveyLink
     );
 
     // Fetch client's WhatsApp group ID from clients table
