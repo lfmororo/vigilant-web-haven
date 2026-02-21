@@ -36,6 +36,8 @@ const AdminTicketDetail = () => {
   const [pendingClientId, setPendingClientId] = useState<string>("");
   const [pendingEquipmentTypeId, setPendingEquipmentTypeId] = useState<string>("");
   const [pendingEquipmentInfo, setPendingEquipmentInfo] = useState<string>("");
+  const [pendingEquipmentId, setPendingEquipmentId] = useState<string>("");
+  const [clientEquipments, setClientEquipments] = useState<any[]>([]);
 
   const isStaff = isAdmin || isTechnician;
 
@@ -75,6 +77,7 @@ const AdminTicketDetail = () => {
         setPendingClientId(data.client_id || "");
         setPendingEquipmentTypeId(data.equipment_type_id || "");
         setPendingEquipmentInfo(data.equipment_info || "");
+        setPendingEquipmentId((data as any).equipment_id || "");
       } else {
         setTicket(null);
       }
@@ -105,13 +108,25 @@ const AdminTicketDetail = () => {
     }
   }, [id, isAdmin, authLoading, user]);
 
+  // Fetch equipment inventory for the selected client
+  useEffect(() => {
+    const clientId = pendingClientId || ticket?.client_id;
+    if (!clientId) { setClientEquipments([]); return; }
+    supabase.from("equipment_inventory")
+      .select("id, name, brand, model, serial_number, equipment_type:equipment_types(name)")
+      .eq("client_id", clientId)
+      .eq("status", "active" as any)
+      .order("name")
+      .then(({ data }) => setClientEquipments(data || []));
+  }, [pendingClientId, ticket?.client_id]);
   const hasChanges = ticket && (
     pendingStatus !== ticket.status ||
     pendingPriority !== ticket.priority ||
     (pendingAssignedTo || null) !== (ticket.assigned_to || null) ||
     (pendingClientId || null) !== (ticket.client_id || null) ||
     (pendingEquipmentTypeId || null) !== (ticket.equipment_type_id || null) ||
-    (pendingEquipmentInfo || "") !== (ticket.equipment_info || "")
+    (pendingEquipmentInfo || "") !== (ticket.equipment_info || "") ||
+    ((pendingEquipmentId === "none" ? null : pendingEquipmentId) || null) !== ((ticket as any).equipment_id || null)
   );
 
   const saveChanges = async () => {
@@ -153,6 +168,12 @@ const AdminTicketDetail = () => {
     if ((pendingEquipmentInfo || "") !== (ticket.equipment_info || "")) {
       updates.equipment_info = pendingEquipmentInfo || null;
       changes.push(`- Informações do equipamento alteradas`);
+    }
+    const resolvedEquipmentId = pendingEquipmentId === "none" ? null : (pendingEquipmentId || null);
+    if (resolvedEquipmentId !== ((ticket as any).equipment_id || null)) {
+      (updates as any).equipment_id = resolvedEquipmentId;
+      const eq = clientEquipments.find(e => e.id === pendingEquipmentId);
+      changes.push(`- Equipamento vinculado: ${eq?.name || "Nenhum"}`);
     }
 
     const { error } = await supabase.from("tickets").update(updates as any).eq("id", id!);
@@ -310,6 +331,21 @@ const AdminTicketDetail = () => {
                     <p className="text-sm text-muted-foreground">{ticket.assigned.full_name}</p>
                   </div>
                 )}
+                <div className="space-y-2">
+                  <Label>Equipamento do Inventário</Label>
+                  <Select value={pendingEquipmentId} onValueChange={setPendingEquipmentId} disabled={updating}>
+                    <SelectTrigger><SelectValue placeholder="Selecionar equipamento" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum</SelectItem>
+                      {clientEquipments.map((eq) => (
+                        <SelectItem key={eq.id} value={eq.id}>
+                          {eq.name} {eq.brand ? `- ${eq.brand}` : ""} {eq.model ? eq.model : ""} {eq.serial_number ? `(${eq.serial_number})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {clientEquipments.length === 0 && <p className="text-xs text-muted-foreground">Nenhum equipamento ativo cadastrado para este cliente</p>}
+                </div>
                 <div className="space-y-2">
                   <Label>Tipo de Equipamento</Label>
                   <EquipmentTypeSelect value={pendingEquipmentTypeId} onValueChange={setPendingEquipmentTypeId} />
