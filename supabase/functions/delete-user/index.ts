@@ -58,38 +58,46 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Delete related data first (order matters due to foreign keys)
+    // Desvincular dados relacionados (NÃO excluir tickets/OS/mensagens)
     
-    // Get all tickets where user is client or creator
+    // Check if user has tickets - if so, block deletion
     const { data: userTickets } = await supabaseAdmin
       .from("tickets")
       .select("id")
-      .or(`client_id.eq.${user_id},created_by.eq.${user_id}`);
+      .or(`client_id.eq.${user_id}`)
+      .limit(1);
     
     if (userTickets && userTickets.length > 0) {
-      const ticketIds = userTickets.map(t => t.id);
-      // Delete ticket messages for those tickets
-      await supabaseAdmin.from("ticket_messages").delete().in("ticket_id", ticketIds);
-      // Delete service orders for those tickets
-      await supabaseAdmin.from("service_orders").delete().in("ticket_id", ticketIds);
+      return new Response(JSON.stringify({ 
+        error: "Este cliente possui chamados vinculados. Reatribua ou exclua os chamados antes de excluir o cliente." 
+      }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Delete tickets where user is client
-    await supabaseAdmin.from("tickets").delete().eq("client_id", user_id);
-    // Nullify created_by on remaining tickets
-    await supabaseAdmin.from("tickets").update({ created_by: null }).eq("created_by", user_id);
+    // Check if user has service orders
+    const { data: userOrders } = await supabaseAdmin
+      .from("service_orders")
+      .select("id")
+      .eq("client_id", user_id)
+      .limit(1);
     
-    // Delete service orders where user is client or technician
-    await supabaseAdmin.from("service_orders").delete().eq("client_id", user_id);
+    if (userOrders && userOrders.length > 0) {
+      return new Response(JSON.stringify({ 
+        error: "Este cliente possui ordens de serviço vinculadas. Exclua-as antes de excluir o cliente." 
+      }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Nullify created_by on tickets created by this user
+    await supabaseAdmin.from("tickets").update({ created_by: null }).eq("created_by", user_id);
+    // Nullify assigned_to on tickets assigned to this user
+    await supabaseAdmin.from("tickets").update({ assigned_to: null }).eq("assigned_to", user_id);
+    // Nullify technician on service orders
     await supabaseAdmin.from("service_orders").update({ technician_id: null }).eq("technician_id", user_id);
     
-    // Delete ticket messages sent by user
-    await supabaseAdmin.from("ticket_messages").delete().eq("sender_id", user_id);
-    
-    // Nullify assigned_to on tickets
-    await supabaseAdmin.from("tickets").update({ assigned_to: null }).eq("assigned_to", user_id);
-    
-    // Delete equipment and API keys
+    // Delete equipment, API keys, IMAP accounts
     await supabaseAdmin.from("equipment_inventory").delete().eq("client_id", user_id);
     await supabaseAdmin.from("inventory_api_keys").delete().eq("client_id", user_id);
     await supabaseAdmin.from("imap_accounts").delete().eq("client_id", user_id);
