@@ -135,6 +135,7 @@ const AdminTicketDetail = () => {
     const updates: Record<string, any> = {};
     const changes: string[] = [];
     let notificationType = "ticket_updated";
+    let technicianJustAssigned = false;
 
     if (pendingStatus !== ticket.status) {
       updates.status = pendingStatus;
@@ -152,6 +153,9 @@ const AdminTicketDetail = () => {
       const oldTechName = ticket.assigned?.full_name || "Nenhum";
       const newTechName = newTech?.full_name || "Nenhum";
       changes.push(`- Técnico responsável alterado de "${oldTechName}" para "${newTechName}"`);
+      if (pendingAssignedTo && !ticket.assigned_to) {
+        technicianJustAssigned = true;
+      }
     }
     if ((pendingClientId || null) !== (ticket.client_id || null)) {
       updates.client_id = pendingClientId;
@@ -201,8 +205,9 @@ const AdminTicketDetail = () => {
 
     // Single email notification
     const emailMessage = changes.join("\n");
+    const finalNotificationType = technicianJustAssigned && notificationType === "ticket_updated" ? "technician_assigned" : notificationType;
     supabase.functions.invoke("notify-ticket-update", {
-      body: { ticket_id: id, sender_id: user.id, message: emailMessage, is_internal: false, notification_type: notificationType, pdf_url: pdfUrl },
+      body: { ticket_id: id, sender_id: user.id, message: emailMessage, is_internal: false, notification_type: finalNotificationType, pdf_url: pdfUrl },
     }).catch(() => {});
 
     toast({ title: "Alterações salvas!" });

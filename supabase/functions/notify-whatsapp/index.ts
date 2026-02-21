@@ -31,9 +31,10 @@ function buildMessage(
 
   const linkLine = ticketLink ? `\n\n🔗 ${ticketLink}` : "";
 
-  if (type === "ticket_opened") {
+  if (type === "ticket_opened" || type === "technician_assigned") {
+    const heading = type === "technician_assigned" ? `🔧 *Chamado Atribuído a Você*` : `🆕 *Novo Chamado*`;
     return [
-      `🆕 *Novo Chamado*`,
+      heading,
       ``,
       `📋 *Ticket:* #${ticketNumber}`,
       `📝 *Assunto:* ${title}`,
