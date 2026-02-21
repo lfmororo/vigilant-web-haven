@@ -38,20 +38,23 @@ Deno.serve(async (req) => {
 
     const baseUrl = apiUrl.replace(/\/+$/, "");
 
-    // Try multiple common endpoints for listing groups
-    const endpoints = [
-      "/chat/fetchAllGroups",
-      "/chat/groups",
-      "/group/fetchAllGroups",
-      "/groups",
-      "/chats",
+    // Try multiple common endpoints for listing groups (GET and POST)
+    const attempts = [
+      { endpoint: "/chat/chats", method: "GET" },
+      { endpoint: "/chat/chats", method: "POST" },
+      { endpoint: "/chat/fetchAllGroups", method: "GET" },
+      { endpoint: "/chat/fetchAllGroups", method: "POST" },
+      { endpoint: "/chat/groups", method: "GET" },
+      { endpoint: "/group/fetchAllGroups", method: "GET" },
+      { endpoint: "/groups", method: "GET" },
+      { endpoint: "/chats", method: "GET" },
     ];
 
-    for (const endpoint of endpoints) {
+    for (const { endpoint, method } of attempts) {
       try {
         const resp = await fetch(`${baseUrl}${endpoint}`, {
-          method: "GET",
-          headers: { token: apiToken },
+          method,
+          headers: { token: apiToken, "Content-Type": "application/json" },
         });
 
         if (resp.ok) {
@@ -86,8 +89,8 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ 
-        error: "Não foi possível listar os grupos. Nenhum endpoint compatível encontrado na API WhatsApp. Verifique a URL da API nas configurações.",
-        tried: endpoints.map(e => `${baseUrl}${e}`)
+        error: "Não foi possível listar os grupos. Nenhum endpoint compatível encontrado. Verifique a documentação da sua API WhatsApp ou informe o endpoint correto.",
+        tried: attempts.map(a => `${a.method} ${baseUrl}${a.endpoint}`)
       }),
       { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
