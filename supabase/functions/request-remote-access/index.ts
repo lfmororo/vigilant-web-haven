@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
         sender_id,
         message: REMOTE_ACCESS_MESSAGE,
         is_internal: false,
-        notification_type: "ticket_updated",
+        notification_type: "remote_access_requested",
       }),
     }).catch((err) => console.error("Email notification error:", err));
 
