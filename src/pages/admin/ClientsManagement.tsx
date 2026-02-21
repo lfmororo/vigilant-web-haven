@@ -5,6 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -31,7 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Eye, EyeOff, Package, TicketCheck, Key, Pencil, Trash2 } from "lucide-react";
+import { Plus, Loader2, Eye, EyeOff, Package, TicketCheck, Key, Pencil, Trash2, AlertTriangle } from "lucide-react";
 import { z } from "zod";
 import { Link } from "react-router-dom";
 import ApiIntegrationDialog from "@/components/admin/ApiIntegrationDialog";
@@ -94,6 +102,12 @@ const ClientsManagement = () => {
   // Delete dialog
   const [deletingClient, setDeletingClient] = useState<ClientProfile | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [linkedTickets, setLinkedTickets] = useState<any[]>([]);
+  const [linkedOrders, setLinkedOrders] = useState<any[]>([]);
+  const [loadingLinked, setLoadingLinked] = useState(false);
+  const [reassignClientId, setReassignClientId] = useState<string>("");
+  const [isReassigning, setIsReassigning] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<"check" | "confirm">("check");
 
   useEffect(() => {
     fetchClients();
@@ -233,6 +247,64 @@ const ClientsManagement = () => {
       toast({ variant: "destructive", title: "Erro ao atualizar cliente", description: error.message });
     } finally {
       setIsEditSubmitting(false);
+    }
+  };
+
+  const openDeleteDialog = async (client: ClientProfile) => {
+    setDeletingClient(client);
+    setDeleteStep("check");
+    setLinkedTickets([]);
+    setLinkedOrders([]);
+    setReassignClientId("");
+    setLoadingLinked(true);
+
+    try {
+      const [ticketsRes, ordersRes] = await Promise.all([
+        supabase.from("tickets").select("id, ticket_number, title, status, priority").eq("client_id", client.id),
+        supabase.from("service_orders").select("id, order_number, status").eq("client_id", client.id),
+      ]);
+      setLinkedTickets(ticketsRes.data || []);
+      setLinkedOrders(ordersRes.data || []);
+      if ((ticketsRes.data?.length || 0) === 0 && (ordersRes.data?.length || 0) === 0) {
+        setDeleteStep("confirm");
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingLinked(false);
+    }
+  };
+
+  const handleReassignAndDelete = async () => {
+    if (!deletingClient || !reassignClientId) return;
+    setIsReassigning(true);
+    try {
+      // Reassign tickets
+      if (linkedTickets.length > 0) {
+        const { error: tErr } = await supabase
+          .from("tickets")
+          .update({ client_id: reassignClientId } as any)
+          .eq("client_id", deletingClient.id);
+        if (tErr) throw tErr;
+      }
+      // Reassign service orders
+      if (linkedOrders.length > 0) {
+        const { error: oErr } = await supabase
+          .from("service_orders")
+          .update({ client_id: reassignClientId } as any)
+          .eq("client_id", deletingClient.id);
+        if (oErr) throw oErr;
+      }
+      toast({ title: "Dados reatribuídos", description: "Chamados e OS foram transferidos. Prosseguindo com a exclusão..." });
+      setLinkedTickets([]);
+      setLinkedOrders([]);
+      setDeleteStep("confirm");
+      // Now actually delete
+      await handleDeleteClient();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao reatribuir", description: error.message });
+    } finally {
+      setIsReassigning(false);
     }
   };
 
@@ -407,7 +479,7 @@ const ClientsManagement = () => {
                             variant="ghost"
                             size="sm"
                             className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => setDeletingClient(client)}
+                            onClick={() => openDeleteDialog(client)}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -485,27 +557,124 @@ const ClientsManagement = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Delete Confirmation */}
-        <AlertDialog open={!!deletingClient} onOpenChange={(open) => { if (!open) setDeletingClient(null); }}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir Cliente</AlertDialogTitle>
-              <AlertDialogDescription>
-                Tem certeza que deseja excluir <strong>{deletingClient?.full_name}</strong>? Esta ação não pode ser desfeita e todos os dados do cliente serão removidos.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDeleteClient}
-                disabled={isDeleting}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                {isDeleting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Excluindo...</> : "Excluir"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        {/* Delete Confirmation with linked data */}
+        <Dialog open={!!deletingClient} onOpenChange={(open) => { if (!open) { setDeletingClient(null); setDeleteStep("check"); } }}>
+          <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {(linkedTickets.length > 0 || linkedOrders.length > 0) && <AlertTriangle className="w-5 h-5 text-amber-500" />}
+                Excluir Cliente
+              </DialogTitle>
+            </DialogHeader>
+
+            {loadingLinked ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            ) : (linkedTickets.length > 0 || linkedOrders.length > 0) && deleteStep === "check" ? (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  <strong>{deletingClient?.full_name}</strong> possui dados vinculados que precisam ser reatribuídos antes da exclusão:
+                </p>
+
+                {linkedTickets.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Chamados ({linkedTickets.length})</h4>
+                    <div className="border rounded-md max-h-40 overflow-y-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">#</TableHead>
+                            <TableHead className="text-xs">Título</TableHead>
+                            <TableHead className="text-xs">Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {linkedTickets.map((t) => (
+                            <TableRow key={t.id}>
+                              <TableCell className="text-xs py-1">{t.ticket_number}</TableCell>
+                              <TableCell className="text-xs py-1 max-w-[180px] truncate">{t.title}</TableCell>
+                              <TableCell className="text-xs py-1">
+                                <Badge variant="outline" className="text-[10px]">{t.status}</Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+
+                {linkedOrders.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Ordens de Serviço ({linkedOrders.length})</h4>
+                    <div className="border rounded-md max-h-32 overflow-y-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">#</TableHead>
+                            <TableHead className="text-xs">Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {linkedOrders.map((o) => (
+                            <TableRow key={o.id}>
+                              <TableCell className="text-xs py-1">{o.order_number}</TableCell>
+                              <TableCell className="text-xs py-1">
+                                <Badge variant="outline" className="text-[10px]">{o.status}</Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2 pt-2 border-t">
+                  <Label>Reatribuir para outro cliente:</Label>
+                  <Select value={reassignClientId} onValueChange={setReassignClientId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um cliente..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients
+                        .filter((c) => c.id !== deletingClient?.id)
+                        .map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex gap-2 justify-end pt-2">
+                  <Button variant="outline" onClick={() => { setDeletingClient(null); setDeleteStep("check"); }}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    disabled={!reassignClientId || isReassigning}
+                    onClick={handleReassignAndDelete}
+                  >
+                    {isReassigning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Reatribuindo...</> : "Reatribuir e Excluir"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Tem certeza que deseja excluir <strong>{deletingClient?.full_name}</strong>? Esta ação não pode ser desfeita.
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setDeletingClient(null)}>Cancelar</Button>
+                  <Button variant="destructive" disabled={isDeleting} onClick={handleDeleteClient}>
+                    {isDeleting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Excluindo...</> : "Excluir"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         <ApiIntegrationDialog
           open={!!apiDialogClientId}
