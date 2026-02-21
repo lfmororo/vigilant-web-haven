@@ -99,7 +99,34 @@ Deno.serve(async (req) => {
     if (whatsappEnabled && whatsappApiUrl && whatsappApiToken) {
       const sendTextUrl = `${whatsappApiUrl.replace(/\/+$/, "")}/send/text`;
 
-      const whatsappText = `🖥️ *Solicitação de Acesso Remoto*\n\n📋 *Ticket:* #${ticket.ticket_number}\n📝 *Assunto:* ${ticket.title}\n👤 *Solicitado por:* ${senderName}\n\n${REMOTE_ACCESS_MESSAGE}\n\n🔗 ${ticketLink}`;
+      const whatsappText = [
+        `🖥️ *Solicitação de Acesso Remoto*`,
+        `━━━━━━━━━━━━━━━━━━━━━`,
+        ``,
+        `📋 *Ticket:* #${ticket.ticket_number}`,
+        `📝 *Assunto:* ${ticket.title}`,
+        `👤 *Solicitado por:* ${senderName}`,
+        ``,
+        `━━━━━━━━━━━━━━━━━━━━━`,
+        `📥 *Instruções para Acesso Remoto*`,
+        `━━━━━━━━━━━━━━━━━━━━━`,
+        ``,
+        `Para que possamos resolver o ocorrido com mais rapidez, precisamos acessar seu computador remotamente.`,
+        ``,
+        `1️⃣ Baixe o *AnyDesk* pelo link abaixo:`,
+        `👉 https://anydesk.com/pt/downloads`,
+        ``,
+        `2️⃣ Instale e abra o programa`,
+        ``,
+        `3️⃣ Envie o *código de acesso* (ID) que aparecerá na tela`,
+        ``,
+        `✅ Se aparecer alguma mensagem pedindo permissão, pode confirmar o acesso.`,
+        ``,
+        `━━━━━━━━━━━━━━━━━━━━━`,
+        `⏳ *Ficamos no aguardo do seu código!*`,
+        ``,
+        `🔗 ${ticketLink}`,
+      ].join("\n");
 
       const phonesToSend = new Set<string>();
 
