@@ -408,57 +408,65 @@ const EquipmentInventory = () => {
                     <TableHead>Nome</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Marca/Modelo</TableHead>
-                    <TableHead>Série</TableHead>
                     <TableHead>Cliente</TableHead>
-                    <TableHead>Hardware</TableHead>
+                    <TableHead>Processador</TableHead>
+                    <TableHead>Memória</TableHead>
+                    <TableHead>Disco</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {equipment.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>{item.equipment_type?.name || "-"}</TableCell>
-                      <TableCell>{[item.brand, item.model].filter(Boolean).join(" ") || "-"}</TableCell>
-                      <TableCell className="font-mono text-sm">{item.serial_number || "-"}</TableCell>
-                      <TableCell>{item.client?.full_name || "-"}</TableCell>
-                      <TableCell>
-                        {(item.cpu || item.ram_total_gb || item.disk_total_gb) ? (
-                          <div className="space-y-0.5 text-xs">
-                            {item.cpu && <div className="text-muted-foreground truncate max-w-[160px]" title={item.cpu}>CPU: {item.cpu}</div>}
-                            {item.ram_total_gb && <div className="text-muted-foreground">RAM: {item.ram_total_gb} GB</div>}
-                            {item.disk_free_gb != null && item.disk_total_gb != null && (
-                              <div className={item.disk_free_gb / item.disk_total_gb < 0.2 ? "text-destructive font-medium" : "text-muted-foreground"}>
-                                Disco: {item.disk_free_gb}/{item.disk_total_gb} GB livre
+                  {equipment.map((item) => {
+                    const diskPercent = item.disk_total_gb && item.disk_used_gb
+                      ? Math.round((item.disk_used_gb / item.disk_total_gb) * 100)
+                      : null;
+                    const diskColorClass = diskPercent != null
+                      ? diskPercent > 80 ? "text-destructive font-medium" : diskPercent > 60 ? "text-yellow-500 font-medium" : "text-muted-foreground"
+                      : "text-muted-foreground";
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell>{item.equipment_type?.name || "-"}</TableCell>
+                        <TableCell>{[item.brand, item.model].filter(Boolean).join(" ") || "-"}</TableCell>
+                        <TableCell>{item.client?.full_name || "-"}</TableCell>
+                        <TableCell className="text-xs max-w-[150px] truncate" title={item.cpu || undefined}>
+                          {item.cpu || "-"}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {item.ram_total_gb != null ? `${item.ram_total_gb} GB` : "-"}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {item.disk_total_gb != null ? (
+                            <div className="space-y-0.5">
+                              <div className={diskColorClass}>
+                                {item.disk_used_gb ?? 0}/{item.disk_total_gb} GB ({diskPercent}%)
                               </div>
-                            )}
-                            {item.hardware_updated_at && (
                               <div className="text-muted-foreground/60 text-[10px]">
-                                {new Date(item.hardware_updated_at).toLocaleDateString("pt-BR")} {new Date(item.hardware_updated_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                                {item.disk_free_gb != null ? `${item.disk_free_gb} GB livre` : ""}
                               </div>
-                            )}
-                          </div>
-                        ) : <span className="text-muted-foreground text-xs">-</span>}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={statusColors[item.status] || ""}>
-                          {statusLabels[item.status] || item.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right flex gap-1 justify-end">
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/admin/inventory/${item.id}`}><Eye className="w-4 h-4 mr-1" />Ver</Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(item)}>
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            </div>
+                          ) : "-"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={statusColors[item.status] || ""}>
+                            {statusLabels[item.status] || item.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right flex gap-1 justify-end">
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link to={`/admin/inventory/${item.id}`}><Eye className="w-4 h-4 mr-1" />Ver</Link>
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(item)}>
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
