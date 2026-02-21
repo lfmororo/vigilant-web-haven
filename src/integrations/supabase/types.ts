@@ -564,6 +564,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string
+          equipment_id: string | null
           equipment_info: string | null
           equipment_type_id: string | null
           id: string
@@ -579,6 +580,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description: string
+          equipment_id?: string | null
           equipment_info?: string | null
           equipment_type_id?: string | null
           id?: string
@@ -594,6 +596,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string
+          equipment_id?: string | null
           equipment_info?: string | null
           equipment_type_id?: string | null
           id?: string
@@ -616,6 +619,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment_inventory"
             referencedColumns: ["id"]
           },
           {
