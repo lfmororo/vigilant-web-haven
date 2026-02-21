@@ -132,22 +132,82 @@ const ApiIntegrationDialog = ({ open, onOpenChange, clientId, clientName }: ApiI
   const maskKey = (key: string) => `${"•".repeat(24)}${key.slice(-8)}`;
 
   const powershellScript = (cId: string, key: string) =>
-    `# Coleta de informações de hardware
-$cpu = (Get-WmiObject Win32_Processor).Name
-$ramGB = [math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 1)
-$disk = Get-WmiObject Win32_LogicalDisk -Filter "DeviceID='C:'"
-$diskTotalGB = [math]::Round($disk.Size / 1GB, 1)
-$diskFreeGB = [math]::Round($disk.FreeSpace / 1GB, 1)
-$diskUsedGB = [math]::Round(($disk.Size - $disk.FreeSpace) / 1GB, 1)
+    `# ------------------------------
+# Inventário -> POST JSON (compatível - HttpClient fallback para WebRequest)
+# Compatível com PowerShell 5.1+ e 7+
+# ------------------------------
 
-$body = @{
-  client_id = "${cId}"
-  api_key = "${key}"
-  equipment = @(@{
-    name = $env:COMPUTERNAME
-    serial_number = (Get-WmiObject Win32_BIOS).SerialNumber
-    brand = (Get-WmiObject Win32_ComputerSystem).Manufacturer
-    model = (Get-WmiObject Win32_ComputerSystem).Model
+# Config
+$ClientId = "${cId}"
+$BodyApiKey = "${key}"
+$HeaderApiKey = "${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}"
+$Endpoint = "${functionsUrl}/inventory-sync"
+$TimeoutSeconds = 30
+$MaxRetries = 3
+
+# Tenta carregar System.Net.Http
+$useHttpClient = $true
+try {
+    Add-Type -AssemblyName "System.Net.Http" -ErrorAction Stop
+    if (-not ([type]::GetType("System.Net.Http.HttpClientHandler", $false, $false))) {
+        $useHttpClient = $false
+    }
+} catch {
+    $useHttpClient = $false
+}
+
+# IPv4 não-loopback
+function Get-PrimaryIPv4 {
+    try {
+        $ips = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+               Where-Object { $_.InterfaceAlias -ne 'Loopback' -and $_.IPAddress -notlike '169.254.*' } |
+               Sort-Object -Property PrefixLength -Descending
+        if ($ips -and $ips.Count -gt 0) { return $ips[0].IPAddress }
+    } catch {
+        try {
+            $adapters = Get-CimInstance -ClassName Win32_NetworkAdapterConfiguration -Filter "IPEnabled = True"
+            foreach ($a in $adapters) {
+                if ($a.IPAddress) {
+                    foreach ($ip in $a.IPAddress) {
+                        if ($ip -match '^\\d{1,3}(\\.\\d{1,3}){3}$' -and -not ($ip -like '169.254.*') -and $ip -ne '127.0.0.1') {
+                            return $ip
+                        }
+                    }
+                }
+            }
+        } catch { return $null }
+    }
+    return $null
+}
+
+# Coleta de hardware (Get-CimInstance)
+try { $cpu = (Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1 -ExpandProperty Name) -as [string] } catch { $cpu = $null }
+try { $ramBytes = (Get-CimInstance -ClassName Win32_ComputerSystem).TotalPhysicalMemory; $ramGB = if ($ramBytes) { [math]::Round($ramBytes / 1GB, 1) } else { $null } } catch { $ramGB = $null }
+
+try {
+    $disk = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='C:'"
+    if ($disk) {
+        $diskTotalGB = [math]::Round($disk.Size / 1GB, 1)
+        $diskFreeGB  = [math]::Round($disk.FreeSpace / 1GB, 1)
+        $diskUsedGB  = [math]::Round(($disk.Size - $disk.FreeSpace) / 1GB, 1)
+    } else { $diskTotalGB = $diskFreeGB = $diskUsedGB = $null }
+} catch { $diskTotalGB = $diskFreeGB = $diskUsedGB = $null }
+
+$computerName = $env:COMPUTERNAME
+try { $serial = (Get-CimInstance -ClassName Win32_BIOS).SerialNumber } catch { $serial = $null }
+try { $manufacturer = (Get-CimInstance -ClassName Win32_ComputerSystem).Manufacturer } catch { $manufacturer = $null }
+try { $model = (Get-CimInstance -ClassName Win32_ComputerSystem).Model } catch { $model = $null }
+$osInfo = try { (Get-CimInstance -ClassName Win32_OperatingSystem | Select-Object -First 1).Caption } catch { $null }
+$osVersion = [System.Environment]::OSVersion.VersionString
+$ip = Get-PrimaryIPv4
+if (-not $ip) { $ip = "" }
+$hardwareUpdatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+$equipment = [PSCustomObject]@{
+    name = $computerName
+    serial_number = $serial
+    brand = $manufacturer
+    model = $model
     equipment_type = "PC/Notebook"
     location = ""
     cpu = $cpu
@@ -155,16 +215,107 @@ $body = @{
     disk_total_gb = $diskTotalGB
     disk_used_gb = $diskUsedGB
     disk_free_gb = $diskFreeGB
-    hardware_updated_at = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
-    notes = "OS: $([System.Environment]::OSVersion.VersionString), IP: $((Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -ne 'Loopback' } | Select-Object -First 1).IPAddress)"
-  })
-} | ConvertTo-Json -Depth 3
-
-$headers = @{
-  "apikey" = "${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}"
+    hardware_updated_at = $hardwareUpdatedAt
+    notes = "OS: $osInfo ($osVersion); IP: $ip"
 }
 
-Invoke-RestMethod -Uri "${functionsUrl}/inventory-sync" -Method POST -Body $body -ContentType "application/json" -Headers $headers`;
+$bodyObject = [PSCustomObject]@{
+    client_id = $ClientId
+    api_key   = $BodyApiKey
+    equipment = @($equipment)
+}
+
+$bodyJson = $bodyObject | ConvertTo-Json -Depth 6
+
+$headers = @{
+    "apikey" = $HeaderApiKey
+    "Content-Type" = "application/json"
+}
+
+# Envio via HttpClient
+function Send-Json-WithHttpClient {
+    param([string]$Uri, [string]$Json, [hashtable]$Hdrs, [int]$TimeoutSec = 30)
+    $handler = New-Object System.Net.Http.HttpClientHandler
+    $handler.UseProxy = $true
+    $client = [System.Net.Http.HttpClient]::new($handler)
+    $client.Timeout = [System.TimeSpan]::FromSeconds($TimeoutSec)
+    try {
+        foreach ($k in $Hdrs.Keys) {
+            if ($client.DefaultRequestHeaders.Contains($k)) { $client.DefaultRequestHeaders.Remove($k) }
+            $client.DefaultRequestHeaders.Add($k, [string]$Hdrs[$k])
+        }
+        $content = New-Object System.Net.Http.StringContent($Json, [System.Text.Encoding]::UTF8, "application/json")
+        $task = $client.PostAsync($Uri, $content)
+        $task.Wait()
+        $resp = $task.Result
+        $readTask = $resp.Content.ReadAsStringAsync()
+        $readTask.Wait()
+        return [PSCustomObject]@{ Success = $resp.IsSuccessStatusCode; StatusCode = [int]$resp.StatusCode; Body = $readTask.Result }
+    } finally { $client.Dispose(); $handler.Dispose() }
+}
+
+# Fallback via WebRequest
+function Send-Json-WithWebRequest {
+    param([string]$Uri, [string]$Json, [hashtable]$Hdrs, [int]$TimeoutSec = 30)
+    try {
+        $req = [System.Net.WebRequest]::Create($Uri)
+        $req.Method = "POST"
+        $req.ContentType = "application/json"
+        $req.Timeout = $TimeoutSec * 1000
+        foreach ($k in $Hdrs.Keys) {
+            if ($k -ieq "Content-Type") { continue }
+            try { $req.Headers.Add($k, [string]$Hdrs[$k]) } catch { }
+        }
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Json)
+        $req.ContentLength = $bytes.Length
+        $reqStream = $req.GetRequestStream()
+        $reqStream.Write($bytes, 0, $bytes.Length)
+        $reqStream.Close()
+        $resp = $req.GetResponse()
+        $sr = New-Object System.IO.StreamReader($resp.GetResponseStream())
+        $body = $sr.ReadToEnd()
+        $sr.Close(); $resp.Close()
+        return [PSCustomObject]@{ Success = $true; StatusCode = 200; Body = $body }
+    } catch {
+        $we = $_.Exception; $body = ""; $status = 0
+        if ($we -is [System.Net.WebException] -and $we.Response) {
+            try { $sr = New-Object System.IO.StreamReader($we.Response.GetResponseStream()); $body = $sr.ReadToEnd(); $sr.Close(); $status = $we.Response.StatusCode } catch { }
+        }
+        return [PSCustomObject]@{ Success = $false; StatusCode = $status; Body = $body; ErrorMessage = $_.Exception.Message }
+    }
+}
+
+if ($useHttpClient) {
+    $sendFunc = { param($u,$j,$h,$t) Send-Json-WithHttpClient -Uri $u -Json $j -Hdrs $h -TimeoutSec $t }
+} else {
+    $sendFunc = { param($u,$j,$h,$t) Send-Json-WithWebRequest -Uri $u -Json $j -Hdrs $h -TimeoutSec $t }
+}
+
+# Envio com retry
+$success = $false; $responseObj = $null
+for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
+    try {
+        $sendResult = & $sendFunc $Endpoint $bodyJson $headers $TimeoutSeconds
+        if ($sendResult.Success) { $success = $true; $responseObj = $sendResult; break }
+        else {
+            Write-Warning ("Falha tentativa {0}: status {1}" -f $attempt, $sendResult.StatusCode)
+            if ($attempt -lt $MaxRetries) { Start-Sleep -Seconds (2 * $attempt) }
+        }
+    } catch {
+        Write-Warning ("Erro tentativa {0}: {1}" -f $attempt, $_.Exception.Message)
+        if ($attempt -lt $MaxRetries) { Start-Sleep -Seconds (2 * $attempt) }
+    }
+}
+
+if ($success) {
+    Write-Output ("Enviado com sucesso (código {0}):" -f $responseObj.StatusCode)
+    try { $responseObj.Body | ConvertFrom-Json } catch { Write-Output $responseObj.Body }
+} else {
+    $logFile = Join-Path $env:TEMP ("inventory-sync-fail-{0:yyyyMMdd-HHmmss}.json" -f (Get-Date))
+    try { $bodyJson | Out-File -FilePath $logFile -Encoding UTF8; Write-Output ("Falha. Payload salvo em: {0}" -f $logFile) }
+    catch { Write-Output "Falha ao enviar e salvar payload." }
+    exit 1
+}`;
 
   const pythonScript = (cId: string, key: string) =>
     `import requests
