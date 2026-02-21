@@ -49,6 +49,7 @@ const ApiIntegrationDialog = ({ open, onOpenChange, clientId, clientName }: ApiI
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
   const [clients, setClients] = useState<{ id: string; full_name: string }[]>([]);
   const [selectedClientId, setSelectedClientId] = useState(clientId || "");
+  const [selectedKeyForScript, setSelectedKeyForScript] = useState<string>("");
 
   const functionsUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
@@ -353,7 +354,8 @@ response = requests.post("${functionsUrl}/inventory-sync", json=data, headers=he
 print(response.json())`;
 
   const exampleClientId = clientId || selectedClientId || "SEU_CLIENT_ID";
-  const exampleKey = newlyCreatedKey || "SUA_API_KEY";
+  const activeKeys = apiKeys.filter(k => k.is_active);
+  const exampleKey = selectedKeyForScript || newlyCreatedKey || "SUA_API_KEY";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -464,6 +466,23 @@ print(response.json())`;
         {/* Script examples */}
         <div className="space-y-2">
           <h3 className="font-semibold text-sm">Exemplos de Scripts</h3>
+          {activeKeys.length > 0 && (
+            <div className="space-y-1">
+              <Label className="text-xs">Usar chave existente no script</Label>
+              <select
+                className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                value={selectedKeyForScript}
+                onChange={(e) => setSelectedKeyForScript(e.target.value)}
+              >
+                <option value="">{newlyCreatedKey ? "Usar chave recém-criada" : "Selecionar chave..."}</option>
+                {activeKeys.map((k) => (
+                  <option key={k.id} value={k.api_key}>
+                    {k.description || "Sem descrição"} — ...{k.api_key.slice(-8)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <Tabs defaultValue="powershell">
             <TabsList>
               <TabsTrigger value="powershell">PowerShell</TabsTrigger>
