@@ -89,7 +89,7 @@ const EquipmentDetail = () => {
           <div className="flex-1">
             <h1 className="text-2xl font-display font-bold">{equipment.name}</h1>
             <p className="text-sm text-muted-foreground">
-              {equipment.equipment_type?.name} — {equipment.client?.full_name || "Sem cliente"}
+              {equipment.asset_tag ? `Tombamento: ${equipment.asset_tag}` : equipment.equipment_type?.name || "Sem tipo"} — {equipment.client?.full_name || "Sem cliente"}
             </p>
           </div>
           <Badge variant="outline" className={statusColors[equipment.status] || ""}>
@@ -102,6 +102,8 @@ const EquipmentDetail = () => {
             <CardHeader><CardTitle className="text-sm">Informações do Equipamento</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-y-3">
+                <div><span className="text-muted-foreground">Tombamento:</span><p className="font-mono">{equipment.asset_tag || "-"}</p></div>
+                <div><span className="text-muted-foreground">Tipo:</span><p>{equipment.equipment_type?.name || "-"}</p></div>
                 <div><span className="text-muted-foreground">Marca:</span><p>{equipment.brand || "-"}</p></div>
                 <div><span className="text-muted-foreground">Modelo:</span><p>{equipment.model || "-"}</p></div>
                 <div><span className="text-muted-foreground">Nº Série:</span><p className="font-mono">{equipment.serial_number || "-"}</p></div>
