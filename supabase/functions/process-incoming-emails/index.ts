@@ -572,14 +572,26 @@ async function processImapAccount(
       }
 
       // ticket client_id references the clients table
-      // Priority: existing profile's parent_client_id > domain match > account default
-      const ticketClientId = (existingProfile?.parent_client_id) || (domainClient?.id) || defaultClientId;
+      // Priority: existing profile's parent_client_id > domain match > account default > "Sem Cliente" fallback
+      let ticketClientId = (existingProfile?.parent_client_id) || (domainClient?.id) || defaultClientId;
       
       if (!ticketClientId) {
-        console.error(`No client found for email ${senderEmail} - skipping ticket creation`);
-        result.errors++;
-        await imapCommand(conn, `d${num}`, `STORE ${num} +FLAGS (\\Seen)`);
-        continue;
+        // Use "Sem Cliente" fallback so ticket is still created
+        const { data: fallbackClient } = await supabaseAdmin
+          .from("clients")
+          .select("id")
+          .eq("full_name", "Sem Cliente")
+          .maybeSingle();
+        
+        if (fallbackClient) {
+          ticketClientId = fallbackClient.id;
+          console.log(`No client found for email ${senderEmail} - using fallback "Sem Cliente"`);
+        } else {
+          console.error(`No client found for email ${senderEmail} and no fallback client - skipping ticket creation`);
+          result.errors++;
+          await imapCommand(conn, `d${num}`, `STORE ${num} +FLAGS (\\Seen)`);
+          continue;
+        }
       }
 
       const { data: newTicket } = await supabaseAdmin.from("tickets").insert({
