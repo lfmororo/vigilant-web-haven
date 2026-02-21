@@ -140,6 +140,21 @@ Deno.serve(async (req) => {
             .eq("client_id", client_id)
             .maybeSingle();
 
+          // Compute aggregated disk values from disks array or fallback to flat fields
+          let aggDiskTotal: number | null = null;
+          let aggDiskUsed: number | null = null;
+          let aggDiskFree: number | null = null;
+          const disksArr: any[] = Array.isArray(item.disks) ? item.disks : [];
+          if (disksArr.length > 0) {
+            aggDiskTotal = disksArr.reduce((s: number, d: any) => s + (d.disk_total_gb || 0), 0);
+            aggDiskUsed = disksArr.reduce((s: number, d: any) => s + (d.disk_used_gb || 0), 0);
+            aggDiskFree = disksArr.reduce((s: number, d: any) => s + (d.disk_free_gb || 0), 0);
+          } else if (item.disk_total_gb) {
+            aggDiskTotal = item.disk_total_gb;
+            aggDiskUsed = item.disk_used_gb ?? null;
+            aggDiskFree = item.disk_free_gb ?? null;
+          }
+
           const record: any = {
             name: item.name,
             serial_number: item.serial_number,
@@ -151,16 +166,18 @@ Deno.serve(async (req) => {
             status: "active",
             cpu: item.cpu || null,
             ram_total_gb: item.ram_total_gb ?? null,
-            disk_total_gb: item.disk_total_gb ?? null,
-            disk_used_gb: item.disk_used_gb ?? null,
-            disk_free_gb: item.disk_free_gb ?? null,
+            disk_total_gb: aggDiskTotal,
+            disk_used_gb: aggDiskUsed,
+            disk_free_gb: aggDiskFree,
             hardware_updated_at: item.hardware_updated_at || new Date().toISOString(),
             logged_in_user: item.logged_in_user || null,
           };
           if (equipmentTypeId) record.equipment_type_id = equipmentTypeId;
 
+          let equipmentId: string;
+
           if (existing) {
-            // Update
+            equipmentId = existing.id;
             const { error: upErr } = await supabase
               .from("equipment_inventory")
               .update(record)
@@ -168,25 +185,47 @@ Deno.serve(async (req) => {
             if (upErr) throw upErr;
             updated++;
           } else {
-            // Insert
-            const { error: inErr } = await supabase
+            const { data: inserted, error: inErr } = await supabase
               .from("equipment_inventory")
-              .insert(record);
+              .insert(record)
+              .select("id")
+              .single();
             if (inErr) throw inErr;
+            equipmentId = inserted.id;
             created++;
           }
 
-          // Check disk usage > 90%
-          if (item.disk_total_gb && item.disk_used_gb && item.disk_total_gb > 0) {
-            const pct = Math.round((item.disk_used_gb / item.disk_total_gb) * 100);
-            if (pct > 90) {
-              diskAlerts.push({
-                name: item.name,
-                serial_number: item.serial_number || "",
-                disk_used_gb: item.disk_used_gb,
-                disk_total_gb: item.disk_total_gb,
-                pct,
-              });
+          // Upsert individual disks if provided
+          if (disksArr.length > 0) {
+            // Delete old disks for this equipment
+            await supabase.from("equipment_disks").delete().eq("equipment_id", equipmentId);
+            // Insert new ones
+            const diskRecords = disksArr.map((d: any) => ({
+              equipment_id: equipmentId,
+              drive_letter: d.drive_letter || d.letter || null,
+              label: d.label || null,
+              disk_total_gb: d.disk_total_gb ?? null,
+              disk_used_gb: d.disk_used_gb ?? null,
+              disk_free_gb: d.disk_free_gb ?? null,
+              file_system: d.file_system || null,
+            }));
+            await supabase.from("equipment_disks").insert(diskRecords);
+          }
+
+          // Check disk usage > 90% per disk
+          const checkDisks = disksArr.length > 0 ? disksArr : (aggDiskTotal && aggDiskTotal > 0 ? [{ drive_letter: "C:", disk_total_gb: aggDiskTotal, disk_used_gb: aggDiskUsed }] : []);
+          for (const d of checkDisks) {
+            if (d.disk_total_gb && d.disk_used_gb && d.disk_total_gb > 0) {
+              const pct = Math.round((d.disk_used_gb / d.disk_total_gb) * 100);
+              if (pct > 90) {
+                diskAlerts.push({
+                  name: `${item.name}${d.drive_letter ? ` [${d.drive_letter}]` : ""}`,
+                  serial_number: item.serial_number || "",
+                  disk_used_gb: d.disk_used_gb,
+                  disk_total_gb: d.disk_total_gb,
+                  pct,
+                });
+              }
             }
           }
         } catch (err: any) {

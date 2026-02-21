@@ -37,6 +37,7 @@ const statusColors: Record<string, string> = {
 const EquipmentDetail = () => {
   const { id } = useParams<{ id: string }>();
   const [equipment, setEquipment] = useState<any>(null);
+  const [disks, setDisks] = useState<any[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
   const [serviceOrders, setServiceOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +56,15 @@ const EquipmentDetail = () => {
 
     setEquipment(data);
 
+    // Fetch individual disks
+    if (data?.id) {
+      const { data: diskData } = await supabase
+        .from("equipment_disks")
+        .select("*")
+        .eq("equipment_id", data.id)
+        .order("drive_letter");
+      setDisks(diskData || []);
+    }
     if (data?.client_id && data?.equipment_type_id) {
       const { data: ticketData } = await supabase
         .from("tickets")
@@ -131,11 +141,7 @@ const EquipmentDetail = () => {
         </div>
 
         {/* Hardware Resources */}
-        {(equipment.cpu || equipment.ram_total_gb || equipment.disk_total_gb) && (() => {
-          const diskPct = equipment.disk_total_gb > 0
-            ? Math.round((equipment.disk_used_gb / equipment.disk_total_gb) * 100)
-            : null;
-          const diskColor = diskPct == null ? "" : diskPct > 80 ? "[&>div]:bg-destructive" : diskPct > 60 ? "[&>div]:bg-yellow-500" : "[&>div]:bg-green-500";
+        {(equipment.cpu || equipment.ram_total_gb || equipment.disk_total_gb || disks.length > 0) && (() => {
           return (
             <Card>
               <CardHeader>
@@ -172,24 +178,61 @@ const EquipmentDetail = () => {
                     <div className="flex items-start gap-2">
                       <HardDrive className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
                       <div>
-                        <p className="text-muted-foreground text-xs">Disco Total</p>
+                        <p className="text-muted-foreground text-xs">Disco Total (todos)</p>
                         <p className="font-medium">{equipment.disk_total_gb} GB</p>
                       </div>
                     </div>
                   )}
                 </div>
-                {equipment.disk_total_gb > 0 && diskPct !== null && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>
-                        Usado: {equipment.disk_used_gb ?? "-"} GB
-                        {diskPct !== null && <span className={diskPct > 80 ? " text-destructive font-bold" : diskPct > 60 ? " text-yellow-500 font-medium" : " text-green-500 font-medium"}> ({diskPct}%)</span>}
-                      </span>
-                      <span>Livre: {equipment.disk_free_gb ?? "-"} GB</span>
-                    </div>
-                    <Progress value={diskPct} className={`h-2 ${diskColor}`} />
+
+                {/* Individual disks */}
+                {disks.length > 0 ? (
+                  <div className="space-y-3 pt-2 border-t border-border">
+                    <p className="text-xs text-muted-foreground font-medium">Discos Individuais</p>
+                    {disks.map((d: any) => {
+                      const pct = d.disk_total_gb > 0 ? Math.round((d.disk_used_gb / d.disk_total_gb) * 100) : null;
+                      const colorClass = pct == null ? "" : pct > 90 ? "[&>div]:bg-destructive" : pct > 80 ? "[&>div]:bg-yellow-500" : "[&>div]:bg-green-500";
+                      return (
+                        <div key={d.id} className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="font-medium">
+                              <HardDrive className="w-3 h-3 inline mr-1" />
+                              {d.drive_letter || "?"}{d.label ? ` (${d.label})` : ""}{d.file_system ? ` — ${d.file_system}` : ""}
+                            </span>
+                            <span className="text-muted-foreground">{d.disk_total_gb} GB</span>
+                          </div>
+                          {pct !== null && (
+                            <>
+                              <Progress value={pct} className={`h-2 ${colorClass}`} />
+                              <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>
+                                  Usado: {d.disk_used_gb} GB
+                                  <span className={pct > 90 ? " text-destructive font-bold" : pct > 80 ? " text-yellow-500 font-medium" : " text-green-500 font-medium"}> ({pct}%)</span>
+                                </span>
+                                <span>Livre: {d.disk_free_gb} GB</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
+                ) : equipment.disk_total_gb > 0 && (() => {
+                  const diskPct = Math.round((equipment.disk_used_gb / equipment.disk_total_gb) * 100);
+                  const diskColor = diskPct > 80 ? "[&>div]:bg-destructive" : diskPct > 60 ? "[&>div]:bg-yellow-500" : "[&>div]:bg-green-500";
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>
+                          Usado: {equipment.disk_used_gb ?? "-"} GB
+                          <span className={diskPct > 80 ? " text-destructive font-bold" : diskPct > 60 ? " text-yellow-500 font-medium" : " text-green-500 font-medium"}> ({diskPct}%)</span>
+                        </span>
+                        <span>Livre: {equipment.disk_free_gb ?? "-"} GB</span>
+                      </div>
+                      <Progress value={diskPct} className={`h-2 ${diskColor}`} />
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           );
