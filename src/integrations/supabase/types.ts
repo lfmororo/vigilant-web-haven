@@ -623,6 +623,9 @@ export type Database = {
           equipment_info: string | null
           equipment_type_id: string | null
           id: string
+          incident_message: string | null
+          is_incident: boolean
+          parent_incident_id: string | null
           priority: Database["public"]["Enums"]["ticket_priority"]
           status: Database["public"]["Enums"]["ticket_status"]
           technician_signature: string | null
@@ -641,6 +644,9 @@ export type Database = {
           equipment_info?: string | null
           equipment_type_id?: string | null
           id?: string
+          incident_message?: string | null
+          is_incident?: boolean
+          parent_incident_id?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           status?: Database["public"]["Enums"]["ticket_status"]
           technician_signature?: string | null
@@ -659,6 +665,9 @@ export type Database = {
           equipment_info?: string | null
           equipment_type_id?: string | null
           id?: string
+          incident_message?: string | null
+          is_incident?: boolean
+          parent_incident_id?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
           status?: Database["public"]["Enums"]["ticket_status"]
           technician_signature?: string | null
@@ -693,6 +702,13 @@ export type Database = {
             columns: ["equipment_type_id"]
             isOneToOne: false
             referencedRelation: "equipment_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_parent_incident_id_fkey"
+            columns: ["parent_incident_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
             referencedColumns: ["id"]
           },
         ]
