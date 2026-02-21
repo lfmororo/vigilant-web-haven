@@ -23,7 +23,7 @@ const AdminTicketsManagement = () => {
 
   useEffect(() => {
     let query = supabase.from("tickets")
-      .select("*, client:profiles!tickets_client_id_fkey(full_name), assigned:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name)")
+      .select("*, client:clients!tickets_client_id_fkey(full_name), assigned:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name)")
       .order("created_at", { ascending: false });
 
     if (!isAdmin && user) {

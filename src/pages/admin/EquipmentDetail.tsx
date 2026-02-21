@@ -49,7 +49,7 @@ const EquipmentDetail = () => {
   const fetchEquipment = async () => {
     const { data } = await supabase
       .from("equipment_inventory")
-      .select("*, client:profiles!equipment_inventory_client_id_fkey(full_name, email), equipment_type:equipment_types!equipment_inventory_equipment_type_id_fkey(name)")
+      .select("*, client:clients!equipment_inventory_client_id_fkey(full_name, email), equipment_type:equipment_types!equipment_inventory_equipment_type_id_fkey(name)")
       .eq("id", id!)
       .single();
 

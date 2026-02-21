@@ -127,7 +127,7 @@ const EquipmentInventory = () => {
     try {
       let query = supabase
         .from("equipment_inventory")
-        .select("*, client:profiles!equipment_inventory_client_id_fkey(full_name), equipment_type:equipment_types!equipment_inventory_equipment_type_id_fkey(name)")
+        .select("*, client:clients!equipment_inventory_client_id_fkey(full_name), equipment_type:equipment_types!equipment_inventory_equipment_type_id_fkey(name)")
         .order("created_at", { ascending: false });
 
       if (clientFilter) query = query.eq("client_id", clientFilter);
@@ -146,12 +146,8 @@ const EquipmentInventory = () => {
   };
 
   const fetchClients = async () => {
-    const { data: roleData } = await supabase.from("user_roles").select("user_id").eq("role", "client" as any);
-    if (roleData && roleData.length > 0) {
-      const ids = roleData.map((r) => r.user_id);
-      const { data } = await supabase.from("profiles").select("id, full_name").in("id", ids);
-      setClients(data || []);
-    }
+    const { data } = await supabase.from("clients").select("id, full_name").order("full_name");
+    setClients(data || []);
   };
 
   const fetchEquipmentTypes = async () => {

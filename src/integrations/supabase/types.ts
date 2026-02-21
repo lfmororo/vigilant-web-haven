@@ -65,6 +65,65 @@ export type Database = {
         }
         Relationships: []
       }
+      clients: {
+        Row: {
+          address: string | null
+          address_complement: string | null
+          address_number: string | null
+          city: string | null
+          created_at: string
+          email: string | null
+          email_domain: string | null
+          full_name: string
+          id: string
+          neighborhood: string | null
+          parent_client_id: string | null
+          phone: string | null
+          updated_at: string
+          whatsapp_group_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          address_complement?: string | null
+          address_number?: string | null
+          city?: string | null
+          created_at?: string
+          email?: string | null
+          email_domain?: string | null
+          full_name: string
+          id?: string
+          neighborhood?: string | null
+          parent_client_id?: string | null
+          phone?: string | null
+          updated_at?: string
+          whatsapp_group_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          address_complement?: string | null
+          address_number?: string | null
+          city?: string | null
+          created_at?: string
+          email?: string | null
+          email_domain?: string | null
+          full_name?: string
+          id?: string
+          neighborhood?: string | null
+          parent_client_id?: string | null
+          phone?: string | null
+          updated_at?: string
+          whatsapp_group_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_parent_client_id_fkey"
+            columns: ["parent_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       equipment_inventory: {
         Row: {
           brand: string | null
@@ -140,7 +199,7 @@ export type Database = {
             foreignKeyName: "equipment_inventory_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
           {
@@ -218,7 +277,7 @@ export type Database = {
             foreignKeyName: "imap_accounts_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
@@ -256,7 +315,7 @@ export type Database = {
             foreignKeyName: "inventory_api_keys_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
@@ -318,7 +377,7 @@ export type Database = {
             foreignKeyName: "profiles_parent_client_id_fkey"
             columns: ["parent_client_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
@@ -410,7 +469,7 @@ export type Database = {
             foreignKeyName: "service_orders_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
           {
@@ -556,7 +615,7 @@ export type Database = {
             foreignKeyName: "tickets_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
           {

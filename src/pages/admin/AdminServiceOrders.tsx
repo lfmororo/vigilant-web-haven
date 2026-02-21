@@ -31,7 +31,7 @@ const AdminServiceOrders = () => {
 
   useEffect(() => {
     supabase.from("service_orders")
-      .select("*, client:profiles!service_orders_client_id_fkey(full_name), technician:profiles!service_orders_technician_id_fkey(full_name)")
+      .select("*, client:clients!service_orders_client_id_fkey(full_name), technician:profiles!service_orders_technician_id_fkey(full_name)")
       .order("created_at", { ascending: false })
       .then(({ data }) => { setOrders(data || []); setLoading(false); });
     supabase.from("profiles").select("id, full_name").then(({ data }) => setClients(data || []));
