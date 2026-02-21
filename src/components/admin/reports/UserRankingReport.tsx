@@ -33,10 +33,7 @@ const UserRankingReport = () => {
         if (linked?.length) clientIds.push(...linked.map(u => u.id));
       }
 
-      let q = supabase.from("tickets").select(`
-        id, created_by,
-        creator:profiles!tickets_created_by_fkey(full_name)
-      `);
+      let q = supabase.from("tickets").select("id, created_by");
 
       if (clientIds.length) q = q.in("client_id", clientIds);
       if (startDate) q = q.gte("created_at", startDate.toISOString());
@@ -46,22 +43,30 @@ const UserRankingReport = () => {
         q = q.lte("created_at", end.toISOString());
       }
 
-      const { data } = await q;
-      return data || [];
+      const { data: ticketData } = await q;
+      if (!ticketData?.length) return [];
+
+      // Fetch creator names separately
+      const creatorIds = [...new Set(ticketData.map(t => t.created_by).filter(Boolean))] as string[];
+      const profileMap: Record<string, string> = {};
+      if (creatorIds.length) {
+        const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", creatorIds);
+        profiles?.forEach(p => { profileMap[p.id] = p.full_name; });
+      }
+
+      // Build ranking
+      const map: Record<string, { name: string; count: number }> = {};
+      ticketData.forEach((t) => {
+        const key = t.created_by || "unknown";
+        const name = profileMap[key] || "Desconhecido";
+        if (!map[key]) map[key] = { name, count: 0 };
+        map[key].count++;
+      });
+      return Object.values(map).sort((a, b) => b.count - a.count);
     },
   });
 
-  const ranking = useMemo(() => {
-    if (!tickets) return [];
-    const map: Record<string, { name: string; count: number }> = {};
-    tickets.forEach((t) => {
-      const name = (t.creator as any)?.full_name || "Desconhecido";
-      const key = t.created_by || "unknown";
-      if (!map[key]) map[key] = { name, count: 0 };
-      map[key].count++;
-    });
-    return Object.values(map).sort((a, b) => b.count - a.count);
-  }, [tickets]);
+  const ranking = tickets || [];
 
   const clearFilters = () => {
     setClientId("all");
