@@ -117,6 +117,7 @@ Deno.serve(async (req) => {
       let created = 0;
       let updated = 0;
       const errors: string[] = [];
+      const diskAlerts: { name: string; serial_number: string; disk_used_gb: number; disk_total_gb: number; pct: number }[] = [];
 
       for (const item of equipment) {
         try {
@@ -173,6 +174,20 @@ Deno.serve(async (req) => {
               .insert(record);
             if (inErr) throw inErr;
             created++;
+          }
+
+          // Check disk usage > 90%
+          if (item.disk_total_gb && item.disk_used_gb && item.disk_total_gb > 0) {
+            const pct = Math.round((item.disk_used_gb / item.disk_total_gb) * 100);
+            if (pct > 90) {
+              diskAlerts.push({
+                name: item.name,
+                serial_number: item.serial_number || "",
+                disk_used_gb: item.disk_used_gb,
+                disk_total_gb: item.disk_total_gb,
+                pct,
+              });
+            }
           }
         } catch (err: any) {
           errors.push(`Error processing ${item.serial_number || item.name}: ${err.message}`);
@@ -252,11 +267,69 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Disk usage > 90% alerts
+      if (diskAlerts.length > 0) {
+        try {
+          const { data: clientProfile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", client_id)
+            .single();
+          const clientName = clientProfile?.full_name || "Cliente";
+
+          const alertItems = diskAlerts
+            .map((a) => `• ${a.name} (S/N: ${a.serial_number}) — ${a.pct}% usado (${a.disk_used_gb}/${a.disk_total_gb} GB)`)
+            .join("\n");
+
+          const alertMsg = `🚨 *Alerta de Disco Cheio (>90%)*\n\n👤 *Cliente:* ${clientName}\n📊 *Equipamentos:* ${diskAlerts.length}\n\n${alertItems}`;
+
+          // Telegram
+          const telegramToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+          const telegramChatId = Deno.env.get("TELEGRAM_CHAT_ID");
+          if (telegramToken && telegramChatId) {
+            const escaped = alertMsg.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, "\\$1");
+            fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: telegramChatId, text: escaped, parse_mode: "MarkdownV2" }),
+            }).catch((e) => console.error("Telegram disk alert error:", e));
+          }
+
+          // WhatsApp
+          const { data: settingsData2 } = await supabase.from("system_settings").select("key, value");
+          const s2: Record<string, string> = {};
+          settingsData2?.forEach((s: any) => { s2[s.key] = s.value || ""; });
+
+          if (s2.whatsapp_enabled === "true" && s2.whatsapp_api_url && s2.whatsapp_api_token) {
+            const { data: adminRoles2 } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
+            const adminIds2 = (adminRoles2 || []).map((r: any) => r.user_id);
+            if (adminIds2.length > 0) {
+              const { data: adminProfiles2 } = await supabase.from("profiles").select("phone").in("id", adminIds2);
+              const sendUrl2 = `${s2.whatsapp_api_url.replace(/\/+$/, "")}/send/text`;
+              const plainAlert = alertMsg.replace(/\*/g, "*");
+              for (const admin of adminProfiles2 || []) {
+                if (!admin.phone) continue;
+                const phone = admin.phone.replace(/[\s\-\(\)\+]/g, "");
+                if (phone.length < 10) continue;
+                fetch(sendUrl2, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", token: s2.whatsapp_api_token },
+                  body: JSON.stringify({ number: phone, text: plainAlert }),
+                }).catch((e) => console.error("WhatsApp disk alert error:", e));
+              }
+            }
+          }
+        } catch (diskNotifyErr) {
+          console.error("Disk alert notification error (non-blocking):", diskNotifyErr);
+        }
+      }
+
       return new Response(
         JSON.stringify({
           success: true,
-          summary: { created, updated, errors: errors.length },
+          summary: { created, updated, errors: errors.length, disk_alerts: diskAlerts.length },
           errors: errors.length > 0 ? errors : undefined,
+          disk_alerts: diskAlerts.length > 0 ? diskAlerts : undefined,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
