@@ -299,7 +299,20 @@ Deno.serve(async (req) => {
 
     // Collect recipient IDs (excluding sender)
     const recipientIds = new Set<string>();
-    if (ticket.client_id && ticket.client_id !== sender_id) recipientIds.add(ticket.client_id);
+
+    // Find users linked to this client (client_id now references clients table, not auth users)
+    if (ticket.client_id) {
+      const { data: linkedUsers } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("parent_client_id", ticket.client_id);
+      if (linkedUsers) {
+        for (const u of linkedUsers) {
+          if (u.id !== sender_id) recipientIds.add(u.id);
+        }
+      }
+    }
+
     if (ticket.assigned_to && ticket.assigned_to !== sender_id) recipientIds.add(ticket.assigned_to);
 
     const { data: adminRoles } = await supabaseAdmin
@@ -396,10 +409,15 @@ Deno.serve(async (req) => {
     let sent = 0;
     for (const recipient of recipients) {
       try {
-        const isClient = recipient.id === ticket.client_id;
-        const ticketLink = isClient
-          ? `${baseUrl}/helpdesk/tickets/${ticket_id}`
-          : `${baseUrl}/admin/tickets/${ticket_id}`;
+        // Check if recipient is a client-linked user (not admin/technician)
+        const { data: recipientRoles } = await supabaseAdmin
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", recipient.id);
+        const isAdminOrTech = recipientRoles?.some(r => r.role === "admin" || r.role === "technician");
+        const ticketLink = isAdminOrTech
+          ? `${baseUrl}/admin/tickets/${ticket_id}`
+          : `${baseUrl}/helpdesk/tickets/${ticket_id}`;
 
         const html = buildEmailHtml({
           type: emailType,

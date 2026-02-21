@@ -41,32 +41,20 @@ Deno.serve(async (req) => {
     const waApiToken = settings.whatsapp_api_token;
     const waConfigured = whatsappEnabled && waApiUrl && waApiToken;
 
-    // Fetch all clients
-    const { data: clientRoles } = await supabaseAdmin
-      .from("user_roles")
-      .select("user_id")
-      .eq("role", "client");
+    // Fetch all clients from the clients table (no longer from user_roles)
+    const { data: clientRecords } = await supabaseAdmin
+      .from("clients")
+      .select("id, full_name, email, phone, whatsapp_group_id");
 
-    if (!clientRoles?.length) {
+    if (!clientRecords?.length) {
       return new Response(JSON.stringify({ success: true, sent: 0, message: "No clients found" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const clientIds = clientRoles.map(r => r.user_id);
+    const clientIds = clientRecords.map(r => r.id);
 
-    const { data: clientProfiles } = await supabaseAdmin
-      .from("profiles")
-      .select("id, full_name, email, phone, whatsapp_group_id")
-      .in("id", clientIds);
-
-    if (!clientProfiles?.length) {
-      return new Response(JSON.stringify({ success: true, sent: 0 }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // For each client, also find linked users (parent_client_id)
+    // For each client, find linked users (profiles with parent_client_id)
     const { data: allLinkedUsers } = await supabaseAdmin
       .from("profiles")
       .select("id, parent_client_id")
@@ -80,13 +68,14 @@ Deno.serve(async (req) => {
       }
     });
 
-    // Fetch all tickets for these clients
-    const allClientAndLinkedIds = [...new Set([...clientIds, ...(allLinkedUsers?.map(u => u.id) || [])])];
+    // Tickets reference client_id from clients table directly
+    // Also include tickets created by linked users (whose client_id matches)
+    const allRelevantClientIds = [...new Set(clientIds)];
     
     const { data: allTickets } = await supabaseAdmin
       .from("tickets")
       .select("id, ticket_number, title, status, priority, created_at, updated_at, client_id, assigned_to, equipment_type_id")
-      .in("client_id", allClientAndLinkedIds)
+      .in("client_id", allRelevantClientIds)
       .order("created_at", { ascending: false });
 
     if (!allTickets?.length) {
@@ -135,7 +124,7 @@ Deno.serve(async (req) => {
     let telegramSummary = `📊 *Relatório Semanal de Chamados*\n📅 ${dateStr}\n\n`;
 
     interface ClientReport {
-      client: typeof clientProfiles[0];
+      client: typeof clientRecords[0];
       myTickets: typeof allTickets;
       grouped: Record<string, typeof allTickets>;
       staleTickets: typeof allTickets;
@@ -145,9 +134,9 @@ Deno.serve(async (req) => {
 
     const clientReports: ClientReport[] = [];
 
-    for (const client of clientProfiles) {
-      const myIds = [client.id, ...(linkedMap[client.id] || [])];
-      const myTickets = allTickets.filter(t => myIds.includes(t.client_id));
+    for (const client of clientRecords) {
+      // Tickets are now directly linked to client.id via client_id column
+      const myTickets = allTickets.filter(t => t.client_id === client.id);
       if (myTickets.length === 0) continue;
 
       const grouped: Record<string, typeof allTickets> = {};
