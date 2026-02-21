@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import TicketStatusBadge from "@/components/helpdesk/TicketStatusBadge";
 import PriorityBadge from "@/components/helpdesk/PriorityBadge";
 import {
-  Users, Camera, Link2, Activity, TicketCheck, Clock, CheckCircle,
-  AlertTriangle, BarChart3, Timer, TrendingUp, Inbox,
+  Users, LayoutDashboard, TicketCheck, Clock, CheckCircle,
+  AlertTriangle, BarChart3, Timer, TrendingUp, Inbox, Activity,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -124,26 +124,21 @@ const STATUS_LABELS: Record<string, string> = {
 const AdminDashboardContent = () => {
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generalStats, setGeneralStats] = useState({ totalUsers: 0, totalCameras: 0, activeCameras: 0, totalAssignments: 0 });
+  const [generalStats, setGeneralStats] = useState({ totalUsers: 0 });
 
   useEffect(() => {
     const fetchAll = async () => {
-      const [ticketsRes, usersRes, camerasRes, assignmentsRes] = await Promise.all([
+      const [ticketsRes, usersRes] = await Promise.all([
         supabase.from("tickets")
           .select("id, ticket_number, title, status, priority, created_at, updated_at, client_id, assigned_to, client:clients!tickets_client_id_fkey(full_name)")
           .order("created_at", { ascending: false })
           .limit(1000),
         supabase.from("profiles").select("id", { count: "exact", head: true }),
-        supabase.from("cameras").select("id, is_active"),
-        supabase.from("user_cameras").select("id", { count: "exact", head: true }),
       ]);
 
       setTickets(ticketsRes.data || []);
       setGeneralStats({
         totalUsers: usersRes.count || 0,
-        totalCameras: camerasRes.data?.length || 0,
-        activeCameras: camerasRes.data?.filter(c => c.is_active).length || 0,
-        totalAssignments: assignmentsRes.count || 0,
       });
       setLoading(false);
     };
@@ -231,9 +226,6 @@ const AdminDashboardContent = () => {
 
   const systemKpis = [
     { title: "Usuários", value: generalStats.totalUsers, icon: Users, color: "text-blue-400", bgColor: "bg-blue-400/10" },
-    { title: "Câmeras", value: generalStats.totalCameras, icon: Camera, color: "text-green-400", bgColor: "bg-green-400/10" },
-    { title: "Câmeras Ativas", value: generalStats.activeCameras, icon: Activity, color: "text-primary", bgColor: "bg-primary/10" },
-    { title: "Atribuições", value: generalStats.totalAssignments, icon: Link2, color: "text-purple-400", bgColor: "bg-purple-400/10" },
   ];
 
   if (loading) {

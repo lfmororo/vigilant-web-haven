@@ -11,8 +11,6 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import UsersManagement from "./pages/admin/UsersManagement";
-import CamerasManagement from "./pages/admin/CamerasManagement";
-import UserCamerasManagement from "./pages/admin/UserCamerasManagement";
 import ClientsManagement from "./pages/admin/ClientsManagement";
 import EquipmentInventory from "./pages/admin/EquipmentInventory";
 import EquipmentDetail from "./pages/admin/EquipmentDetail";
@@ -51,8 +49,6 @@ const App = () => (
               <Route path="/helpdesk/orders" element={<AuthGuard><ClientServiceOrders /></AuthGuard>} />
               <Route path="/admin" element={<AuthGuard requireAdminOrTechnician><AdminDashboard /></AuthGuard>} />
               <Route path="/admin/users" element={<AuthGuard requireAdmin><UsersManagement /></AuthGuard>} />
-              <Route path="/admin/cameras" element={<AuthGuard requireAdmin><CamerasManagement /></AuthGuard>} />
-              <Route path="/admin/users/:userId/cameras" element={<AuthGuard requireAdmin><UserCamerasManagement /></AuthGuard>} />
               <Route path="/admin/clients" element={<AuthGuard requireAdmin><ClientsManagement /></AuthGuard>} />
               <Route path="/admin/inventory" element={<AuthGuard requireAdmin><EquipmentInventory /></AuthGuard>} />
               <Route path="/admin/inventory/:id" element={<AuthGuard requireAdmin><EquipmentDetail /></AuthGuard>} />
