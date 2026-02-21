@@ -66,75 +66,75 @@ const EquipmentInventoryPrint = ({ equipment, filters, onClose }: EquipmentInven
 
   return (
     <>
-      <style>{`@media print { @page { size: landscape; margin: 10mm; } }`}</style>
+      <style>{`@media print { @page { size: landscape; margin: 8mm; } .print-container { font-size: 10px; } }`}</style>
       <div className="print-container bg-white text-black min-h-screen">
       <div className="print:hidden fixed top-4 right-4 z-50 flex gap-2">
         <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Imprimir</button>
         <button onClick={onClose} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Voltar</button>
       </div>
 
-      <div className="print-page p-8 max-w-[210mm] mx-auto">
+      <div className="print-page p-4 mx-auto">
         <div className="border-2 border-black">
           {/* Header */}
           <div className="flex items-center border-b-2 border-black p-3 gap-3">
-            <img src="/lovable-uploads/6a5524af-fc9f-4a85-85ec-2236896048a6.png" alt="Logo" className="h-12 w-auto object-contain" />
+            <img src="/lovable-uploads/6a5524af-fc9f-4a85-85ec-2236896048a6.png" alt="Logo" className="h-10 w-auto object-contain" />
             <div className="flex-1">
-              <h1 className="text-lg font-bold">{company.company_name || "Empresa"}</h1>
-              <p className="text-xs">{company.company_address || ""}</p>
-              <p className="text-xs">{company.company_phone || ""} {company.company_email ? `| ${company.company_email}` : ""}</p>
-              {company.company_cnpj && <p className="text-xs">CNPJ: {company.company_cnpj}</p>}
+              <h1 className="text-sm font-bold">{company.company_name || "Empresa"}</h1>
+              <p className="text-[10px]">{company.company_address || ""}</p>
+              <p className="text-[10px]">{company.company_phone || ""} {company.company_email ? `| ${company.company_email}` : ""}</p>
+              {company.company_cnpj && <p className="text-[10px]">CNPJ: {company.company_cnpj}</p>}
             </div>
             <div className="text-right">
-              <h2 className="text-base font-bold">Relatório de Inventário</h2>
-              <p className="text-xs">Gerado em: {format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
+              <h2 className="text-sm font-bold">Relatório de Inventário</h2>
+              <p className="text-[10px]">Gerado em: {format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
             </div>
           </div>
 
           {/* Filters applied */}
           {activeFilters.length > 0 && (
             <div className="border-b-2 border-black">
-              <div className="bg-gray-200 px-3 py-1 font-bold text-sm border-b border-black">Filtros Aplicados</div>
-              <div className="px-3 py-2 text-xs">{activeFilters.join(" | ")}</div>
+              <div className="bg-gray-200 px-3 py-1 font-bold text-[11px] border-b border-black">Filtros Aplicados</div>
+              <div className="px-3 py-1 text-[10px]">{activeFilters.join(" | ")}</div>
             </div>
           )}
 
           {/* Equipment Table */}
           <div>
-            <div className="bg-gray-200 px-3 py-1 font-bold text-sm border-b border-black">
+            <div className="bg-gray-200 px-3 py-1 font-bold text-[11px] border-b border-black">
               Equipamentos ({equipment.length} {equipment.length === 1 ? "item" : "itens"})
             </div>
-            <table className="w-full text-xs">
+            <table className="w-full text-[10px] table-fixed">
               <thead>
                 <tr className="border-b border-black bg-gray-100">
-                  <th className="border-r border-black px-2 py-1 text-left">Nome</th>
-                  <th className="border-r border-black px-2 py-1 text-left w-20">Tombamento</th>
-                  <th className="border-r border-black px-2 py-1 text-left w-24">Marca/Modelo</th>
-                  <th className="border-r border-black px-2 py-1 text-left w-24">Usuário</th>
-                  <th className="border-r border-black px-2 py-1 text-left w-24">Cliente</th>
-                  <th className="border-r border-black px-2 py-1 text-left w-32">CPU</th>
-                  <th className="border-r border-black px-2 py-1 text-center w-16">RAM (GB)</th>
-                  <th className="border-r border-black px-2 py-1 text-center w-24">Disco Us./Tot.</th>
-                  <th className="border-r border-black px-2 py-1 text-left w-24">Últ. Atualiz.</th>
-                  <th className="px-2 py-1 text-left w-16">Status</th>
+                  <th className="border-r border-black px-1 py-1 text-left" style={{width:'18%'}}>Nome</th>
+                  <th className="border-r border-black px-1 py-1 text-left" style={{width:'8%'}}>Tomb.</th>
+                  <th className="border-r border-black px-1 py-1 text-left" style={{width:'12%'}}>Marca/Modelo</th>
+                  <th className="border-r border-black px-1 py-1 text-left" style={{width:'10%'}}>Usuário</th>
+                  <th className="border-r border-black px-1 py-1 text-left" style={{width:'12%'}}>Cliente</th>
+                  <th className="border-r border-black px-1 py-1 text-left" style={{width:'16%'}}>CPU</th>
+                  <th className="border-r border-black px-1 py-1 text-center" style={{width:'5%'}}>RAM</th>
+                  <th className="border-r border-black px-1 py-1 text-center" style={{width:'8%'}}>Disco</th>
+                  <th className="border-r border-black px-1 py-1 text-left" style={{width:'7%'}}>Atualiz.</th>
+                  <th className="px-1 py-1 text-left" style={{width:'4%'}}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {equipment.map((item) => (
                   <tr key={item.id} className="border-b border-black">
-                    <td className="border-r border-black px-2 py-1">{item.name}</td>
-                    <td className="border-r border-black px-2 py-1">{item.asset_tag || "-"}</td>
-                    <td className="border-r border-black px-2 py-1">{[item.brand, item.model].filter(Boolean).join(" ") || "-"}</td>
-                    <td className="border-r border-black px-2 py-1">{item.logged_in_user || "-"}</td>
-                    <td className="border-r border-black px-2 py-1">{item.client?.full_name || "-"}</td>
-                    <td className="border-r border-black px-2 py-1">{item.cpu || "-"}</td>
-                    <td className="border-r border-black px-2 py-1 text-center">{item.ram_total_gb ?? "-"}</td>
-                    <td className="border-r border-black px-2 py-1 text-center">
+                    <td className="border-r border-black px-1 py-1 truncate">{item.name}</td>
+                    <td className="border-r border-black px-1 py-1 truncate">{item.asset_tag || "-"}</td>
+                    <td className="border-r border-black px-1 py-1 truncate">{[item.brand, item.model].filter(Boolean).join(" ") || "-"}</td>
+                    <td className="border-r border-black px-1 py-1 truncate">{item.logged_in_user || "-"}</td>
+                    <td className="border-r border-black px-1 py-1 truncate">{item.client?.full_name || "-"}</td>
+                    <td className="border-r border-black px-1 py-1 truncate">{item.cpu || "-"}</td>
+                    <td className="border-r border-black px-1 py-1 text-center">{item.ram_total_gb ?? "-"}</td>
+                    <td className="border-r border-black px-1 py-1 text-center">
                       {item.disk_used_gb != null && item.disk_total_gb != null ? `${item.disk_used_gb}/${item.disk_total_gb}` : "-"}
                     </td>
-                    <td className="border-r border-black px-2 py-1">
-                      {item.hardware_updated_at ? format(new Date(item.hardware_updated_at), "dd/MM/yy HH:mm", { locale: ptBR }) : "-"}
+                    <td className="border-r border-black px-1 py-1 truncate">
+                      {item.hardware_updated_at ? format(new Date(item.hardware_updated_at), "dd/MM/yy", { locale: ptBR }) : "-"}
                     </td>
-                    <td className="px-2 py-1">{statusLabels[item.status] || item.status}</td>
+                    <td className="px-1 py-1 truncate">{statusLabels[item.status] || item.status}</td>
                   </tr>
                 ))}
               </tbody>
