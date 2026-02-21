@@ -9,7 +9,7 @@ const corsHeaders = {
 // ---------- HTML Email Builder ----------
 
 interface EmailParams {
-  type: "ticket_opened" | "ticket_updated" | "ticket_resolved" | "ticket_closed" | "signature_requested";
+  type: "ticket_opened" | "ticket_updated" | "ticket_resolved" | "ticket_closed" | "signature_requested" | "technician_assigned";
   recipientName: string;
   ticketNumber: number;
   title: string;
@@ -24,11 +24,12 @@ interface EmailParams {
 
 function buildEmailHtml(p: EmailParams): string {
   const themes: Record<string, { heading: string; emoji: string; color: string; bgLight: string }> = {
-    ticket_opened:        { heading: "Novo Chamado Aberto",       emoji: "🎫", color: "#2563eb", bgLight: "#eff6ff" },
-    ticket_updated:       { heading: "Chamado Atualizado",        emoji: "🔄", color: "#7c3aed", bgLight: "#f5f3ff" },
-    ticket_resolved:      { heading: "Chamado Resolvido",         emoji: "✅", color: "#16a34a", bgLight: "#f0fdf4" },
-    ticket_closed:        { heading: "Chamado Encerrado",         emoji: "📁", color: "#6b7280", bgLight: "#f9fafb" },
-    signature_requested:  { heading: "Assinatura Solicitada",     emoji: "✍️", color: "#d97706", bgLight: "#fffbeb" },
+    ticket_opened:          { heading: "Novo Chamado Aberto",         emoji: "🎫", color: "#2563eb", bgLight: "#eff6ff" },
+    technician_assigned:    { heading: "Chamado Atribuído a Você",    emoji: "🔧", color: "#2563eb", bgLight: "#eff6ff" },
+    ticket_updated:         { heading: "Chamado Atualizado",          emoji: "🔄", color: "#7c3aed", bgLight: "#f5f3ff" },
+    ticket_resolved:        { heading: "Chamado Resolvido",           emoji: "✅", color: "#16a34a", bgLight: "#f0fdf4" },
+    ticket_closed:          { heading: "Chamado Encerrado",           emoji: "📁", color: "#6b7280", bgLight: "#f9fafb" },
+    signature_requested:    { heading: "Assinatura Solicitada",       emoji: "✍️", color: "#d97706", bgLight: "#fffbeb" },
   };
 
   const theme = themes[p.type] || themes.ticket_updated;
@@ -58,10 +59,13 @@ function buildEmailHtml(p: EmailParams): string {
 
   let bodyContent = "";
 
-  if (p.type === "ticket_opened") {
+  if (p.type === "ticket_opened" || p.type === "technician_assigned") {
+    const introText = p.type === "technician_assigned"
+      ? `Um chamado foi atribuído a você:`
+      : `Um novo chamado foi registrado no sistema:`;
     bodyContent = `
       <p style="margin:0 0 8px;color:#334155;font-size:15px;line-height:1.6;">Olá <strong>${p.recipientName}</strong>,</p>
-      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">Um novo chamado foi registrado no sistema:</p>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">${introText}</p>
       ${senderInfo}
       <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">
         ${tableRow("Nº do Ticket", `<strong>#${p.ticketNumber}</strong>`)}
@@ -382,6 +386,7 @@ Deno.serve(async (req) => {
 
     const subjectMap: Record<string, string> = {
       ticket_opened: `Novo Chamado #${ticket.ticket_number} - ${ticket.title}`,
+      technician_assigned: `Chamado Atribuído #${ticket.ticket_number} - ${ticket.title}`,
       ticket_updated: `Atualização no Chamado #${ticket.ticket_number} - ${ticket.title}`,
       ticket_resolved: `Chamado Resolvido #${ticket.ticket_number} - ${ticket.title}`,
       ticket_closed: `Chamado Encerrado #${ticket.ticket_number} - ${ticket.title}`,
