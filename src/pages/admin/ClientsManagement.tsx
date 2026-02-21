@@ -31,8 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Eye, EyeOff, Package, TicketCheck, Key, Pencil, Trash2, Search } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Loader2, Eye, EyeOff, Package, TicketCheck, Key, Pencil, Trash2 } from "lucide-react";
 import { z } from "zod";
 import { Link } from "react-router-dom";
 import ApiIntegrationDialog from "@/components/admin/ApiIntegrationDialog";
@@ -91,10 +90,6 @@ const ClientsManagement = () => {
     whatsapp_group_id: "",
   });
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
-
-  // WhatsApp groups
-  const [whatsappGroups, setWhatsappGroups] = useState<Array<{ id: string; name: string }>>([]);
-  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
 
   // Delete dialog
   const [deletingClient, setDeletingClient] = useState<ClientProfile | null>(null);
@@ -467,62 +462,14 @@ const ClientsManagement = () => {
                 <p className="text-xs text-muted-foreground">Usuários com emails deste domínio serão vinculados automaticamente a este cliente.</p>
               </div>
               <div className="space-y-2">
-                <Label>Grupo WhatsApp (opcional)</Label>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    {whatsappGroups.length > 0 ? (
-                      <Select
-                        value={editFormData.whatsapp_group_id}
-                        onValueChange={(value) => setEditFormData({ ...editFormData, whatsapp_group_id: value === "__none__" ? "" : value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione um grupo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">Nenhum</SelectItem>
-                          {whatsappGroups.map((g) => (
-                            <SelectItem key={g.id} value={g.id}>
-                              {g.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input
-                        placeholder="Ex: 5511999999999-1234567890@g.us"
-                        value={editFormData.whatsapp_group_id}
-                        onChange={(e) => setEditFormData({ ...editFormData, whatsapp_group_id: e.target.value })}
-                      />
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={isLoadingGroups}
-                    onClick={async () => {
-                      setIsLoadingGroups(true);
-                      try {
-                        const { data, error } = await supabase.functions.invoke("list-whatsapp-groups");
-                        if (error) throw new Error(error.message);
-                        if (data?.error) throw new Error(data.error);
-                        const groups = Array.isArray(data) ? data : data?.groups || [];
-                        const mapped = groups.map((g: any) => ({ id: g.id || g.jid, name: g.name || g.subject || g.id || g.jid }));
-                        setWhatsappGroups(mapped);
-                        if (mapped.length === 0) {
-                          toast({ title: "Nenhum grupo encontrado", description: "Nenhum grupo foi retornado pela API WhatsApp." });
-                        }
-                      } catch (err: any) {
-                        toast({ variant: "destructive", title: "Erro ao buscar grupos", description: err.message });
-                      } finally {
-                        setIsLoadingGroups(false);
-                      }
-                    }}
-                  >
-                    {isLoadingGroups ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Search className="w-4 h-4 mr-1" />Buscar</>}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">Clique em "Buscar" para listar os grupos disponíveis na API WhatsApp.</p>
+                <Label htmlFor="edit_whatsapp_group_id">Grupo WhatsApp (opcional)</Label>
+                <Input
+                  id="edit_whatsapp_group_id"
+                  placeholder="Ex: 5511999999999-1234567890@g.us"
+                  value={editFormData.whatsapp_group_id}
+                  onChange={(e) => setEditFormData({ ...editFormData, whatsapp_group_id: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">ID do grupo WhatsApp para notificações deste cliente (formato: [id]@g.us).</p>
               </div>
               <Button type="submit" className="w-full" disabled={isEditSubmitting}>
                 {isEditSubmitting ? (
