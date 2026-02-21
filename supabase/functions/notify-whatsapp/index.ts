@@ -208,6 +208,27 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Add admin phones
+    const { data: adminRoles } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "admin");
+
+    if (adminRoles) {
+      for (const r of adminRoles) {
+        if (r.user_id !== ticket.created_by && r.user_id !== ticket.assigned_to) {
+          const { data: adminProfile } = await supabaseAdmin
+            .from("profiles")
+            .select("phone")
+            .eq("id", r.user_id)
+            .maybeSingle();
+          if (adminProfile?.phone) {
+            individualPhones.add(cleanPhone(adminProfile.phone));
+          }
+        }
+      }
+    }
+
     const senderName = sender_name || "Sistema";
 
     // Build ticket link using app_base_url from settings
