@@ -222,6 +222,23 @@ const AdminTicketDetail = () => {
       } catch (err) {
         console.error("PDF generation error:", err);
       }
+
+      // Generate AI summary
+      try {
+        const { data: summaryData, error: summaryError } = await supabase.functions.invoke("ai-ticket-summary", {
+          body: { ticket_id: id },
+        });
+        if (!summaryError && summaryData?.summary) {
+          await supabase.from("ticket_messages").insert({
+            ticket_id: id!,
+            sender_id: user.id,
+            message: `📋 **Resumo automático do atendimento (IA)**\n\n${summaryData.summary}`,
+            is_internal: true,
+          });
+        }
+      } catch (err) {
+        console.error("AI summary error:", err);
+      }
     }
 
     // Single email notification
@@ -233,6 +250,7 @@ const AdminTicketDetail = () => {
 
     toast({ title: "Alterações salvas!" });
     fetchTicket();
+    fetchChatMessages();
     setUpdating(false);
   };
 
