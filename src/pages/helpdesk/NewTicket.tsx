@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, AlertTriangle, Info } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const PRIORITY_LABELS: Record<string, string> = {
   low: "Baixa",
@@ -19,6 +20,13 @@ const PRIORITY_LABELS: Record<string, string> = {
   high: "Alta",
   urgent: "Urgente",
 };
+
+interface IncidentMatch {
+  match: boolean;
+  incident_id?: string;
+  incident_title?: string;
+  incident_message?: string;
+}
 
 const NewTicket = () => {
   const { user } = useAuth();
@@ -29,6 +37,8 @@ const NewTicket = () => {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [classifying, setClassifying] = useState(false);
   const [classified, setClassified] = useState(false);
+  const [checkingIncident, setCheckingIncident] = useState(false);
+  const [incidentMatch, setIncidentMatch] = useState<IncidentMatch | null>(null);
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -79,18 +89,37 @@ const NewTicket = () => {
     }
   }, [form.title, form.description, classifying, classified, toast]);
 
-  // Auto-classify when description loses focus
+  const checkForIncident = useCallback(async () => {
+    if (!form.title.trim() || !form.description.trim()) return;
+    setCheckingIncident(true);
+    try {
+      const { data } = await supabase.functions.invoke("ai-detect-incident", {
+        body: { title: form.title, description: form.description, client_id: parentClientId },
+      });
+      if (data?.match) {
+        setIncidentMatch(data);
+      } else {
+        setIncidentMatch(null);
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setCheckingIncident(false);
+    }
+  }, [form.title, form.description, parentClientId]);
+
   const handleDescriptionBlur = () => {
-    if (form.title.trim() && form.description.trim() && !classified) {
-      classifyTicket();
+    if (form.title.trim() && form.description.trim()) {
+      if (!classified) classifyTicket();
+      checkForIncident();
     }
   };
 
-  // Reset classified flag when title or description changes significantly
   const handleFieldChange = (field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     if (field === "title" || field === "description") {
       setClassified(false);
+      setIncidentMatch(null);
     }
   };
 
@@ -101,19 +130,31 @@ const NewTicket = () => {
       return;
     }
     setLoading(true);
-    const { data: insertedTicket, error } = await supabase.from("tickets").insert({
+
+    const insertData: any = {
       title: form.title,
       description: form.description,
       equipment_type_id: form.equipment_type_id || null,
       equipment_info: form.equipment_info || null,
-      priority: form.priority as any,
+      priority: form.priority,
       client_id: parentClientId,
       created_by: user.id,
-    }).select("id").single();
+    };
+
+    // If matches an incident, link to it
+    if (incidentMatch?.match && incidentMatch.incident_id) {
+      insertData.parent_incident_id = incidentMatch.incident_id;
+    }
+
+    const { data: insertedTicket, error } = await supabase.from("tickets")
+      .insert(insertData)
+      .select("id")
+      .single();
+
     if (error) {
       toast({ variant: "destructive", title: "Erro ao criar chamado", description: error.message });
     } else {
-      toast({ title: "Chamado criado com sucesso!" });
+      toast({ title: incidentMatch?.match ? "Chamado vinculado ao incidente!" : "Chamado criado com sucesso!" });
       if (insertedTicket?.id) {
         supabase.functions.invoke("notify-ticket-update", {
           body: {
@@ -149,6 +190,32 @@ const NewTicket = () => {
     <HelpdeskLayout>
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl font-display font-bold mb-6">Abrir Novo Chamado</h1>
+
+        {incidentMatch?.match && (
+          <Alert className="mb-6 border-orange-500/50 bg-orange-500/10">
+            <AlertTriangle className="h-5 w-5 text-orange-500" />
+            <AlertTitle className="text-orange-600 font-semibold">
+              🚨 Incidente em andamento: {incidentMatch.incident_title}
+            </AlertTitle>
+            <AlertDescription className="mt-2 space-y-2">
+              <p className="text-sm">{incidentMatch.incident_message}</p>
+              <p className="text-xs text-muted-foreground">
+                Seu chamado será vinculado automaticamente a este incidente. Você receberá atualizações assim que o problema for resolvido.
+              </p>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {checkingIncident && (
+          <Alert className="mb-6">
+            <Info className="h-4 w-4" />
+            <AlertDescription className="flex items-center gap-2 text-sm">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Verificando incidentes ativos...
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Card>
           <CardContent className="pt-6">
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -208,7 +275,8 @@ const NewTicket = () => {
               <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => navigate(-1)}>Cancelar</Button>
                 <Button type="submit" disabled={loading}>
-                  {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Enviar Chamado
+                  {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {incidentMatch?.match ? "Vincular ao Incidente" : "Enviar Chamado"}
                 </Button>
               </div>
             </form>

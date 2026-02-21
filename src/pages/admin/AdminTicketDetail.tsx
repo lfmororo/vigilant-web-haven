@@ -18,7 +18,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, FileText, Trash2, Save, Printer, Monitor } from "lucide-react";
+import { ArrowLeft, Loader2, FileText, Trash2, Save, Printer, Monitor, AlertTriangle, Link2 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -44,6 +48,10 @@ const AdminTicketDetail = () => {
   const [showPrint, setShowPrint] = useState(false);
   const [requestingAccess, setRequestingAccess] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ sender_name: string; message: string }>>([]);
+  const [linkedTicketsCount, setLinkedTicketsCount] = useState(0);
+  const [showIncidentDialog, setShowIncidentDialog] = useState(false);
+  const [incidentMessage, setIncidentMessage] = useState("Já estamos cientes deste problema e trabalhando na solução.");
+  const [promotingIncident, setPromotingIncident] = useState(false);
 
   const fetchChatMessages = useCallback(async () => {
     if (!id) return;
@@ -129,6 +137,14 @@ const AdminTicketDetail = () => {
           setClients(data || []);
         });
     }
+    // Fetch linked tickets count
+    supabase.rpc("has_role" as any, { _user_id: user!.id, _role: "admin" }).then(() => {
+      // Fetch linked tickets count using raw filter
+      supabase.from("tickets")
+        .select("id", { count: "exact", head: true })
+        .filter("parent_incident_id", "eq", id!)
+        .then(({ count }) => setLinkedTicketsCount(count || 0));
+    });
   }, [id, isAdmin, authLoading, user]);
 
   // Fetch equipment inventory for the selected client
@@ -266,6 +282,23 @@ const AdminTicketDetail = () => {
     else { toast({ title: "OS criada!" }); navigate(`/admin/service-orders/${data.id}`); }
   };
 
+  const promoteToIncident = async () => {
+    if (!ticket || !user) return;
+    setPromotingIncident(true);
+    const { error } = await supabase.from("tickets").update({
+      is_incident: true,
+      incident_message: incidentMessage,
+    } as any).eq("id", id!);
+    if (error) {
+      toast({ variant: "destructive", title: "Erro", description: error.message });
+    } else {
+      toast({ title: "🚨 Ticket promovido a Incidente!" });
+      setShowIncidentDialog(false);
+      fetchTicket();
+    }
+    setPromotingIncident(false);
+  };
+
   if (loading || authLoading) return <AdminLayout><div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></AdminLayout>;
   if (!ticket) return <AdminLayout><p className="text-center text-muted-foreground py-12">Ticket não encontrado</p></AdminLayout>;
 
@@ -281,9 +314,16 @@ const AdminTicketDetail = () => {
           <div className="flex-1">
             <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground font-mono">#{ticket.ticket_number}</span>
+              {ticket.is_incident && <Badge variant="destructive" className="text-xs">🚨 INCIDENTE</Badge>}
+              {ticket.parent_incident_id && <Badge variant="outline" className="text-xs"><Link2 className="w-3 h-3 mr-1" />Vinculado a incidente</Badge>}
               <h1 className="text-xl font-display font-bold">{ticket.title}</h1>
             </div>
-            <p className="text-sm text-muted-foreground">Cliente: {ticket.client?.full_name} ({ticket.client?.email})</p>
+            <p className="text-sm text-muted-foreground">
+              Cliente: {ticket.client?.full_name} ({ticket.client?.email})
+              {ticket.is_incident && linkedTicketsCount > 0 && (
+                <span className="ml-2 text-primary font-medium">• {linkedTicketsCount} ticket(s) vinculado(s)</span>
+              )}
+            </p>
           </div>
           <Button variant="outline" size="icon" onClick={() => setShowPrint(true)} title="Exportar PDF"><Printer className="w-4 h-4" /></Button>
           <Button
@@ -426,6 +466,56 @@ const AdminTicketDetail = () => {
                 )}
               </CardContent>
             </Card>
+
+            {/* Incident Management */}
+            {isAdmin && !ticket.is_incident && !ticket.parent_incident_id && (
+              <Card>
+                <CardContent className="pt-4 space-y-3">
+                  {!showIncidentDialog ? (
+                    <Button variant="outline" className="w-full" onClick={() => setShowIncidentDialog(true)}>
+                      <AlertTriangle className="w-4 h-4 mr-2" />
+                      Promover a Incidente
+                    </Button>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">🚨 Criar Incidente</p>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Mensagem para os clientes</Label>
+                        <Textarea
+                          value={incidentMessage}
+                          onChange={(e) => setIncidentMessage(e.target.value)}
+                          placeholder="Ex: Já estamos cientes do problema..."
+                          className="min-h-[80px] text-sm"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Novos tickets similares serão automaticamente vinculados a este incidente.
+                      </p>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => setShowIncidentDialog(false)}>Cancelar</Button>
+                        <Button size="sm" onClick={promoteToIncident} disabled={promotingIncident} className="flex-1">
+                          {promotingIncident && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                          Confirmar Incidente
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {ticket.is_incident && (
+              <Card className="border-destructive/30">
+                <CardContent className="pt-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-destructive" />
+                    <span className="text-sm font-medium">Modo Incidente Ativo</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{ticket.incident_message}</p>
+                  <p className="text-xs text-primary font-medium">{linkedTicketsCount} ticket(s) vinculado(s)</p>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader><CardTitle className="text-sm">Detalhes</CardTitle></CardHeader>
