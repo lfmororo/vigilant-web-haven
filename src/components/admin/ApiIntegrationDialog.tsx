@@ -132,7 +132,15 @@ const ApiIntegrationDialog = ({ open, onOpenChange, clientId, clientName }: ApiI
   const maskKey = (key: string) => `${"•".repeat(24)}${key.slice(-8)}`;
 
   const powershellScript = (cId: string, key: string) =>
-    `$body = @{
+    `# Coleta de informações de hardware
+$cpu = (Get-WmiObject Win32_Processor).Name
+$ramGB = [math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 1)
+$disk = Get-WmiObject Win32_LogicalDisk -Filter "DeviceID='C:'"
+$diskTotalGB = [math]::Round($disk.Size / 1GB, 1)
+$diskFreeGB = [math]::Round($disk.FreeSpace / 1GB, 1)
+$diskUsedGB = [math]::Round(($disk.Size - $disk.FreeSpace) / 1GB, 1)
+
+$body = @{
   client_id = "${cId}"
   api_key = "${key}"
   equipment = @(@{
@@ -142,7 +150,13 @@ const ApiIntegrationDialog = ({ open, onOpenChange, clientId, clientName }: ApiI
     model = (Get-WmiObject Win32_ComputerSystem).Model
     equipment_type = "PC/Notebook"
     location = ""
-    notes = "OS: $([System.Environment]::OSVersion.VersionString), RAM: $([math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory/1GB))GB, CPU: $((Get-WmiObject Win32_Processor).Name), IP: $((Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -ne 'Loopback' } | Select-Object -First 1).IPAddress)"
+    cpu = $cpu
+    ram_total_gb = $ramGB
+    disk_total_gb = $diskTotalGB
+    disk_used_gb = $diskUsedGB
+    disk_free_gb = $diskFreeGB
+    hardware_updated_at = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+    notes = "OS: $([System.Environment]::OSVersion.VersionString), IP: $((Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -ne 'Loopback' } | Select-Object -First 1).IPAddress)"
   })
 } | ConvertTo-Json -Depth 3
 
@@ -157,6 +171,8 @@ Invoke-RestMethod -Uri "${functionsUrl}/inventory-sync" -Method POST -Body $body
 import platform
 import subprocess
 import socket
+import psutil
+from datetime import datetime, timezone
 
 def get_serial():
     try:
@@ -164,6 +180,8 @@ def get_serial():
         return result.decode().split("\\n")[1].strip()
     except:
         return "N/A"
+
+disk = psutil.disk_usage("/")
 
 data = {
     "client_id": "${cId}",
@@ -174,7 +192,13 @@ data = {
         "brand": platform.system(),
         "model": platform.machine(),
         "equipment_type": "PC/Notebook",
-        "notes": f"OS: {platform.platform()}, CPU: {platform.processor()}, IP: {socket.gethostbyname(socket.gethostname())}"
+        "cpu": platform.processor(),
+        "ram_total_gb": round(psutil.virtual_memory().total / (1024**3), 1),
+        "disk_total_gb": round(disk.total / (1024**3), 1),
+        "disk_used_gb": round(disk.used / (1024**3), 1),
+        "disk_free_gb": round(disk.free / (1024**3), 1),
+        "hardware_updated_at": datetime.now(timezone.utc).isoformat(),
+        "notes": f"OS: {platform.platform()}, IP: {socket.gethostbyname(socket.gethostname())}"
     }]
 }
 
