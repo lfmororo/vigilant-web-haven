@@ -410,8 +410,7 @@ const EquipmentInventory = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Marca/Modelo</TableHead>
+                    <TableHead>Tombamento</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>Processador</TableHead>
                     <TableHead>Memória</TableHead>
@@ -432,8 +431,7 @@ const EquipmentInventory = () => {
                     return (
                       <TableRow key={item.id}>
                         <TableCell className="font-medium">{item.name}</TableCell>
-                        <TableCell>{item.equipment_type?.name || "-"}</TableCell>
-                        <TableCell>{[item.brand, item.model].filter(Boolean).join(" ") || "-"}</TableCell>
+                        <TableCell className="font-mono text-xs">{(item as any).asset_tag || "-"}</TableCell>
                         <TableCell>{item.client?.full_name || "-"}</TableCell>
                         <TableCell className="text-xs max-w-[150px] truncate" title={item.cpu || undefined}>
                           {item.cpu || "-"}
