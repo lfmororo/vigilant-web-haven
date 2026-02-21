@@ -50,8 +50,7 @@ const Auth = () => {
       } else if (role === "technician") {
         navigate("/admin/helpdesk");
       } else {
-        // Regular users go to dashboard (cameras); users linked to a client can access helpdesk from there
-        navigate("/dashboard");
+        navigate("/helpdesk");
       }
     }
   }, [user, role, loading, navigate, mustChangePassword]);

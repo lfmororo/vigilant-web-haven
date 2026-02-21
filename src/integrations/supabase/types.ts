@@ -14,57 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      cameras: {
-        Row: {
-          channel: number | null
-          created_at: string
-          created_by: string | null
-          description: string | null
-          device_ip: string | null
-          device_password: string | null
-          device_username: string | null
-          embed_url: string | null
-          id: string
-          is_active: boolean
-          location: string | null
-          name: string
-          serial_number: string | null
-          updated_at: string
-        }
-        Insert: {
-          channel?: number | null
-          created_at?: string
-          created_by?: string | null
-          description?: string | null
-          device_ip?: string | null
-          device_password?: string | null
-          device_username?: string | null
-          embed_url?: string | null
-          id?: string
-          is_active?: boolean
-          location?: string | null
-          name: string
-          serial_number?: string | null
-          updated_at?: string
-        }
-        Update: {
-          channel?: number | null
-          created_at?: string
-          created_by?: string | null
-          description?: string | null
-          device_ip?: string | null
-          device_password?: string | null
-          device_username?: string | null
-          embed_url?: string | null
-          id?: string
-          is_active?: boolean
-          location?: string | null
-          name?: string
-          serial_number?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
       clients: {
         Row: {
           address: string | null
@@ -686,38 +635,6 @@ export type Database = {
             columns: ["equipment_type_id"]
             isOneToOne: false
             referencedRelation: "equipment_types"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      user_cameras: {
-        Row: {
-          assigned_at: string
-          assigned_by: string | null
-          camera_id: string
-          id: string
-          user_id: string
-        }
-        Insert: {
-          assigned_at?: string
-          assigned_by?: string | null
-          camera_id: string
-          id?: string
-          user_id: string
-        }
-        Update: {
-          assigned_at?: string
-          assigned_by?: string | null
-          camera_id?: string
-          id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_cameras_camera_id_fkey"
-            columns: ["camera_id"]
-            isOneToOne: false
-            referencedRelation: "cameras"
             referencedColumns: ["id"]
           },
         ]
