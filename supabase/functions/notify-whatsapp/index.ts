@@ -86,6 +86,19 @@ function buildMessage(
     return lines.join("\n");
   }
 
+  if (type === "signature_requested") {
+    return [
+      `✍️ *Assinatura Solicitada*`,
+      ``,
+      `📋 *Ticket:* #${ticketNumber}`,
+      `📝 *Assunto:* ${title}`,
+      `👤 *Técnico:* ${senderName}`,
+      ``,
+      `O técnico finalizou o atendimento e registrou sua assinatura.`,
+      `Por favor, acesse o chamado para assinar e encerrar o atendimento.`,
+    ].join("\n");
+  }
+
   return `🔔 *Notificação do Chamado #${ticketNumber}*\n\n${message}`;
 }
 
