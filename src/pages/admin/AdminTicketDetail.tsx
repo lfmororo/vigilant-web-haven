@@ -9,6 +9,7 @@ import PriorityBadge from "@/components/helpdesk/PriorityBadge";
 import TicketChat from "@/components/helpdesk/TicketChat";
 import SignaturePad from "@/components/helpdesk/SignaturePad";
 import TicketPrint from "@/components/admin/TicketPrint";
+import { generateAndUploadTicketPdf } from "@/lib/generateTicketPdf";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -187,10 +188,21 @@ const AdminTicketDetail = () => {
       is_internal: false,
     });
 
+    // Generate PDF for resolved/closed tickets and include in notification
+    let pdfUrl: string | undefined;
+    if (notificationType === "ticket_resolved" || notificationType === "ticket_closed") {
+      try {
+        const url = await generateAndUploadTicketPdf(id!);
+        if (url) pdfUrl = url;
+      } catch (err) {
+        console.error("PDF generation error:", err);
+      }
+    }
+
     // Single email notification
     const emailMessage = changes.join("\n");
     supabase.functions.invoke("notify-ticket-update", {
-      body: { ticket_id: id, sender_id: user.id, message: emailMessage, is_internal: false, notification_type: notificationType },
+      body: { ticket_id: id, sender_id: user.id, message: emailMessage, is_internal: false, notification_type: notificationType, pdf_url: pdfUrl },
     }).catch(() => {});
 
     toast({ title: "Alterações salvas!" });
