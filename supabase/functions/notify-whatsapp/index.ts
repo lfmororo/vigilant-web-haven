@@ -166,10 +166,18 @@ Deno.serve(async (req) => {
     };
     const priority = priorityLabels[ticket.priority] || "Média";
 
-    // Collect recipient IDs
+    // Collect profile recipient IDs (users, not clients)
     const recipientIds = new Set<string>();
-    if (ticket.client_id) recipientIds.add(ticket.client_id);
     if (ticket.assigned_to) recipientIds.add(ticket.assigned_to);
+
+    // Add users linked to this client (profiles with parent_client_id = ticket.client_id)
+    if (ticket.client_id) {
+      const { data: clientUsers } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("parent_client_id", ticket.client_id);
+      clientUsers?.forEach((u: any) => recipientIds.add(u.id));
+    }
 
     const { data: adminRoles } = await supabaseAdmin
       .from("user_roles")
@@ -188,7 +196,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch recipient phones
+    // Fetch recipient phones from profiles
     const { data: recipients } = await supabaseAdmin
       .from("profiles")
       .select("id, phone, full_name")
@@ -207,15 +215,15 @@ Deno.serve(async (req) => {
       resolution_summary
     );
 
-    // Fetch client's WhatsApp group ID
+    // Fetch client's WhatsApp group ID from clients table
     let groupId = "";
     if (ticket.client_id) {
-      const { data: clientProfile } = await supabaseAdmin
-        .from("profiles")
+      const { data: clientRecord } = await supabaseAdmin
+        .from("clients")
         .select("whatsapp_group_id")
         .eq("id", ticket.client_id)
         .single();
-      groupId = clientProfile?.whatsapp_group_id || "";
+      groupId = clientRecord?.whatsapp_group_id || "";
     }
 
     let sent = 0;
