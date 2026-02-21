@@ -9,21 +9,34 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Save, Loader2, Mail, Send, TestTube, Inbox, MessageCircle } from "lucide-react";
+import { Eye, EyeOff, Save, Loader2, Mail, Send, TestTube, Inbox, MessageCircle, Plus, Trash2, Edit2, X, Check } from "lucide-react";
+
+interface ImapAccount {
+  id: string;
+  label: string;
+  host: string;
+  port: string;
+  username: string;
+  password: string;
+  client_id: string | null;
+  is_active: boolean;
+  last_checked_at: string | null;
+}
+
+interface ClientProfile {
+  id: string;
+  full_name: string;
+  email: string;
+}
 
 const SystemSettings = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [imapForm, setImapForm] = useState({
-    email_imap_host: "",
-    email_imap_port: "",
-    email_imap_user: "",
-    email_imap_password: "",
-  });
-
+  // SMTP form state
   const [smtpForm, setSmtpForm] = useState({
     smtp_host: "",
     smtp_port: "",
@@ -33,41 +46,76 @@ const SystemSettings = () => {
     notification_enabled: "false",
   });
 
+  // WhatsApp form state
   const [whatsappForm, setWhatsappForm] = useState({
     whatsapp_api_url: "",
     whatsapp_api_token: "",
     whatsapp_enabled: "false",
   });
 
+  // IMAP accounts state
+  const [editingAccount, setEditingAccount] = useState<ImapAccount | null>(null);
+  const [isAddingAccount, setIsAddingAccount] = useState(false);
+  const [newAccount, setNewAccount] = useState<Omit<ImapAccount, "id" | "last_checked_at">>({
+    label: "",
+    host: "",
+    port: "993",
+    username: "",
+    password: "",
+    client_id: null,
+    is_active: true,
+  });
+
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
-  const [testingImap, setTestingImap] = useState(false);
   const [testingSmtp, setTestingSmtp] = useState(false);
   const [testingWhatsapp, setTestingWhatsapp] = useState(false);
+  const [testingImapId, setTestingImapId] = useState<string | null>(null);
   const [processingEmails, setProcessingEmails] = useState(false);
 
-  const { data: settings, isLoading } = useQuery({
+  // Fetch system settings
+  const { data: settings, isLoading: settingsLoading } = useQuery({
     queryKey: ["system-settings"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("system_settings")
-        .select("*");
+      const { data, error } = await supabase.from("system_settings").select("*");
       if (error) throw error;
       return data;
+    },
+  });
+
+  // Fetch IMAP accounts
+  const { data: imapAccounts, isLoading: imapLoading } = useQuery({
+    queryKey: ["imap-accounts"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("imap_accounts").select("*").order("created_at");
+      if (error) throw error;
+      return data as ImapAccount[];
+    },
+  });
+
+  // Fetch clients for the select dropdown
+  const { data: clients } = useQuery({
+    queryKey: ["clients-for-imap"],
+    queryFn: async () => {
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "client");
+      if (!roles || roles.length === 0) return [];
+      const clientIds = roles.map((r) => r.user_id);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", clientIds)
+        .is("parent_client_id", null)
+        .order("full_name");
+      return (profiles || []) as ClientProfile[];
     },
   });
 
   useEffect(() => {
     if (settings) {
       const map: Record<string, string> = {};
-      settings.forEach((s: any) => {
-        map[s.key] = s.value || "";
-      });
-      setImapForm({
-        email_imap_host: map.email_imap_host || "",
-        email_imap_port: map.email_imap_port || "",
-        email_imap_user: map.email_imap_user || "",
-        email_imap_password: map.email_imap_password || "",
-      });
+      settings.forEach((s: any) => { map[s.key] = s.value || ""; });
       setSmtpForm({
         smtp_host: map.smtp_host || "",
         smtp_port: map.smtp_port || "",
@@ -84,6 +132,7 @@ const SystemSettings = () => {
     }
   }, [settings]);
 
+  // Save system settings mutation
   const saveMutation = useMutation({
     mutationFn: async (entries: { key: string; value: string }[]) => {
       for (const entry of entries) {
@@ -103,30 +152,67 @@ const SystemSettings = () => {
     },
   });
 
-  const handleSaveImap = () => {
-    saveMutation.mutate(
-      Object.entries(imapForm).map(([key, value]) => ({ key, value }))
-    );
-  };
+  // IMAP account mutations
+  const createImapMutation = useMutation({
+    mutationFn: async (account: Omit<ImapAccount, "id" | "last_checked_at">) => {
+      const { error } = await supabase.from("imap_accounts").insert(account);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["imap-accounts"] });
+      setIsAddingAccount(false);
+      setNewAccount({ label: "", host: "", port: "993", username: "", password: "", client_id: null, is_active: true });
+      toast({ title: "Conta IMAP adicionada com sucesso!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao adicionar conta IMAP", variant: "destructive" });
+    },
+  });
+
+  const updateImapMutation = useMutation({
+    mutationFn: async (account: ImapAccount) => {
+      const { id, last_checked_at, ...updates } = account;
+      const { error } = await supabase.from("imap_accounts").update(updates).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["imap-accounts"] });
+      setEditingAccount(null);
+      toast({ title: "Conta IMAP atualizada com sucesso!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar conta IMAP", variant: "destructive" });
+    },
+  });
+
+  const deleteImapMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("imap_accounts").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["imap-accounts"] });
+      toast({ title: "Conta IMAP removida!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao remover conta IMAP", variant: "destructive" });
+    },
+  });
 
   const handleSaveSmtp = () => {
-    saveMutation.mutate(
-      Object.entries(smtpForm).map(([key, value]) => ({ key, value }))
-    );
+    saveMutation.mutate(Object.entries(smtpForm).map(([key, value]) => ({ key, value })));
   };
 
   const handleSaveWhatsapp = () => {
-    saveMutation.mutate(
-      Object.entries(whatsappForm).map(([key, value]) => ({ key, value }))
-    );
+    saveMutation.mutate(Object.entries(whatsappForm).map(([key, value]) => ({ key, value })));
   };
 
   const togglePassword = (field: string) => {
     setShowPasswords((prev) => ({ ...prev, [field]: !prev[field] }));
   };
 
-  const handleTestImap = async () => {
-    setTestingImap(true);
+  const handleTestImap = async (account: ImapAccount) => {
+    setTestingImapId(account.id);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const res = await fetch(
@@ -138,23 +224,23 @@ const SystemSettings = () => {
             Authorization: `Bearer ${sessionData.session?.access_token}`,
           },
           body: JSON.stringify({
-            host: imapForm.email_imap_host,
-            port: imapForm.email_imap_port,
-            user: imapForm.email_imap_user,
-            password: imapForm.email_imap_password,
+            host: account.host,
+            port: account.port,
+            user: account.username,
+            password: account.password,
           }),
         }
       );
       const result = await res.json();
       toast({
-        title: result.success ? "Teste IMAP" : "Falha no teste IMAP",
-        description: result.message || result.error,
+        title: result.success ? `Teste IMAP - ${account.label}` : `Falha - ${account.label}`,
+        description: String(result.message || result.error || ""),
         variant: result.success ? "default" : "destructive",
       });
     } catch {
       toast({ title: "Erro ao testar conexão IMAP", variant: "destructive" });
     } finally {
-      setTestingImap(false);
+      setTestingImapId(null);
     }
   };
 
@@ -174,14 +260,11 @@ const SystemSettings = () => {
       );
       const result = await res.json();
       if (result.success) {
-        toast({
-          title: "Emails processados",
-          description: result.message,
-        });
+        toast({ title: "Emails processados", description: String(result.message || "") });
       } else {
         toast({
           title: "Erro ao processar emails",
-          description: result.error || result.message,
+          description: String(result.error || result.message || ""),
           variant: "destructive",
         });
       }
@@ -216,7 +299,7 @@ const SystemSettings = () => {
       const result = await res.json();
       toast({
         title: result.success ? "Teste SMTP" : "Falha no teste SMTP",
-        description: result.message || result.error,
+        description: String(result.message || result.error || ""),
         variant: result.success ? "default" : "destructive",
       });
     } catch {
@@ -243,19 +326,12 @@ const SystemSettings = () => {
         const statusText = typeof result === "object"
           ? (result.status ? String(result.status) : result.message ? String(result.message) : JSON.stringify(result))
           : String(result);
-        toast({
-          title: "Conexão WhatsApp OK",
-          description: statusText,
-        });
+        toast({ title: "Conexão WhatsApp OK", description: statusText });
       } else {
         const errText = typeof result === "object"
           ? (result.error ? String(result.error) : result.message ? String(result.message) : `Status: ${res.status}`)
           : String(result);
-        toast({
-          title: "Falha na conexão WhatsApp",
-          description: errText,
-          variant: "destructive",
-        });
+        toast({ title: "Falha na conexão WhatsApp", description: errText, variant: "destructive" });
       }
     } catch (err: any) {
       toast({
@@ -268,6 +344,14 @@ const SystemSettings = () => {
     }
   };
 
+  const getClientName = (clientId: string | null) => {
+    if (!clientId || !clients) return "Nenhum (auto-detectar)";
+    const client = clients.find((c) => c.id === clientId);
+    return client ? client.full_name : "Cliente não encontrado";
+  };
+
+  const isLoading = settingsLoading || imapLoading;
+
   if (isLoading) {
     return (
       <AdminLayout>
@@ -277,6 +361,94 @@ const SystemSettings = () => {
       </AdminLayout>
     );
   }
+
+  const renderImapAccountForm = (
+    account: Omit<ImapAccount, "id" | "last_checked_at">,
+    onChange: (updates: Partial<typeof account>) => void,
+    passwordKey: string
+  ) => (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Nome da Conta</Label>
+        <Input
+          placeholder="Ex: Suporte Principal"
+          value={account.label}
+          onChange={(e) => onChange({ label: e.target.value })}
+        />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Servidor IMAP</Label>
+          <Input
+            placeholder="imap.gmail.com"
+            value={account.host}
+            onChange={(e) => onChange({ host: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Porta IMAP</Label>
+          <Input
+            placeholder="993"
+            value={account.port}
+            onChange={(e) => onChange({ port: e.target.value })}
+          />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label>Email</Label>
+        <Input
+          type="email"
+          placeholder="suporte@empresa.com"
+          value={account.username}
+          onChange={(e) => onChange({ username: e.target.value })}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Senha</Label>
+        <div className="relative">
+          <Input
+            type={showPasswords[passwordKey] ? "text" : "password"}
+            placeholder="••••••••"
+            value={account.password}
+            onChange={(e) => onChange({ password: e.target.value })}
+          />
+          <button
+            type="button"
+            onClick={() => togglePassword(passwordKey)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            {showPasswords[passwordKey] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label>Cliente vinculado</Label>
+        <Select
+          value={account.client_id || "none"}
+          onValueChange={(v) => onChange({ client_id: v === "none" ? null : v })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Selecione um cliente (opcional)" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Nenhum (auto-detectar por domínio)</SelectItem>
+            {clients?.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.full_name} ({c.email})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex items-center gap-3">
+        <Switch
+          checked={account.is_active}
+          onCheckedChange={(checked) => onChange({ is_active: checked })}
+        />
+        <Label>Conta ativa</Label>
+      </div>
+    </div>
+  );
 
   return (
     <AdminLayout>
@@ -304,82 +476,159 @@ const SystemSettings = () => {
             </TabsTrigger>
           </TabsList>
 
+          {/* IMAP Tab */}
           <TabsContent value="imap">
             <Card>
               <CardHeader>
-                <CardTitle>Email de Captura de Tickets</CardTitle>
-                <CardDescription>
-                  Configure o email que o sistema irá verificar periodicamente para abrir tickets automaticamente a partir de emails recebidos.
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Contas de Email para Captura de Tickets</CardTitle>
+                    <CardDescription>
+                      Configure as contas IMAP que o sistema verificará periodicamente. Cada conta pode ser vinculada a um cliente específico.
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      onClick={handleProcessEmails}
+                      disabled={processingEmails}
+                      className="gap-2"
+                    >
+                      {processingEmails ? <Loader2 className="w-4 h-4 animate-spin" /> : <Inbox className="w-4 h-4" />}
+                      Verificar Emails
+                    </Button>
+                    <Button onClick={() => setIsAddingAccount(true)} disabled={isAddingAccount} className="gap-2">
+                      <Plus className="w-4 h-4" />
+                      Nova Conta
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="imap_host">Servidor IMAP</Label>
-                    <Input
-                      id="imap_host"
-                      placeholder="imap.gmail.com"
-                      value={imapForm.email_imap_host}
-                      onChange={(e) => setImapForm((f) => ({ ...f, email_imap_host: e.target.value }))}
-                    />
+                {/* Add new account form */}
+                {isAddingAccount && (
+                  <Card className="border-primary/30 bg-primary/5">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg">Nova Conta IMAP</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {renderImapAccountForm(newAccount, (updates) => setNewAccount((prev) => ({ ...prev, ...updates })), "new-imap")}
+                      <div className="flex gap-3">
+                        <Button
+                          onClick={() => createImapMutation.mutate(newAccount)}
+                          disabled={createImapMutation.isPending || !newAccount.host || !newAccount.username}
+                          className="gap-2"
+                        >
+                          {createImapMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                          Salvar
+                        </Button>
+                        <Button variant="ghost" onClick={() => setIsAddingAccount(false)} className="gap-2">
+                          <X className="w-4 h-4" />
+                          Cancelar
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Existing accounts list */}
+                {(!imapAccounts || imapAccounts.length === 0) && !isAddingAccount && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Mail className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>Nenhuma conta IMAP configurada.</p>
+                    <p className="text-sm">Clique em "Nova Conta" para adicionar.</p>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="imap_port">Porta IMAP</Label>
-                    <Input
-                      id="imap_port"
-                      placeholder="993"
-                      value={imapForm.email_imap_port}
-                      onChange={(e) => setImapForm((f) => ({ ...f, email_imap_port: e.target.value }))}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="imap_user">Email</Label>
-                  <Input
-                    id="imap_user"
-                    type="email"
-                    placeholder="suporte@empresa.com"
-                    value={imapForm.email_imap_user}
-                    onChange={(e) => setImapForm((f) => ({ ...f, email_imap_user: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="imap_password">Senha</Label>
-                  <div className="relative">
-                    <Input
-                      id="imap_password"
-                      type={showPasswords.imap ? "text" : "password"}
-                      placeholder="••••••••"
-                      value={imapForm.email_imap_password}
-                      onChange={(e) => setImapForm((f) => ({ ...f, email_imap_password: e.target.value }))}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => togglePassword("imap")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {showPasswords.imap ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-                <div className="flex gap-3 flex-wrap">
-                  <Button onClick={handleSaveImap} disabled={saveMutation.isPending} className="gap-2">
-                    {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    Salvar
-                  </Button>
-                  <Button variant="outline" onClick={handleTestImap} disabled={testingImap} className="gap-2">
-                    {testingImap ? <Loader2 className="w-4 h-4 animate-spin" /> : <TestTube className="w-4 h-4" />}
-                    Testar Conexão
-                  </Button>
-                  <Button variant="secondary" onClick={handleProcessEmails} disabled={processingEmails} className="gap-2">
-                    {processingEmails ? <Loader2 className="w-4 h-4 animate-spin" /> : <Inbox className="w-4 h-4" />}
-                    Verificar Emails Agora
-                  </Button>
-                </div>
+                )}
+
+                {imapAccounts?.map((account) => (
+                  <Card key={account.id} className={!account.is_active ? "opacity-60" : ""}>
+                    <CardContent className="pt-4">
+                      {editingAccount?.id === account.id ? (
+                        <div className="space-y-4">
+                          {renderImapAccountForm(
+                            editingAccount,
+                            (updates) => setEditingAccount((prev) => prev ? { ...prev, ...updates } : prev),
+                            `edit-${account.id}`
+                          )}
+                          <div className="flex gap-3">
+                            <Button
+                              onClick={() => updateImapMutation.mutate(editingAccount)}
+                              disabled={updateImapMutation.isPending}
+                              className="gap-2"
+                            >
+                              {updateImapMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                              Salvar
+                            </Button>
+                            <Button variant="ghost" onClick={() => setEditingAccount(null)} className="gap-2">
+                              <X className="w-4 h-4" />
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold">{account.label || account.username}</h3>
+                              {!account.is_active && (
+                                <span className="text-xs bg-muted px-2 py-0.5 rounded-full">Inativa</span>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {account.host}:{account.port} — {account.username}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Cliente: {getClientName(account.client_id)}
+                            </p>
+                            {account.last_checked_at && (
+                              <p className="text-xs text-muted-foreground">
+                                Última verificação: {new Date(account.last_checked_at).toLocaleString("pt-BR")}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleTestImap(account)}
+                              disabled={testingImapId === account.id}
+                              className="gap-1"
+                            >
+                              {testingImapId === account.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <TestTube className="w-3 h-3" />}
+                              Testar
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEditingAccount({ ...account })}
+                              className="gap-1"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                              Editar
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => {
+                                if (confirm("Tem certeza que deseja remover esta conta IMAP?")) {
+                                  deleteImapMutation.mutate(account.id);
+                                }
+                              }}
+                              className="gap-1"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
               </CardContent>
             </Card>
           </TabsContent>
 
+          {/* SMTP Tab */}
           <TabsContent value="smtp">
             <Card>
               <CardHeader>
@@ -392,69 +641,32 @@ const SystemSettings = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="smtp_host">Servidor SMTP</Label>
-                    <Input
-                      id="smtp_host"
-                      placeholder="smtp.gmail.com"
-                      value={smtpForm.smtp_host}
-                      onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_host: e.target.value }))}
-                    />
+                    <Input id="smtp_host" placeholder="smtp.gmail.com" value={smtpForm.smtp_host} onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_host: e.target.value }))} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="smtp_port">Porta SMTP</Label>
-                    <Input
-                      id="smtp_port"
-                      placeholder="587"
-                      value={smtpForm.smtp_port}
-                      onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_port: e.target.value }))}
-                    />
+                    <Input id="smtp_port" placeholder="587" value={smtpForm.smtp_port} onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_port: e.target.value }))} />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="smtp_user">Email de Envio</Label>
-                  <Input
-                    id="smtp_user"
-                    type="email"
-                    placeholder="notificacoes@empresa.com"
-                    value={smtpForm.smtp_user}
-                    onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_user: e.target.value }))}
-                  />
+                  <Input id="smtp_user" type="email" placeholder="notificacoes@empresa.com" value={smtpForm.smtp_user} onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_user: e.target.value }))} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="smtp_password">Senha SMTP</Label>
                   <div className="relative">
-                    <Input
-                      id="smtp_password"
-                      type={showPasswords.smtp ? "text" : "password"}
-                      placeholder="••••••••"
-                      value={smtpForm.smtp_password}
-                      onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_password: e.target.value }))}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => togglePassword("smtp")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
+                    <Input id="smtp_password" type={showPasswords.smtp ? "text" : "password"} placeholder="••••••••" value={smtpForm.smtp_password} onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_password: e.target.value }))} />
+                    <button type="button" onClick={() => togglePassword("smtp")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                       {showPasswords.smtp ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="smtp_from_name">Nome do Remetente</Label>
-                  <Input
-                    id="smtp_from_name"
-                    placeholder="FM TechFlow Suporte"
-                    value={smtpForm.smtp_from_name}
-                    onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_from_name: e.target.value }))}
-                  />
+                  <Input id="smtp_from_name" placeholder="FM TechFlow Suporte" value={smtpForm.smtp_from_name} onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_from_name: e.target.value }))} />
                 </div>
                 <div className="flex items-center gap-3 pt-2">
-                  <Switch
-                    id="notification_enabled"
-                    checked={smtpForm.notification_enabled === "true"}
-                    onCheckedChange={(checked) =>
-                      setSmtpForm((f) => ({ ...f, notification_enabled: checked ? "true" : "false" }))
-                    }
-                  />
+                  <Switch id="notification_enabled" checked={smtpForm.notification_enabled === "true"} onCheckedChange={(checked) => setSmtpForm((f) => ({ ...f, notification_enabled: checked ? "true" : "false" }))} />
                   <Label htmlFor="notification_enabled">Ativar notificações por email</Label>
                 </div>
                 <div className="flex gap-3">
@@ -471,6 +683,7 @@ const SystemSettings = () => {
             </Card>
           </TabsContent>
 
+          {/* WhatsApp Tab */}
           <TabsContent value="whatsapp">
             <Card>
               <CardHeader>
@@ -482,40 +695,19 @@ const SystemSettings = () => {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="whatsapp_api_url">URL da API</Label>
-                  <Input
-                    id="whatsapp_api_url"
-                    placeholder="https://ipazua.uazapi.com"
-                    value={whatsappForm.whatsapp_api_url}
-                    onChange={(e) => setWhatsappForm((f) => ({ ...f, whatsapp_api_url: e.target.value }))}
-                  />
+                  <Input id="whatsapp_api_url" placeholder="https://ipazua.uazapi.com" value={whatsappForm.whatsapp_api_url} onChange={(e) => setWhatsappForm((f) => ({ ...f, whatsapp_api_url: e.target.value }))} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="whatsapp_api_token">Token da Instância</Label>
                   <div className="relative">
-                    <Input
-                      id="whatsapp_api_token"
-                      type={showPasswords.whatsapp ? "text" : "password"}
-                      placeholder="••••••••"
-                      value={whatsappForm.whatsapp_api_token}
-                      onChange={(e) => setWhatsappForm((f) => ({ ...f, whatsapp_api_token: e.target.value }))}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => togglePassword("whatsapp")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
+                    <Input id="whatsapp_api_token" type={showPasswords.whatsapp ? "text" : "password"} placeholder="••••••••" value={whatsappForm.whatsapp_api_token} onChange={(e) => setWhatsappForm((f) => ({ ...f, whatsapp_api_token: e.target.value }))} />
+                    <button type="button" onClick={() => togglePassword("whatsapp")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                       {showPasswords.whatsapp ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 pt-2">
-                  <Switch
-                    id="whatsapp_enabled"
-                    checked={whatsappForm.whatsapp_enabled === "true"}
-                    onCheckedChange={(checked) =>
-                      setWhatsappForm((f) => ({ ...f, whatsapp_enabled: checked ? "true" : "false" }))
-                    }
-                  />
+                  <Switch id="whatsapp_enabled" checked={whatsappForm.whatsapp_enabled === "true"} onCheckedChange={(checked) => setWhatsappForm((f) => ({ ...f, whatsapp_enabled: checked ? "true" : "false" }))} />
                   <Label htmlFor="whatsapp_enabled">Ativar notificações via WhatsApp</Label>
                 </div>
                 <div className="flex gap-3">
