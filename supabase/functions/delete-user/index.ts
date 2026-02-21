@@ -97,6 +97,9 @@ Deno.serve(async (req) => {
     // Nullify technician on service orders
     await supabaseAdmin.from("service_orders").update({ technician_id: null }).eq("technician_id", user_id);
     
+    // Delete ticket messages sent by this user
+    await supabaseAdmin.from("ticket_messages").delete().eq("sender_id", user_id);
+    
     // Delete equipment, API keys, IMAP accounts
     await supabaseAdmin.from("equipment_inventory").delete().eq("client_id", user_id);
     await supabaseAdmin.from("inventory_api_keys").delete().eq("client_id", user_id);
