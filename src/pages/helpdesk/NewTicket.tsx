@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,7 +11,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
+
+const PRIORITY_LABELS: Record<string, string> = {
+  low: "Baixa",
+  medium: "Média",
+  high: "Alta",
+  urgent: "Urgente",
+};
 
 const NewTicket = () => {
   const { user } = useAuth();
@@ -20,6 +27,8 @@ const NewTicket = () => {
   const [loading, setLoading] = useState(false);
   const [parentClientId, setParentClientId] = useState<string | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [classifying, setClassifying] = useState(false);
+  const [classified, setClassified] = useState(false);
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -36,6 +45,54 @@ const NewTicket = () => {
         setLoadingProfile(false);
       });
   }, [user]);
+
+  const classifyTicket = useCallback(async () => {
+    if (!form.title.trim() || !form.description.trim() || classifying || classified) return;
+
+    setClassifying(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-classify-ticket", {
+        body: { title: form.title, description: form.description },
+      });
+
+      if (error) {
+        console.error("Classification error:", error);
+        return;
+      }
+
+      if (data) {
+        setForm((prev) => ({
+          ...prev,
+          priority: data.priority || prev.priority,
+          equipment_type_id: data.equipment_type_id || prev.equipment_type_id,
+        }));
+        setClassified(true);
+        toast({
+          title: "🤖 IA classificou o chamado",
+          description: `Prioridade: ${PRIORITY_LABELS[data.priority] || data.priority}${data.equipment_type_id ? " • Tipo de equipamento detectado" : ""}`,
+        });
+      }
+    } catch (err) {
+      console.error("Classification error:", err);
+    } finally {
+      setClassifying(false);
+    }
+  }, [form.title, form.description, classifying, classified, toast]);
+
+  // Auto-classify when description loses focus
+  const handleDescriptionBlur = () => {
+    if (form.title.trim() && form.description.trim() && !classified) {
+      classifyTicket();
+    }
+  };
+
+  // Reset classified flag when title or description changes significantly
+  const handleFieldChange = (field: string, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    if (field === "title" || field === "description") {
+      setClassified(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,19 +154,42 @@ const NewTicket = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="title">Título *</Label>
-                <Input id="title" placeholder="Descreva brevemente o problema" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                <Input id="title" placeholder="Descreva brevemente o problema" value={form.title} onChange={(e) => handleFieldChange("title", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">Descrição *</Label>
-                <Textarea id="description" placeholder="Detalhe o problema, quando começou, o que já tentou..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="min-h-[120px]" />
+                <Textarea
+                  id="description"
+                  placeholder="Detalhe o problema, quando começou, o que já tentou..."
+                  value={form.description}
+                  onChange={(e) => handleFieldChange("description", e.target.value)}
+                  onBlur={handleDescriptionBlur}
+                  className="min-h-[120px]"
+                />
+                {classifying && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse">
+                    <Sparkles className="w-3 h-3" />
+                    <span>IA classificando chamado...</span>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Tipo de Equipamento</Label>
+                  <Label className="flex items-center gap-1.5">
+                    Tipo de Equipamento
+                    {classified && form.equipment_type_id && (
+                      <span className="text-xs text-primary flex items-center gap-0.5"><Sparkles className="w-3 h-3" /> IA</span>
+                    )}
+                  </Label>
                   <EquipmentTypeSelect value={form.equipment_type_id} onValueChange={(v) => setForm({ ...form, equipment_type_id: v })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Prioridade</Label>
+                  <Label className="flex items-center gap-1.5">
+                    Prioridade
+                    {classified && (
+                      <span className="text-xs text-primary flex items-center gap-0.5"><Sparkles className="w-3 h-3" /> IA</span>
+                    )}
+                  </Label>
                   <Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
