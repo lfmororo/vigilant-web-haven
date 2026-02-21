@@ -2,11 +2,14 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import ReportFilters from "./ReportFilters";
+import RankingReportPrint from "./RankingReportPrint";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { Printer } from "lucide-react";
 
 const COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#16a34a", "#0891b2", "#d97706", "#6366f1", "#e11d48", "#059669"];
 
@@ -14,6 +17,7 @@ const UserRankingReport = () => {
   const [clientId, setClientId] = useState("all");
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
+  const [showPrint, setShowPrint] = useState(false);
 
   const { data: clients } = useQuery({
     queryKey: ["ranking-clients-u"],
@@ -74,8 +78,33 @@ const UserRankingReport = () => {
     setEndDate(undefined);
   };
 
+  const printFilters = useMemo(() => {
+    const clientName = clientId !== "all" && clients
+      ? clients.find(c => c.id === clientId)?.full_name || "Todos"
+      : "Todos";
+    return { clientName, startDate, endDate };
+  }, [clientId, startDate, endDate, clients]);
+
+  if (showPrint && ranking.length) {
+    return (
+      <RankingReportPrint
+        title="Ranking de Usuários"
+        columnLabel="Usuário"
+        ranking={ranking}
+        filters={printFilters}
+        onClose={() => setShowPrint(false)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <Button onClick={() => setShowPrint(true)} variant="outline" className="gap-2" disabled={!ranking.length}>
+          <Printer className="w-4 h-4" /> Imprimir
+        </Button>
+      </div>
+
       <Card>
         <CardContent className="pt-6">
           <ReportFilters
