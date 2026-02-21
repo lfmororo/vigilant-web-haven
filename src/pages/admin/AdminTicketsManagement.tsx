@@ -15,6 +15,7 @@ import { formatTimeAgo } from "@/lib/formatTimeAgo";
 const AdminTicketsManagement = () => {
   const { user, isAdmin } = useAuth();
   const [tickets, setTickets] = useState<any[]>([]);
+  const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
   const [lastMessages, setLastMessages] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -23,7 +24,7 @@ const AdminTicketsManagement = () => {
 
   useEffect(() => {
     let query = supabase.from("tickets")
-      .select("*, client:clients!tickets_client_id_fkey(full_name), assigned:profiles!tickets_assigned_to_fkey(full_name), creator:profiles!tickets_created_by_fkey(full_name), equipment_type:equipment_types(name)")
+      .select("*, client:clients!tickets_client_id_fkey(full_name), assigned:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name)")
       .order("created_at", { ascending: false });
 
     if (!isAdmin && user) {
@@ -35,6 +36,7 @@ const AdminTicketsManagement = () => {
       setTickets(tks);
       if (tks.length > 0) {
         const ids = tks.map((t: any) => t.id);
+        // Fetch last messages
         const { data: msgs } = await supabase
           .from("ticket_messages")
           .select("ticket_id, created_at")
@@ -45,6 +47,18 @@ const AdminTicketsManagement = () => {
           if (!map[m.ticket_id]) map[m.ticket_id] = m.created_at;
         });
         setLastMessages(map);
+
+        // Fetch creator names from profiles
+        const creatorIds = [...new Set(tks.map((t: any) => t.created_by).filter(Boolean))];
+        if (creatorIds.length > 0) {
+          const { data: creators } = await supabase
+            .from("profiles")
+            .select("id, full_name")
+            .in("id", creatorIds);
+          const cMap: Record<string, string> = {};
+          (creators || []).forEach((c: any) => { cMap[c.id] = c.full_name; });
+          setCreatorNames(cMap);
+        }
       }
       setLoading(false);
     });
@@ -121,7 +135,7 @@ const AdminTicketsManagement = () => {
                       <TableCell><Link to={`/admin/tickets/${t.id}`} className="font-mono text-xs">{t.ticket_number}</Link></TableCell>
                       <TableCell><Link to={`/admin/tickets/${t.id}`} className="font-medium hover:underline">{t.title}</Link></TableCell>
                       <TableCell className="text-muted-foreground">{t.client?.full_name || "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">{t.creator?.full_name || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">{creatorNames[t.created_by] || "-"}</TableCell>
                       <TableCell className="text-muted-foreground">{t.equipment_type?.name || "-"}</TableCell>
                       <TableCell className="text-muted-foreground">{t.assigned?.full_name || "Não atribuído"}</TableCell>
                       <TableCell><PriorityBadge priority={t.priority} /></TableCell>
