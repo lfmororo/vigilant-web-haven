@@ -546,7 +546,7 @@ async function processImapAccount(
 
         await supabaseAdmin.from("user_roles").insert({
           user_id: clientId,
-          role: "client",
+          role: "user",
         });
 
         result.usersCreated++;
@@ -568,8 +568,11 @@ async function processImapAccount(
         }
       }
 
+      // Use parent client as ticket owner if available, otherwise use sender's own ID
+      const ticketClientId = (existingProfile?.parent_client_id) || (domainClient?.id) || defaultClientId || clientId;
+
       const { data: newTicket } = await supabaseAdmin.from("tickets").insert({
-        client_id: clientId,
+        client_id: ticketClientId,
         created_by: clientId,
         title: subject,
         description: bodyText,
