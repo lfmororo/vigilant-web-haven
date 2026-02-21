@@ -229,7 +229,7 @@ Deno.serve(async (req) => {
 
     let sent = 0;
     const sendTextUrl = `${apiUrl.replace(/\/+$/, "")}/send/text`;
-    const sendDocUrl = `${apiUrl.replace(/\/+$/, "")}/send/document`;
+    const sendFileUrl = `${apiUrl.replace(/\/+$/, "")}/send/file-url`;
 
     // Helper to send text + optional PDF document
     const sendToNumber = async (number: string) => {
@@ -248,9 +248,9 @@ Deno.serve(async (req) => {
           console.error(`WhatsApp text failed for ${number}: ${textResp.status} ${errBody}`);
         }
 
-        // Send PDF document if available (only for resolved tickets)
+        // Send PDF document if available (only for resolved/closed tickets)
         if (pdf_url && (notification_type === "ticket_resolved" || notification_type === "ticket_closed")) {
-          const docResp = await fetch(sendDocUrl, {
+          const docResp = await fetch(sendFileUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json", token: apiToken },
             body: JSON.stringify({
