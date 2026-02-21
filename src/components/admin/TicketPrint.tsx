@@ -93,7 +93,8 @@ const TicketPrint = ({ ticketId, onClose }: TicketPrintProps) => {
       <div className="p-8 max-w-[210mm] mx-auto">
         <div className="border-2 border-black">
           {/* Header */}
-          <div className="flex items-center border-b-2 border-black p-4">
+          <div className="flex items-center border-b-2 border-black p-4 gap-4">
+            <img src="/lovable-uploads/6a5524af-fc9f-4a85-85ec-2236896048a6.png" alt="Logo" className="h-14 w-auto object-contain" />
             <div className="flex-1">
               <h1 className="text-xl font-bold tracking-tight">{company.company_name || "Empresa"}</h1>
               {company.company_address && <p className="text-xs mt-0.5">{company.company_address}</p>}
