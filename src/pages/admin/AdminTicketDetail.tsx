@@ -45,7 +45,7 @@ const AdminTicketDetail = () => {
     if (!id) return;
     supabase.from("tickets")
       .select("*, client:profiles!tickets_client_id_fkey(full_name, email), assigned:profiles!tickets_assigned_to_fkey(full_name), creator:profiles!tickets_created_by_fkey(full_name, email), equipment_type:equipment_types(name)")
-      .eq("id", id).single()
+      .eq("id", id).maybeSingle()
       .then(({ data }) => {
         setTicket(data);
         if (data) {
