@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, FileText, Trash2, Save, Printer } from "lucide-react";
+import { ArrowLeft, Loader2, FileText, Trash2, Save, Printer, Monitor } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -40,6 +40,7 @@ const AdminTicketDetail = () => {
   const [pendingEquipmentId, setPendingEquipmentId] = useState<string>("");
   const [clientEquipments, setClientEquipments] = useState<any[]>([]);
   const [showPrint, setShowPrint] = useState(false);
+  const [requestingAccess, setRequestingAccess] = useState(false);
 
   const isStaff = isAdmin || isTechnician;
 
@@ -246,6 +247,26 @@ const AdminTicketDetail = () => {
             <p className="text-sm text-muted-foreground">Cliente: {ticket.client?.full_name} ({ticket.client?.email})</p>
           </div>
           <Button variant="outline" size="icon" onClick={() => setShowPrint(true)} title="Exportar PDF"><Printer className="w-4 h-4" /></Button>
+          <Button
+            variant="outline"
+            disabled={requestingAccess}
+            onClick={async () => {
+              setRequestingAccess(true);
+              try {
+                const { error } = await supabase.functions.invoke("request-remote-access", {
+                  body: { ticket_id: id, sender_id: user?.id },
+                });
+                if (error) throw error;
+                toast({ title: "Solicitação enviada!", description: "Notificação de acesso remoto enviada por e-mail e WhatsApp." });
+              } catch (err: any) {
+                toast({ variant: "destructive", title: "Erro", description: err.message || "Erro ao enviar solicitação" });
+              }
+              setRequestingAccess(false);
+            }}
+          >
+            {requestingAccess ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Monitor className="w-4 h-4 mr-2" />}
+            Acesso Remoto
+          </Button>
           <Button variant="outline" onClick={createServiceOrder}><FileText className="w-4 h-4 mr-2" />Criar OS</Button>
           {isAdmin && (
             <AlertDialog>
