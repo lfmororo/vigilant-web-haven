@@ -553,6 +553,64 @@ export type Database = {
           },
         ]
       }
+      ticket_ratings: {
+        Row: {
+          client_id: string
+          comment: string | null
+          created_at: string
+          id: string
+          rated_at: string
+          rating: number | null
+          rating_token: string
+          technician_id: string | null
+          ticket_id: string
+        }
+        Insert: {
+          client_id: string
+          comment?: string | null
+          created_at?: string
+          id?: string
+          rated_at?: string
+          rating?: number | null
+          rating_token?: string
+          technician_id?: string | null
+          ticket_id: string
+        }
+        Update: {
+          client_id?: string
+          comment?: string | null
+          created_at?: string
+          id?: string
+          rated_at?: string
+          rating?: number | null
+          rating_token?: string
+          technician_id?: string | null
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_ratings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_ratings_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_ratings_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: true
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tickets: {
         Row: {
           assigned_to: string | null
