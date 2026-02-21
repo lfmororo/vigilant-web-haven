@@ -603,9 +603,10 @@ async function processImapAccount(
       result.ticketsCreated++;
 
       if (newTicket) {
+        // Use centralized notify-ticket-update which handles email, Telegram, and WhatsApp
         try {
-          const telegramUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-telegram`;
-          await fetch(telegramUrl, {
+          const notifyUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-ticket-update`;
+          const notifyResp = await fetch(notifyUrl, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -613,71 +614,15 @@ async function processImapAccount(
             },
             body: JSON.stringify({
               ticket_id: newTicket.id,
-              notification_type: "ticket_opened",
+              sender_id: senderId,
               message: bodyText.substring(0, 500),
-              sender_name: senderName,
+              is_internal: false,
+              notification_type: "ticket_opened",
             }),
           });
-        } catch (tgErr) {
-          console.error("Error sending Telegram notification:", tgErr);
-        }
-
-        // WhatsApp notification
-        try {
-          const whatsappUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-whatsapp`;
-          await fetch(whatsappUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-            },
-            body: JSON.stringify({
-              ticket_id: newTicket.id,
-              notification_type: "ticket_opened",
-              message: bodyText.substring(0, 500),
-              sender_name: senderName,
-            }),
-          });
-        } catch (waErr) {
-          console.error("Error sending WhatsApp notification:", waErr);
-        }
-      }
-
-      // Notify admins about new ticket via email
-      if (newTicket && smtpHost && smtpUser && smtpPassword) {
-        try {
-          const { data: adminRoles } = await supabaseAdmin
-            .from("user_roles")
-            .select("user_id")
-            .eq("role", "admin");
-
-          if (adminRoles && adminRoles.length > 0) {
-            const adminIds = adminRoles.map((r: any) => r.user_id);
-            const { data: adminProfiles } = await supabaseAdmin
-              .from("profiles")
-              .select("email, full_name")
-              .in("id", adminIds);
-
-            const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
-            const ticketUrl = `${baseUrl}/admin/tickets/${newTicket.id}`;
-
-            for (const admin of (adminProfiles || [])) {
-              try {
-                const adminHtml = buildAdminNewTicketHtml(smtpFromName, admin.full_name, senderName, senderEmail, subject, bodyText, ticketUrl);
-                await sendSmtpEmail(
-                  smtpHost, smtpPort, smtpUser, smtpPassword, smtpFromName,
-                  admin.email,
-                  `Novo chamado recebido por e-mail: ${subject}`,
-                  adminHtml,
-                  true
-                );
-              } catch (adminEmailErr) {
-                console.error(`Error sending admin notification to ${admin.email}:`, adminEmailErr);
-              }
-            }
-          }
+          console.log(`notify-ticket-update response: ${notifyResp.status}`);
         } catch (notifyErr) {
-          console.error("Error notifying admins:", notifyErr);
+          console.error("Error calling notify-ticket-update:", notifyErr);
         }
       }
 
