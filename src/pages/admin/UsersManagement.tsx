@@ -29,7 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Camera, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
+import { Plus, Loader2, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,7 +41,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { z } from "zod";
-import { Link } from "react-router-dom";
+
 
 interface UserProfile {
   id: string;
@@ -411,9 +411,6 @@ const UsersManagement = () => {
                         <TableCell className="text-right space-x-1">
                           <Button variant="ghost" size="sm" onClick={() => openEditDialog(user)}>
                             <Pencil className="w-4 h-4 mr-1" />Editar
-                          </Button>
-                          <Button variant="ghost" size="sm" asChild>
-                            <Link to={`/admin/users/${user.id}/cameras`}><Camera className="w-4 h-4 mr-1" />Câmeras</Link>
                           </Button>
                           <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeletingUser(user)}>
                             <Trash2 className="w-4 h-4 mr-1" />Excluir
