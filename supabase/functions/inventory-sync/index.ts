@@ -179,6 +179,79 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Send notifications if new equipment was created
+      if (created > 0) {
+        try {
+          // Get client name
+          const { data: clientProfile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", client_id)
+            .single();
+          const clientName = clientProfile?.full_name || "Cliente";
+
+          // Collect new equipment names for the message
+          const newItems = equipment
+            .filter((item: any) => item.name && item.serial_number)
+            .slice(0, 10)
+            .map((item: any) => `• ${item.name}${item.serial_number ? ` (S/N: ${item.serial_number})` : ""}`)
+            .join("\n");
+
+          const summary = `📦 *Novos Equipamentos no Inventário*\n\n👤 *Cliente:* ${clientName}\n📊 *Adicionados:* ${created}\n🔄 *Atualizados:* ${updated}\n\n🆕 *Equipamentos:*\n${newItems}${created > 10 ? `\n... e mais ${created - 10}` : ""}`;
+
+          // Telegram notification (fire-and-forget)
+          const telegramToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+          const telegramChatId = Deno.env.get("TELEGRAM_CHAT_ID");
+          if (telegramToken && telegramChatId) {
+            const escaped = summary.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, "\\$1");
+            fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: telegramChatId, text: escaped, parse_mode: "MarkdownV2" }),
+            }).catch((e) => console.error("Telegram notify error:", e));
+          }
+
+          // WhatsApp notification (fire-and-forget)
+          const { data: settingsData } = await supabase
+            .from("system_settings")
+            .select("key, value");
+          const settings: Record<string, string> = {};
+          settingsData?.forEach((s: any) => { settings[s.key] = s.value || ""; });
+
+          if (settings.whatsapp_enabled === "true" && settings.whatsapp_api_url && settings.whatsapp_api_token) {
+            // Get admin phones
+            const { data: adminRoles } = await supabase
+              .from("user_roles")
+              .select("user_id")
+              .eq("role", "admin");
+            const adminIds = (adminRoles || []).map((r: any) => r.user_id);
+
+            if (adminIds.length > 0) {
+              const { data: adminProfiles } = await supabase
+                .from("profiles")
+                .select("phone")
+                .in("id", adminIds);
+
+              const sendUrl = `${settings.whatsapp_api_url.replace(/\/+$/, "")}/send/text`;
+              const plainText = summary.replace(/\*/g, "*"); // WhatsApp uses simple markdown
+
+              for (const admin of adminProfiles || []) {
+                if (!admin.phone) continue;
+                const phone = admin.phone.replace(/[\s\-\(\)\+]/g, "");
+                if (phone.length < 10) continue;
+                fetch(sendUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", token: settings.whatsapp_api_token },
+                  body: JSON.stringify({ number: phone, text: plainText }),
+                }).catch((e) => console.error("WhatsApp notify error:", e));
+              }
+            }
+          }
+        } catch (notifyErr) {
+          console.error("Notification error (non-blocking):", notifyErr);
+        }
+      }
+
       return new Response(
         JSON.stringify({
           success: true,
