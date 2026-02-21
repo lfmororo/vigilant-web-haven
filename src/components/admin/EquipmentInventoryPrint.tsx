@@ -72,7 +72,8 @@ const EquipmentInventoryPrint = ({ equipment, filters, onClose }: EquipmentInven
       <div className="print-page p-8 max-w-[210mm] mx-auto">
         <div className="border-2 border-black">
           {/* Header */}
-          <div className="flex items-center border-b-2 border-black p-3">
+          <div className="flex items-center border-b-2 border-black p-3 gap-3">
+            <img src="/lovable-uploads/6a5524af-fc9f-4a85-85ec-2236896048a6.png" alt="Logo" className="h-12 w-auto object-contain" />
             <div className="flex-1">
               <h1 className="text-lg font-bold">{company.company_name || "Empresa"}</h1>
               <p className="text-xs">{company.company_address || ""}</p>
