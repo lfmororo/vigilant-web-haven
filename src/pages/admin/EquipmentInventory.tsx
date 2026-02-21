@@ -105,6 +105,7 @@ const EquipmentInventory = () => {
   const [searchParams] = useSearchParams();
   const clientFilter = searchParams.get("client");
   const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [diskMap, setDiskMap] = useState<Record<string, { drive_letter: string; pct: number; used: number; total: number; free: number }>>({});
   const [clients, setClients] = useState<{ id: string; full_name: string }[]>([]);
   const [equipmentTypes, setEquipmentTypes] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,7 +139,30 @@ const EquipmentInventory = () => {
 
       const { data, error } = await query;
       if (error) throw error;
-      setEquipment((data as any) || []);
+      const items = (data as any) || [];
+      setEquipment(items);
+
+      // Fetch all disks for these equipment IDs
+      const ids = items.map((e: any) => e.id);
+      if (ids.length > 0) {
+        const { data: allDisks } = await supabase
+          .from("equipment_disks")
+          .select("equipment_id, drive_letter, disk_total_gb, disk_used_gb, disk_free_gb")
+          .in("equipment_id", ids);
+        
+        const map: Record<string, { drive_letter: string; pct: number; used: number; total: number; free: number }> = {};
+        for (const d of allDisks || []) {
+          if (d.disk_total_gb && d.disk_total_gb > 0 && d.disk_used_gb != null) {
+            const pct = Math.round((d.disk_used_gb / d.disk_total_gb) * 100);
+            if (!map[d.equipment_id] || pct > map[d.equipment_id].pct) {
+              map[d.equipment_id] = { drive_letter: d.drive_letter || "?", pct, used: d.disk_used_gb, total: d.disk_total_gb, free: d.disk_free_gb || 0 };
+            }
+          }
+        }
+        setDiskMap(map);
+      } else {
+        setDiskMap({});
+      }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro ao carregar equipamentos", description: error.message });
     } finally {
@@ -422,11 +446,11 @@ const EquipmentInventory = () => {
                 </TableHeader>
                 <TableBody>
                   {equipment.map((item) => {
-                    const diskPercent = item.disk_total_gb && item.disk_used_gb
-                      ? Math.round((item.disk_used_gb / item.disk_total_gb) * 100)
-                      : null;
+                    const worstDisk = diskMap[item.id];
+                    const diskPercent = worstDisk ? worstDisk.pct
+                      : (item.disk_total_gb && item.disk_used_gb ? Math.round((item.disk_used_gb / item.disk_total_gb) * 100) : null);
                     const diskColorClass = diskPercent != null
-                      ? diskPercent > 80 ? "text-destructive font-medium" : diskPercent > 60 ? "text-yellow-500 font-medium" : "text-muted-foreground"
+                      ? diskPercent > 90 ? "text-destructive font-bold" : diskPercent > 80 ? "text-destructive font-medium" : diskPercent > 60 ? "text-yellow-500 font-medium" : "text-muted-foreground"
                       : "text-muted-foreground";
                     return (
                       <TableRow key={item.id}>
@@ -440,7 +464,16 @@ const EquipmentInventory = () => {
                           {item.ram_total_gb != null ? `${item.ram_total_gb} GB` : "-"}
                         </TableCell>
                         <TableCell className="text-xs">
-                          {item.disk_total_gb != null ? (
+                          {worstDisk ? (
+                            <div className="space-y-0.5">
+                              <div className={diskColorClass}>
+                                {worstDisk.drive_letter}: {worstDisk.used}/{worstDisk.total} GB ({worstDisk.pct}%)
+                              </div>
+                              <div className="text-muted-foreground/60 text-[10px]">
+                                {worstDisk.free} GB livre (pior disco)
+                              </div>
+                            </div>
+                          ) : item.disk_total_gb != null ? (
                             <div className="space-y-0.5">
                               <div className={diskColorClass}>
                                 {item.disk_used_gb ?? 0}/{item.disk_total_gb} GB ({diskPercent}%)
