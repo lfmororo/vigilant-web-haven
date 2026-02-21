@@ -173,6 +173,56 @@ export type Database = {
         }
         Relationships: []
       }
+      imap_accounts: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          host: string
+          id: string
+          is_active: boolean
+          label: string
+          last_checked_at: string | null
+          password: string
+          port: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          host?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          last_checked_at?: string | null
+          password?: string
+          port?: string
+          updated_at?: string
+          username?: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          host?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          last_checked_at?: string | null
+          password?: string
+          port?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "imap_accounts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_api_keys: {
         Row: {
           api_key: string
