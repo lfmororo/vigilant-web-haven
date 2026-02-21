@@ -9,7 +9,7 @@ const corsHeaders = {
 // ---------- HTML Email Builder ----------
 
 interface EmailParams {
-  type: "ticket_opened" | "ticket_updated" | "ticket_resolved" | "ticket_closed" | "signature_requested" | "technician_assigned";
+  type: "ticket_opened" | "ticket_updated" | "ticket_resolved" | "ticket_closed" | "signature_requested" | "technician_assigned" | "remote_access_requested";
   recipientName: string;
   ticketNumber: number;
   title: string;
@@ -29,7 +29,8 @@ function buildEmailHtml(p: EmailParams): string {
     ticket_updated:         { heading: "Chamado Atualizado",          emoji: "🔄", color: "#7c3aed", bgLight: "#f5f3ff" },
     ticket_resolved:        { heading: "Chamado Resolvido",           emoji: "✅", color: "#16a34a", bgLight: "#f0fdf4" },
     ticket_closed:          { heading: "Chamado Encerrado",           emoji: "📁", color: "#6b7280", bgLight: "#f9fafb" },
-    signature_requested:    { heading: "Assinatura Solicitada",       emoji: "✍️", color: "#d97706", bgLight: "#fffbeb" },
+    signature_requested:        { heading: "Assinatura Solicitada",       emoji: "✍️", color: "#d97706", bgLight: "#fffbeb" },
+    remote_access_requested:    { heading: "Acesso Remoto Solicitado",    emoji: "🖥️", color: "#0891b2", bgLight: "#ecfeff" },
   };
 
   const theme = themes[p.type] || themes.ticket_updated;
@@ -103,6 +104,29 @@ function buildEmailHtml(p: EmailParams): string {
         <p style="margin:0;color:#334155;font-size:14px;line-height:1.5;">${p.resolutionSummary}</p>
       </div>` : ""}
       <p style="margin:0 0 20px;color:#475569;font-size:14px;line-height:1.6;">Agradecemos por utilizar nosso suporte. Caso precise de algo mais, não hesite em abrir um novo chamado.</p>`;
+  } else if (p.type === "remote_access_requested") {
+    bodyContent = `
+      <p style="margin:0 0 8px;color:#334155;font-size:15px;line-height:1.6;">Olá <strong>${p.recipientName}</strong>,</p>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">Foi solicitado acesso remoto para o chamado <strong>#${p.ticketNumber} - ${p.title}</strong>:</p>
+      ${senderInfo}
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">
+        ${tableRow("Nº do Ticket", `<strong>#${p.ticketNumber}</strong>`)}
+        ${tableRow("Assunto", p.title)}
+        ${p.category ? tableRow("Categoria", p.category) : ""}
+      </table>
+      <div style="background:#ecfeff;border-left:4px solid #0891b2;border-radius:0 8px 8px 0;padding:20px;margin-bottom:20px;">
+        <p style="margin:0 0 10px;font-weight:700;color:#0891b2;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;">📥 Instruções para Acesso Remoto</p>
+        <p style="margin:0 0 12px;color:#334155;font-size:14px;line-height:1.6;">Para que possamos verificar e resolver o ocorrido com mais rapidez, precisamos acessar seu computador remotamente.</p>
+        <p style="margin:0 0 12px;color:#334155;font-size:14px;line-height:1.6;">Por favor, baixe o <strong>AnyDesk</strong> pelo link abaixo, instale e nos envie o número (ID) exibido na tela:</p>
+        <div style="text-align:center;margin:16px 0;">
+          <a href="https://anydesk.com/pt/downloads" style="display:inline-block;background:linear-gradient(135deg,#0891b2,#06b6d4);color:#ffffff;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;box-shadow:0 4px 14px rgba(8,145,178,0.3);">⬇️ Baixar AnyDesk</a>
+        </div>
+        <p style="margin:12px 0 0;color:#334155;font-size:14px;line-height:1.6;">Após abrir o programa, aparecerá um código de acesso. Basta nos encaminhar esse código para iniciarmos o atendimento.</p>
+        <p style="margin:8px 0 0;color:#475569;font-size:13px;line-height:1.6;font-style:italic;">Se aparecer alguma mensagem pedindo permissão, pode confirmar o acesso 👍</p>
+      </div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 20px;margin-bottom:20px;text-align:center;">
+        <p style="margin:0;color:#15803d;font-size:14px;font-weight:600;">Ficamos no aguardo do seu código de acesso!</p>
+      </div>`;
   } else {
     bodyContent = `
       <p style="margin:0 0 8px;color:#334155;font-size:15px;line-height:1.6;">Olá <strong>${p.recipientName}</strong>,</p>
