@@ -154,6 +154,7 @@ Deno.serve(async (req) => {
             disk_used_gb: item.disk_used_gb ?? null,
             disk_free_gb: item.disk_free_gb ?? null,
             hardware_updated_at: item.hardware_updated_at || new Date().toISOString(),
+            logged_in_user: item.logged_in_user || null,
           };
           if (equipmentTypeId) record.equipment_type_id = equipmentTypeId;
 

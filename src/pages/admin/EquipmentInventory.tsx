@@ -65,6 +65,7 @@ interface Equipment {
   disk_used_gb: number | null;
   disk_free_gb: number | null;
   hardware_updated_at: string | null;
+  logged_in_user: string | null;
   client?: { full_name: string } | null;
   equipment_type?: { name: string } | null;
 }
@@ -412,6 +413,7 @@ const EquipmentInventory = () => {
                     <TableHead>Processador</TableHead>
                     <TableHead>Memória</TableHead>
                     <TableHead>Disco</TableHead>
+                    <TableHead>Usuário Logado</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -448,6 +450,7 @@ const EquipmentInventory = () => {
                             </div>
                           ) : "-"}
                         </TableCell>
+                        <TableCell className="text-xs">{item.logged_in_user || "-"}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={statusColors[item.status] || ""}>
                             {statusLabels[item.status] || item.status}

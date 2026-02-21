@@ -1,0 +1,1 @@
+ALTER TABLE public.equipment_inventory ADD COLUMN IF NOT EXISTS logged_in_user text;

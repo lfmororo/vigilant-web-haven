@@ -78,6 +78,7 @@ export type Database = {
           hardware_updated_at: string | null
           id: string
           location: string | null
+          logged_in_user: string | null
           model: string | null
           name: string
           notes: string | null
@@ -100,6 +101,7 @@ export type Database = {
           hardware_updated_at?: string | null
           id?: string
           location?: string | null
+          logged_in_user?: string | null
           model?: string | null
           name: string
           notes?: string | null
@@ -122,6 +124,7 @@ export type Database = {
           hardware_updated_at?: string | null
           id?: string
           location?: string | null
+          logged_in_user?: string | null
           model?: string | null
           name?: string
           notes?: string | null
