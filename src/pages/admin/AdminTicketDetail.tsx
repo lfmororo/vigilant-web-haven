@@ -4,11 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import AdminLayout from "@/components/admin/AdminLayout";
 import TicketStatusBadge from "@/components/helpdesk/TicketStatusBadge";
+import EquipmentTypeSelect from "@/components/helpdesk/EquipmentTypeSelect";
 import PriorityBadge from "@/components/helpdesk/PriorityBadge";
 import TicketChat from "@/components/helpdesk/TicketChat";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, FileText, Trash2, Save } from "lucide-react";
@@ -32,6 +34,8 @@ const AdminTicketDetail = () => {
   const [pendingPriority, setPendingPriority] = useState<string>("");
   const [pendingAssignedTo, setPendingAssignedTo] = useState<string>("");
   const [pendingClientId, setPendingClientId] = useState<string>("");
+  const [pendingEquipmentTypeId, setPendingEquipmentTypeId] = useState<string>("");
+  const [pendingEquipmentInfo, setPendingEquipmentInfo] = useState<string>("");
 
   const isStaff = isAdmin || isTechnician;
 
@@ -69,6 +73,8 @@ const AdminTicketDetail = () => {
         setPendingPriority(data.priority);
         setPendingAssignedTo(data.assigned_to || "");
         setPendingClientId(data.client_id || "");
+        setPendingEquipmentTypeId(data.equipment_type_id || "");
+        setPendingEquipmentInfo(data.equipment_info || "");
       } else {
         setTicket(null);
       }
@@ -103,7 +109,9 @@ const AdminTicketDetail = () => {
     pendingStatus !== ticket.status ||
     pendingPriority !== ticket.priority ||
     (pendingAssignedTo || null) !== (ticket.assigned_to || null) ||
-    (pendingClientId || null) !== (ticket.client_id || null)
+    (pendingClientId || null) !== (ticket.client_id || null) ||
+    (pendingEquipmentTypeId || null) !== (ticket.equipment_type_id || null) ||
+    (pendingEquipmentInfo || "") !== (ticket.equipment_info || "")
   );
 
   const saveChanges = async () => {
@@ -137,6 +145,14 @@ const AdminTicketDetail = () => {
       const oldClientName = ticket.client?.full_name || "Nenhum";
       const newClientName = newClient?.full_name || "Nenhum";
       changes.push(`- Cliente alterado de "${oldClientName}" para "${newClientName}"`);
+    }
+    if ((pendingEquipmentTypeId || null) !== (ticket.equipment_type_id || null)) {
+      updates.equipment_type_id = pendingEquipmentTypeId || null;
+      changes.push(`- Tipo de equipamento alterado`);
+    }
+    if ((pendingEquipmentInfo || "") !== (ticket.equipment_info || "")) {
+      updates.equipment_info = pendingEquipmentInfo || null;
+      changes.push(`- Informações do equipamento alteradas`);
     }
 
     const { error } = await supabase.from("tickets").update(updates as any).eq("id", id!);
@@ -294,6 +310,14 @@ const AdminTicketDetail = () => {
                     <p className="text-sm text-muted-foreground">{ticket.assigned.full_name}</p>
                   </div>
                 )}
+                <div className="space-y-2">
+                  <Label>Tipo de Equipamento</Label>
+                  <EquipmentTypeSelect value={pendingEquipmentTypeId} onValueChange={setPendingEquipmentTypeId} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Info do Equipamento</Label>
+                  <Input value={pendingEquipmentInfo} onChange={(e) => setPendingEquipmentInfo(e.target.value)} placeholder="Modelo, marca, série..." />
+                </div>
                 {hasChanges && (
                   <Button onClick={saveChanges} disabled={updating} className="w-full">
                     {updating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
