@@ -11,6 +11,7 @@ import SignaturePad from "@/components/helpdesk/SignaturePad";
 import TicketPrint from "@/components/admin/TicketPrint";
 import { generateAndUploadTicketPdf } from "@/lib/generateTicketPdf";
 import AiSuggestionsPanel from "@/components/admin/AiSuggestionsPanel";
+import RecurrencePanel from "@/components/admin/RecurrencePanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -475,14 +476,17 @@ const AdminTicketDetail = () => {
             </Card>
 
             {isStaff && (
-              <AiSuggestionsPanel
-                ticketId={ticket.id}
-                ticketTitle={ticket.title}
-                ticketDescription={ticket.description}
-                ticketCategory={ticket.equipment_type?.name}
-                ticketPriority={ticket.priority}
-                messages={chatMessages}
-              />
+              <>
+                <AiSuggestionsPanel
+                  ticketId={ticket.id}
+                  ticketTitle={ticket.title}
+                  ticketDescription={ticket.description}
+                  ticketCategory={ticket.equipment_type?.name}
+                  ticketPriority={ticket.priority}
+                  messages={chatMessages}
+                />
+                <RecurrencePanel ticketId={ticket.id} />
+              </>
             )}
           </div>
         </div>
