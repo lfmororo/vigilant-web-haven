@@ -145,6 +145,28 @@ $Endpoint = "${functionsUrl}/inventory-sync"
 $TimeoutSeconds = 30
 $MaxRetries = 3
 
+# Log
+$logDir = Join-Path $env:TEMP "inventory-sync-logs"
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+$logFile = Join-Path $logDir ("sync-{0:yyyyMMdd-HHmmss}.log" -f (Get-Date))
+
+function Write-Log {
+    param([string]$Message, [string]$Level = "INFO")
+    $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    $line = "[$ts] [$Level] $Message"
+    $line | Out-File -FilePath $logFile -Append -Encoding UTF8
+    switch ($Level) {
+        "ERROR"   { Write-Error $Message }
+        "WARN"    { Write-Warning $Message }
+        default   { Write-Output $line }
+    }
+}
+
+Write-Log "=== Início da sincronização de inventário ==="
+Write-Log "Computador: $env:COMPUTERNAME | Usuário execução: $env:USERDOMAIN\\$env:USERNAME"
+Write-Log "Endpoint: $Endpoint"
+Write-Log "PowerShell: $($PSVersionTable.PSVersion)"
+
 # Tenta carregar System.Net.Http
 $useHttpClient = $true
 try {
@@ -152,8 +174,18 @@ try {
     if (-not ([type]::GetType("System.Net.Http.HttpClientHandler", $false, $false))) {
         $useHttpClient = $false
     }
+    Write-Log ("Método HTTP: {0}" -f $(if ($useHttpClient) { "HttpClient" } else { "WebRequest (fallback)" }))
 } catch {
     $useHttpClient = $false
+    Write-Log "HttpClient indisponível, usando WebRequest (fallback)" "WARN"
+}
+
+# Teste de conectividade
+try {
+    $dnsTest = [System.Net.Dns]::GetHostAddresses("egbusmegupjfxqswdlxq.supabase.co")
+    Write-Log ("DNS OK: {0}" -f ($dnsTest.IPAddressToString -join ", "))
+} catch {
+    Write-Log ("Falha DNS: {0}" -f $_.Exception.Message) "ERROR"
 }
 
 # IPv4 não-loopback
@@ -181,8 +213,9 @@ function Get-PrimaryIPv4 {
 }
 
 # Coleta de hardware (Get-CimInstance)
-try { $cpu = (Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1 -ExpandProperty Name) -as [string] } catch { $cpu = $null }
-try { $ramBytes = (Get-CimInstance -ClassName Win32_ComputerSystem).TotalPhysicalMemory; $ramGB = if ($ramBytes) { [math]::Round($ramBytes / 1GB, 1) } else { $null } } catch { $ramGB = $null }
+Write-Log "Coletando informações de hardware..."
+try { $cpu = (Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1 -ExpandProperty Name) -as [string] } catch { $cpu = $null; Write-Log "Falha ao coletar CPU: $($_.Exception.Message)" "WARN" }
+try { $ramBytes = (Get-CimInstance -ClassName Win32_ComputerSystem).TotalPhysicalMemory; $ramGB = if ($ramBytes) { [math]::Round($ramBytes / 1GB, 1) } else { $null } } catch { $ramGB = $null; Write-Log "Falha ao coletar RAM: $($_.Exception.Message)" "WARN" }
 
 try {
     $disk = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='C:'"
@@ -191,7 +224,7 @@ try {
         $diskFreeGB  = [math]::Round($disk.FreeSpace / 1GB, 1)
         $diskUsedGB  = [math]::Round(($disk.Size - $disk.FreeSpace) / 1GB, 1)
     } else { $diskTotalGB = $diskFreeGB = $diskUsedGB = $null }
-} catch { $diskTotalGB = $diskFreeGB = $diskUsedGB = $null }
+} catch { $diskTotalGB = $diskFreeGB = $diskUsedGB = $null; Write-Log "Falha ao coletar disco: $($_.Exception.Message)" "WARN" }
 
 $computerName = $env:COMPUTERNAME
 try { $serial = (Get-CimInstance -ClassName Win32_BIOS).SerialNumber } catch { $serial = $null }
@@ -213,7 +246,10 @@ try {
             $loggedInUser = "$($owner.Domain)\\$($owner.User)"
         }
     }
-} catch { }
+} catch { Write-Log "Não foi possível detectar usuário interativo: $($_.Exception.Message)" "WARN" }
+Write-Log "Usuário logado detectado: $loggedInUser"
+
+Write-Log ("Hardware: CPU={0} | RAM={1}GB | Disco Total={2}GB Usado={3}GB Livre={4}GB" -f $cpu, $ramGB, $diskTotalGB, $diskUsedGB, $diskFreeGB)
 
 $equipment = [PSCustomObject]@{
     name = $computerName
@@ -239,6 +275,7 @@ $bodyObject = [PSCustomObject]@{
 }
 
 $bodyJson = $bodyObject | ConvertTo-Json -Depth 6
+Write-Log ("Payload JSON: {0} bytes" -f $bodyJson.Length)
 
 $headers = @{
     "apikey" = $HeaderApiKey
@@ -307,29 +344,38 @@ if ($useHttpClient) {
 # Envio com retry
 $success = $false; $responseObj = $null
 for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
+    Write-Log ("Tentativa {0}/{1}..." -f $attempt, $MaxRetries)
     try {
         $sendResult = & $sendFunc $Endpoint $bodyJson $headers $TimeoutSeconds
-        if ($sendResult.Success) { $success = $true; $responseObj = $sendResult; break }
-        else {
-            Write-Warning ("Falha tentativa {0}: status {1}" -f $attempt, $sendResult.StatusCode)
+        if ($sendResult.Success) {
+            $success = $true; $responseObj = $sendResult
+            Write-Log ("Sucesso na tentativa {0} (HTTP {1})" -f $attempt, $sendResult.StatusCode)
+            break
+        } else {
+            $errDetail = if ($sendResult.Body) { $sendResult.Body.Substring(0, [math]::Min(500, $sendResult.Body.Length)) } else { "Sem corpo de resposta" }
+            Write-Log ("Falha tentativa {0}: HTTP {1} | Resposta: {2}" -f $attempt, $sendResult.StatusCode, $errDetail) "WARN"
+            if ($sendResult.ErrorMessage) { Write-Log ("Detalhe erro: {0}" -f $sendResult.ErrorMessage) "WARN" }
             if ($attempt -lt $MaxRetries) { Start-Sleep -Seconds (2 * $attempt) }
         }
     } catch {
-        Write-Warning ("Erro tentativa {0}: {1}" -f $attempt, $_.Exception.Message)
+        $innerEx = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { "" }
+        Write-Log ("Exceção tentativa {0}: {1} {2}" -f $attempt, $_.Exception.Message, $innerEx) "ERROR"
         if ($attempt -lt $MaxRetries) { Start-Sleep -Seconds (2 * $attempt) }
     }
 }
 
 if ($success) {
-    Write-Output ("Enviado com sucesso (código {0}):" -f $responseObj.StatusCode)
+    Write-Log "=== Sincronização concluída com SUCESSO ==="
     try { $responseObj.Body | ConvertFrom-Json } catch { Write-Output $responseObj.Body }
 } else {
-    $logFile = Join-Path $env:TEMP ("inventory-sync-fail-{0:yyyyMMdd-HHmmss}.json" -f (Get-Date))
-    try { $bodyJson | Out-File -FilePath $logFile -Encoding UTF8; Write-Output ("Falha. Payload salvo em: {0}" -f $logFile) }
-    catch { Write-Output "Falha ao enviar e salvar payload." }
+    $payloadFile = Join-Path $logDir ("payload-fail-{0:yyyyMMdd-HHmmss}.json" -f (Get-Date))
+    try { $bodyJson | Out-File -FilePath $payloadFile -Encoding UTF8 } catch { }
+    Write-Log ("=== Sincronização FALHOU após {0} tentativas ===" -f $MaxRetries) "ERROR"
+    Write-Log ("Payload salvo em: {0}" -f $payloadFile)
+    Write-Log ("Log completo em: {0}" -f $logFile)
+    Write-Output ("FALHA. Verifique o log em: {0}" -f $logFile)
     exit 1
 }`;
-
   const pythonScript = (cId: string, key: string) =>
     `import requests, platform, subprocess, socket, psutil, os, getpass
 from datetime import datetime, timezone
