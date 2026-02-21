@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
 
     let sent = 0;
     const sendTextUrl = `${apiUrl.replace(/\/+$/, "")}/send/text`;
-    const sendFileUrl = `${apiUrl.replace(/\/+$/, "")}/send/file-url`;
+    const sendMediaUrl = `${apiUrl.replace(/\/+$/, "")}/send/media`;
 
     // Helper to send text + optional PDF document
     const sendToNumber = async (number: string) => {
@@ -227,14 +227,15 @@ Deno.serve(async (req) => {
 
         // Send PDF document if available (only for resolved/closed tickets)
         if (pdf_url && (notification_type === "ticket_resolved" || notification_type === "ticket_closed")) {
-          const docResp = await fetch(sendFileUrl, {
+          const docResp = await fetch(sendMediaUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json", token: apiToken },
             body: JSON.stringify({
               number,
-              url: pdf_url,
-              fileName: `chamado-${ticket.ticket_number}.pdf`,
-              caption: `📄 Relatório do Chamado #${ticket.ticket_number}`,
+              type: "document",
+              file: pdf_url,
+              docName: `chamado-${ticket.ticket_number}.pdf`,
+              text: `📄 Relatório do Chamado #${ticket.ticket_number}`,
             }),
           });
           if (docResp.ok) {
