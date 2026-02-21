@@ -53,16 +53,19 @@ interface UserProfile {
   parent_client_id?: string | null;
 }
 
+interface ClientRecord {
+  id: string;
+  full_name: string;
+}
+
 const roleLabels: Record<string, string> = {
   admin: "Admin",
-  client: "Cliente",
   technician: "Técnico",
   user: "Usuário",
 };
 
 const roleBadgeColors: Record<string, string> = {
   admin: "bg-destructive/20 text-destructive border-destructive/30",
-  client: "bg-primary/20 text-primary border-primary/30",
   technician: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
   user: "bg-muted text-muted-foreground border-border",
 };
@@ -82,6 +85,7 @@ const editUserSchema = z.object({
 const UsersManagement = () => {
   const { toast } = useToast();
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [clients, setClients] = useState<ClientRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -92,7 +96,8 @@ const UsersManagement = () => {
     email: "",
     password: "",
     phone: "",
-    role: "client",
+    role: "user",
+    parent_client_id: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -100,7 +105,7 @@ const UsersManagement = () => {
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
-  const [editFormData, setEditFormData] = useState({ full_name: "", phone: "", role: "client", parent_client_id: "" });
+  const [editFormData, setEditFormData] = useState({ full_name: "", phone: "", role: "user", parent_client_id: "" });
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
   // Delete state
@@ -108,28 +113,29 @@ const UsersManagement = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    fetchUsers();
+    fetchData();
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchData = async () => {
     try {
-      const { data: profiles, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const [profilesRes, rolesRes, clientsRes] = await Promise.all([
+        supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+        supabase.from("user_roles").select("user_id, role"),
+        supabase.from("clients").select("id, full_name").order("full_name"),
+      ]);
 
-      if (error) throw error;
+      if (profilesRes.error) throw profilesRes.error;
 
-      const { data: roles } = await supabase.from("user_roles").select("user_id, role");
       const roleMap = new Map<string, string>();
-      roles?.forEach((r) => roleMap.set(r.user_id, r.role));
+      rolesRes.data?.forEach((r) => roleMap.set(r.user_id, r.role));
 
-      const usersWithRoles = (profiles || []).map((p) => ({
+      const usersWithRoles = (profilesRes.data || []).map((p) => ({
         ...p,
         role: roleMap.get(p.id) || "user",
       }));
 
       setUsers(usersWithRoles);
+      setClients(clientsRes.data || []);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro ao carregar usuários", description: error.message });
     } finally {
@@ -152,19 +158,29 @@ const UsersManagement = () => {
     }
 
     setIsSubmitting(true);
-
     try {
       const response = await supabase.functions.invoke("create-user", {
-        body: { full_name: formData.full_name, email: formData.email, password: formData.password, phone: formData.phone, role: formData.role },
+        body: {
+          full_name: formData.full_name,
+          email: formData.email,
+          password: formData.password,
+          phone: formData.phone,
+          role: formData.role,
+        },
       });
 
       if (response.error) throw new Error(response.error.message);
       if (response.data.error) throw new Error(response.data.error);
 
+      // Link to client if selected
+      if (response.data?.user?.id && formData.parent_client_id) {
+        await supabase.from("profiles").update({ parent_client_id: formData.parent_client_id } as any).eq("id", response.data.user.id);
+      }
+
       toast({ title: "Usuário criado", description: `${formData.full_name} foi criado com sucesso.` });
-      setFormData({ full_name: "", email: "", password: "", phone: "", role: "client" });
+      setFormData({ full_name: "", email: "", password: "", phone: "", role: "user", parent_client_id: "" });
       setIsDialogOpen(false);
-      fetchUsers();
+      fetchData();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro ao criar usuário", description: error.message });
     } finally {
@@ -174,7 +190,7 @@ const UsersManagement = () => {
 
   const openEditDialog = (user: UserProfile) => {
     setEditingUser(user);
-    setEditFormData({ full_name: user.full_name, phone: user.phone || "", role: user.role || "client", parent_client_id: user.parent_client_id || "" });
+    setEditFormData({ full_name: user.full_name, phone: user.phone || "", role: user.role || "user", parent_client_id: user.parent_client_id || "" });
     setEditErrors({});
     setIsEditDialogOpen(true);
   };
@@ -195,9 +211,7 @@ const UsersManagement = () => {
     }
 
     setIsEditSubmitting(true);
-
     try {
-      // Update profile
       const { error: profileError } = await supabase
         .from("profiles")
         .update({
@@ -209,7 +223,6 @@ const UsersManagement = () => {
 
       if (profileError) throw profileError;
 
-      // Update role if changed
       if (editFormData.role !== editingUser.role) {
         const { data: existingRole } = await supabase
           .from("user_roles")
@@ -234,7 +247,7 @@ const UsersManagement = () => {
       toast({ title: "Usuário atualizado", description: `${editFormData.full_name} foi atualizado com sucesso.` });
       setIsEditDialogOpen(false);
       setEditingUser(null);
-      fetchUsers();
+      fetchData();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro ao atualizar usuário", description: error.message });
     } finally {
@@ -253,7 +266,7 @@ const UsersManagement = () => {
       if (response.data?.error) throw new Error(response.data.error);
       toast({ title: "Usuário excluído", description: `${deletingUser.full_name} foi excluído com sucesso.` });
       setDeletingUser(null);
-      fetchUsers();
+      fetchData();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro ao excluir usuário", description: error.message });
     } finally {
@@ -262,6 +275,11 @@ const UsersManagement = () => {
   };
 
   const filteredUsers = filterRole === "all" ? users : users.filter((u) => u.role === filterRole);
+
+  const getClientName = (clientId: string | null | undefined) => {
+    if (!clientId) return null;
+    return clients.find((c) => c.id === clientId)?.full_name || null;
+  };
 
   return (
     <AdminLayout>
@@ -307,11 +325,24 @@ const UsersManagement = () => {
                   <Select value={formData.role} onValueChange={(v) => setFormData({ ...formData, role: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="client">Cliente</SelectItem>
+                      <SelectItem value="user">Usuário</SelectItem>
                       <SelectItem value="technician">Técnico</SelectItem>
                       <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Vincular ao Cliente</Label>
+                  <Select value={formData.parent_client_id || "none"} onValueChange={(v) => setFormData({ ...formData, parent_client_id: v === "none" ? "" : v })}>
+                    <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum</SelectItem>
+                      {clients.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Vincule este usuário a um cliente para acesso ao helpdesk.</p>
                 </div>
                 <Button type="submit" className="w-full" disabled={isSubmitting}>
                   {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Criando...</> : "Criar Usuário"}
@@ -323,13 +354,13 @@ const UsersManagement = () => {
 
         {/* Filter */}
         <div className="flex gap-4">
-        <Select value={filterRole} onValueChange={setFilterRole}>
+          <Select value={filterRole} onValueChange={setFilterRole}>
             <SelectTrigger className="w-48"><SelectValue placeholder="Filtrar por perfil" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
               <SelectItem value="admin">Admin</SelectItem>
-              <SelectItem value="client">Cliente</SelectItem>
               <SelectItem value="technician">Técnico</SelectItem>
+              <SelectItem value="user">Usuário</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -355,45 +386,42 @@ const UsersManagement = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.full_name}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={roleBadgeColors[user.role || "user"] || ""}>
-                          {roleLabels[user.role || "user"] || user.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {user.parent_client_id
-                          ? (() => {
-                              const client = users.find((u) => u.id === user.parent_client_id);
-                              return client ? (
-                                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-xs">
-                                  {client.full_name}
-                                </Badge>
-                              ) : (
-                                <span className="text-muted-foreground text-sm">-</span>
-                              );
-                            })()
-                          : <span className="text-muted-foreground text-sm">-</span>
-                        }
-                      </TableCell>
-                      <TableCell>{user.phone || "-"}</TableCell>
-                      <TableCell>{new Date(user.created_at).toLocaleDateString("pt-BR")}</TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(user)}>
-                          <Pencil className="w-4 h-4 mr-1" />Editar
-                        </Button>
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/admin/users/${user.id}/cameras`}><Camera className="w-4 h-4 mr-1" />Câmeras</Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeletingUser(user)}>
-                          <Trash2 className="w-4 h-4 mr-1" />Excluir
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredUsers.map((user) => {
+                    const clientName = getClientName(user.parent_client_id);
+                    return (
+                      <TableRow key={user.id}>
+                        <TableCell className="font-medium">{user.full_name}</TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={roleBadgeColors[user.role || "user"] || ""}>
+                            {roleLabels[user.role || "user"] || user.role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {clientName ? (
+                            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-xs">
+                              {clientName}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{user.phone || "-"}</TableCell>
+                        <TableCell>{new Date(user.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                        <TableCell className="text-right space-x-1">
+                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(user)}>
+                            <Pencil className="w-4 h-4 mr-1" />Editar
+                          </Button>
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link to={`/admin/users/${user.id}/cameras`}><Camera className="w-4 h-4 mr-1" />Câmeras</Link>
+                          </Button>
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeletingUser(user)}>
+                            <Trash2 className="w-4 h-4 mr-1" />Excluir
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
@@ -423,7 +451,7 @@ const UsersManagement = () => {
                 <Select value={editFormData.role} onValueChange={(v) => setEditFormData({ ...editFormData, role: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="client">Cliente</SelectItem>
+                    <SelectItem value="user">Usuário</SelectItem>
                     <SelectItem value="technician">Técnico</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
@@ -435,12 +463,12 @@ const UsersManagement = () => {
                   <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhum</SelectItem>
-                    {users.filter((u) => u.role === "client" && u.id !== editingUser?.id).map((c) => (
+                    {clients.map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">Vincule este usuário a um cliente principal para agrupar chamados no relatório.</p>
+                <p className="text-xs text-muted-foreground">Vincule este usuário a um cliente para agrupar chamados.</p>
               </div>
               <Button type="submit" className="w-full" disabled={isEditSubmitting}>
                 {isEditSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Salvando...</> : "Salvar Alterações"}

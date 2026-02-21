@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import HelpdeskLayout from "@/components/helpdesk/HelpdeskLayout";
-import TicketStatusBadge from "@/components/helpdesk/TicketStatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -22,9 +21,16 @@ const ClientServiceOrders = () => {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("service_orders").select("*").eq("client_id", user.id)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => { setOrders(data || []); setLoading(false); });
+    // Get parent_client_id from profile, then fetch service orders for that client
+    supabase.from("profiles").select("parent_client_id").eq("id", user.id).maybeSingle()
+      .then(({ data }) => {
+        const clientId = data?.parent_client_id;
+        if (!clientId) { setLoading(false); return; }
+        
+        supabase.from("service_orders").select("*").eq("client_id", clientId)
+          .order("created_at", { ascending: false })
+          .then(({ data: orderData }) => { setOrders(orderData || []); setLoading(false); });
+      });
   }, [user]);
 
   return (

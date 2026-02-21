@@ -13,16 +13,24 @@ const HelpdeskDashboard = () => {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [parentClientId, setParentClientId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("tickets")
-      .select("*, equipment_type:equipment_types(name)")
-      .eq("client_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(10)
-      .then(({ data }) => { setTickets(data || []); setLoading(false); });
+    // Get the user's parent_client_id from their profile
+    supabase.from("profiles").select("parent_client_id").eq("id", user.id).maybeSingle()
+      .then(({ data }) => {
+        const clientId = data?.parent_client_id;
+        setParentClientId(clientId);
+        if (!clientId) { setLoading(false); return; }
+        
+        supabase.from("tickets")
+          .select("*, equipment_type:equipment_types(name)")
+          .eq("client_id", clientId)
+          .order("created_at", { ascending: false })
+          .limit(10)
+          .then(({ data: ticketData }) => { setTickets(ticketData || []); setLoading(false); });
+      });
   }, [user]);
 
   const counts = {
@@ -39,50 +47,62 @@ const HelpdeskDashboard = () => {
             <h1 className="text-2xl font-display font-bold">Central de Suporte</h1>
             <p className="text-muted-foreground">Acompanhe seus chamados e ordens de serviço</p>
           </div>
-          <Link to="/helpdesk/tickets/new">
-            <Button><Plus className="w-4 h-4 mr-2" />Novo Chamado</Button>
-          </Link>
+          {parentClientId && (
+            <Link to="/helpdesk/tickets/new">
+              <Button><Plus className="w-4 h-4 mr-2" />Novo Chamado</Button>
+            </Link>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Abertos</CardTitle><TicketCheck className="w-5 h-5 text-blue-400" /></CardHeader><CardContent><p className="text-3xl font-bold">{counts.open}</p></CardContent></Card>
-          <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em Andamento</CardTitle><Clock className="w-5 h-5 text-yellow-400" /></CardHeader><CardContent><p className="text-3xl font-bold">{counts.in_progress}</p></CardContent></Card>
-          <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Resolvidos</CardTitle><CheckCircle className="w-5 h-5 text-green-400" /></CardHeader><CardContent><p className="text-3xl font-bold">{counts.resolved}</p></CardContent></Card>
-        </div>
+        {!parentClientId && !loading && (
+          <Card><CardContent className="py-8 text-center text-muted-foreground">
+            Seu usuário não está vinculado a nenhum cliente. Solicite ao administrador para vincular sua conta.
+          </CardContent></Card>
+        )}
 
-        <Card>
-          <CardHeader><CardTitle>Últimos Chamados</CardTitle></CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
-            ) : tickets.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">Nenhum chamado ainda. Abra seu primeiro chamado!</p>
-            ) : (
-              <div className="space-y-3">
-                {tickets.map((t) => (
-                  <Link key={t.id} to={`/helpdesk/tickets/${t.id}`}
-                    className="flex items-center justify-between p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground font-mono">#{t.ticket_number}</span>
-                        <span className="font-medium">{t.title}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        {t.equipment_type?.name && <span>{t.equipment_type.name}</span>}
-                        <span>·</span>
-                        <span>{new Date(t.created_at).toLocaleDateString("pt-BR")}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <PriorityBadge priority={t.priority} />
-                      <TicketStatusBadge status={t.status} />
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {parentClientId && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Abertos</CardTitle><TicketCheck className="w-5 h-5 text-blue-400" /></CardHeader><CardContent><p className="text-3xl font-bold">{counts.open}</p></CardContent></Card>
+              <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em Andamento</CardTitle><Clock className="w-5 h-5 text-yellow-400" /></CardHeader><CardContent><p className="text-3xl font-bold">{counts.in_progress}</p></CardContent></Card>
+              <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Resolvidos</CardTitle><CheckCircle className="w-5 h-5 text-green-400" /></CardHeader><CardContent><p className="text-3xl font-bold">{counts.resolved}</p></CardContent></Card>
+            </div>
+
+            <Card>
+              <CardHeader><CardTitle>Últimos Chamados</CardTitle></CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+                ) : tickets.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">Nenhum chamado ainda. Abra seu primeiro chamado!</p>
+                ) : (
+                  <div className="space-y-3">
+                    {tickets.map((t) => (
+                      <Link key={t.id} to={`/helpdesk/tickets/${t.id}`}
+                        className="flex items-center justify-between p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground font-mono">#{t.ticket_number}</span>
+                            <span className="font-medium">{t.title}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            {t.equipment_type?.name && <span>{t.equipment_type.name}</span>}
+                            <span>·</span>
+                            <span>{new Date(t.created_at).toLocaleDateString("pt-BR")}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <PriorityBadge priority={t.priority} />
+                          <TicketStatusBadge status={t.status} />
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
     </HelpdeskLayout>
   );

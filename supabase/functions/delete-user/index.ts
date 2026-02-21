@@ -58,37 +58,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Desvincular dados relacionados (NÃO excluir tickets/OS/mensagens)
-    
-    // Check if user has tickets - if so, block deletion
-    const { data: userTickets } = await supabaseAdmin
-      .from("tickets")
-      .select("id")
-      .or(`client_id.eq.${user_id}`)
-      .limit(1);
-    
-    if (userTickets && userTickets.length > 0) {
-      return new Response(JSON.stringify({ 
-        error: "Este cliente possui chamados vinculados. Reatribua ou exclua os chamados antes de excluir o cliente." 
-      }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Check if user has service orders
-    const { data: userOrders } = await supabaseAdmin
-      .from("service_orders")
-      .select("id")
-      .eq("client_id", user_id)
-      .limit(1);
-    
-    if (userOrders && userOrders.length > 0) {
-      return new Response(JSON.stringify({ 
-        error: "Este cliente possui ordens de serviço vinculadas. Exclua-as antes de excluir o cliente." 
-      }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // This function now only deletes USERS (auth accounts), not clients.
+    // Clients are managed separately in the clients table.
 
     // Nullify created_by on tickets created by this user
     await supabaseAdmin.from("tickets").update({ created_by: null }).eq("created_by", user_id);
@@ -99,14 +70,6 @@ Deno.serve(async (req) => {
     
     // Delete ticket messages sent by this user
     await supabaseAdmin.from("ticket_messages").delete().eq("sender_id", user_id);
-    
-    // Delete equipment, API keys, IMAP accounts
-    await supabaseAdmin.from("equipment_inventory").delete().eq("client_id", user_id);
-    await supabaseAdmin.from("inventory_api_keys").delete().eq("client_id", user_id);
-    await supabaseAdmin.from("imap_accounts").delete().eq("client_id", user_id);
-    
-    // Update child profiles that reference this user as parent
-    await supabaseAdmin.from("profiles").update({ parent_client_id: null }).eq("parent_client_id", user_id);
     
     // Delete user cameras, roles, profile
     await supabaseAdmin.from("user_cameras").delete().eq("user_id", user_id);
