@@ -26,10 +26,12 @@ const AdminTicketDetail = () => {
   const [ticket, setTicket] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [technicians, setTechnicians] = useState<any[]>([]);
+  const [clients, setClients] = useState<any[]>([]);
   const [updating, setUpdating] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string>("");
   const [pendingPriority, setPendingPriority] = useState<string>("");
   const [pendingAssignedTo, setPendingAssignedTo] = useState<string>("");
+  const [pendingClientId, setPendingClientId] = useState<string>("");
 
   const isStaff = isAdmin || isTechnician;
 
@@ -42,7 +44,7 @@ const AdminTicketDetail = () => {
   const fetchTicket = () => {
     if (!id) return;
     supabase.from("tickets")
-      .select("*, client:profiles!tickets_client_id_fkey(full_name, email), assigned:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name)")
+      .select("*, client:profiles!tickets_client_id_fkey(full_name, email), assigned:profiles!tickets_assigned_to_fkey(full_name), creator:profiles!tickets_created_by_fkey(full_name, email), equipment_type:equipment_types(name)")
       .eq("id", id).single()
       .then(({ data }) => {
         setTicket(data);
@@ -50,6 +52,7 @@ const AdminTicketDetail = () => {
           setPendingStatus(data.status);
           setPendingPriority(data.priority);
           setPendingAssignedTo(data.assigned_to || "");
+          setPendingClientId(data.client_id || "");
         }
         setLoading(false);
       });
@@ -58,6 +61,7 @@ const AdminTicketDetail = () => {
   useEffect(() => {
     fetchTicket();
     if (isAdmin) {
+      // Fetch technicians
       supabase.from("user_roles").select("user_id").in("role", ["technician", "admin"] as any)
         .then(async ({ data: roleData }) => {
           if (roleData && roleData.length > 0) {
@@ -66,13 +70,23 @@ const AdminTicketDetail = () => {
             setTechnicians(profiles || []);
           }
         });
+      // Fetch clients
+      supabase.from("user_roles").select("user_id").eq("role", "client" as any)
+        .then(async ({ data: roleData }) => {
+          if (roleData && roleData.length > 0) {
+            const ids = roleData.map(r => r.user_id);
+            const { data: profiles } = await supabase.from("profiles").select("id, full_name, email").in("id", ids);
+            setClients(profiles || []);
+          }
+        });
     }
   }, [id, isAdmin]);
 
   const hasChanges = ticket && (
     pendingStatus !== ticket.status ||
     pendingPriority !== ticket.priority ||
-    (pendingAssignedTo || null) !== (ticket.assigned_to || null)
+    (pendingAssignedTo || null) !== (ticket.assigned_to || null) ||
+    (pendingClientId || null) !== (ticket.client_id || null)
   );
 
   const saveChanges = async () => {
@@ -99,6 +113,13 @@ const AdminTicketDetail = () => {
       const oldTechName = ticket.assigned?.full_name || "Nenhum";
       const newTechName = newTech?.full_name || "Nenhum";
       changes.push(`- Técnico responsável alterado de "${oldTechName}" para "${newTechName}"`);
+    }
+    if ((pendingClientId || null) !== (ticket.client_id || null)) {
+      updates.client_id = pendingClientId;
+      const newClient = clients.find(c => c.id === pendingClientId);
+      const oldClientName = ticket.client?.full_name || "Nenhum";
+      const newClientName = newClient?.full_name || "Nenhum";
+      changes.push(`- Cliente alterado de "${oldClientName}" para "${newClientName}"`);
     }
 
     const { error } = await supabase.from("tickets").update(updates as any).eq("id", id!);
@@ -226,6 +247,19 @@ const AdminTicketDetail = () => {
                 </div>
                 {isAdmin && (
                   <div className="space-y-2">
+                    <Label>Cliente</Label>
+                    <Select value={pendingClientId} onValueChange={setPendingClientId} disabled={updating}>
+                      <SelectTrigger><SelectValue placeholder="Selecionar cliente" /></SelectTrigger>
+                      <SelectContent>
+                        {clients.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {isAdmin && (
+                  <div className="space-y-2">
                     <Label>Técnico Responsável</Label>
                     <Select value={pendingAssignedTo} onValueChange={setPendingAssignedTo} disabled={updating}>
                       <SelectTrigger><SelectValue placeholder="Selecionar técnico" /></SelectTrigger>
@@ -255,6 +289,10 @@ const AdminTicketDetail = () => {
             <Card>
               <CardHeader><CardTitle className="text-sm">Detalhes</CardTitle></CardHeader>
               <CardContent className="space-y-3 text-sm">
+                {ticket.creator && (
+                  <div><span className="text-muted-foreground">Aberto por:</span><p className="mt-1">{ticket.creator.full_name} ({ticket.creator.email})</p></div>
+                )}
+                <div><span className="text-muted-foreground">Cliente:</span><p className="mt-1">{ticket.client?.full_name} ({ticket.client?.email})</p></div>
                 <div><span className="text-muted-foreground">Descrição:</span><p className="mt-1">{ticket.description}</p></div>
                 {ticket.equipment_type?.name && <div><span className="text-muted-foreground">Equipamento:</span><p className="mt-1">{ticket.equipment_type.name}</p></div>}
                 {ticket.equipment_info && <div><span className="text-muted-foreground">Info:</span><p className="mt-1">{ticket.equipment_info}</p></div>}
