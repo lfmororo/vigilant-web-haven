@@ -275,7 +275,7 @@ Deno.serve(async (req) => {
     // Fetch ticket data with equipment type
     const { data: ticket } = await supabaseAdmin
       .from("tickets")
-      .select("ticket_number, title, client_id, assigned_to, priority, equipment_type_id")
+      .select("ticket_number, title, client_id, assigned_to, priority, equipment_type_id, created_by")
       .eq("id", ticket_id)
       .single();
 
@@ -300,24 +300,20 @@ Deno.serve(async (req) => {
     const priorityLabels: Record<string, string> = { low: "Baixa", medium: "Média", high: "Alta", urgent: "Urgente" };
     const priority = priority_label || priorityLabels[ticket.priority] || "Média";
 
-    // Collect recipient IDs (excluding sender)
+    // Collect recipient IDs: only admins, assigned technician, and ticket creator (excluding sender)
     const recipientIds = new Set<string>();
 
-    // Find users linked to this client (client_id now references clients table, not auth users)
-    if (ticket.client_id) {
-      const { data: linkedUsers } = await supabaseAdmin
-        .from("profiles")
-        .select("id")
-        .eq("parent_client_id", ticket.client_id);
-      if (linkedUsers) {
-        for (const u of linkedUsers) {
-          if (u.id !== sender_id) recipientIds.add(u.id);
-        }
-      }
+    // Add ticket creator
+    if (ticket.created_by && ticket.created_by !== sender_id) {
+      recipientIds.add(ticket.created_by);
     }
 
-    if (ticket.assigned_to && ticket.assigned_to !== sender_id) recipientIds.add(ticket.assigned_to);
+    // Add assigned technician
+    if (ticket.assigned_to && ticket.assigned_to !== sender_id) {
+      recipientIds.add(ticket.assigned_to);
+    }
 
+    // Add admins
     const { data: adminRoles } = await supabaseAdmin
       .from("user_roles")
       .select("user_id")
