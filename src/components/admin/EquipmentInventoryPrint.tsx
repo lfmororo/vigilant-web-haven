@@ -66,7 +66,10 @@ const EquipmentInventoryPrint = ({ equipment, filters, onClose }: EquipmentInven
 
   return (
     <>
-      <style>{`@media print { @page { size: landscape; margin: 8mm; } .print-container { font-size: 10px; } }`}</style>
+      <style>{`
+        @media print { @page { size: landscape; margin: 8mm; } }
+        .inv-cell { overflow: hidden; max-height: 2.8em; line-height: 1.4em; word-break: break-word; }
+      `}</style>
       <div className="print-container bg-white text-black min-h-screen">
       <div className="print:hidden fixed top-4 right-4 z-50 flex gap-2">
         <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Imprimir</button>
@@ -103,38 +106,40 @@ const EquipmentInventoryPrint = ({ equipment, filters, onClose }: EquipmentInven
             <div className="bg-gray-200 px-3 py-1 font-bold text-[11px] border-b border-black">
               Equipamentos ({equipment.length} {equipment.length === 1 ? "item" : "itens"})
             </div>
-            <table className="w-full text-[10px] border-collapse" style={{tableLayout:'fixed'}}>
+            <table className="w-full text-[9px] border-collapse" style={{tableLayout:'fixed'}}>
               <thead>
                 <tr className="border-b border-black bg-gray-100">
-                  <th className="border-r border-black px-1 py-1 text-left overflow-hidden" style={{width:'16%'}}>Nome</th>
-                  <th className="border-r border-black px-1 py-1 text-left overflow-hidden" style={{width:'8%'}}>Tomb.</th>
-                  <th className="border-r border-black px-1 py-1 text-left overflow-hidden" style={{width:'12%'}}>Marca/Modelo</th>
-                  <th className="border-r border-black px-1 py-1 text-left overflow-hidden" style={{width:'10%'}}>Usuário</th>
-                  <th className="border-r border-black px-1 py-1 text-left overflow-hidden" style={{width:'12%'}}>Cliente</th>
-                  <th className="border-r border-black px-1 py-1 text-left overflow-hidden" style={{width:'16%'}}>CPU</th>
-                  <th className="border-r border-black px-1 py-1 text-center overflow-hidden" style={{width:'5%'}}>RAM</th>
-                  <th className="border-r border-black px-1 py-1 text-center overflow-hidden" style={{width:'8%'}}>Disco</th>
-                  <th className="border-r border-black px-1 py-1 text-left overflow-hidden" style={{width:'8%'}}>Atualiz.</th>
-                  <th className="px-1 py-1 text-left overflow-hidden" style={{width:'5%'}}>Status</th>
+                  <th className="border-r border-black px-1 py-1 text-left" style={{width:'10%'}}>Nome</th>
+                  <th className="border-r border-black px-1 py-1 text-left" style={{width:'7%'}}>Tomb.</th>
+                  <th className="border-r border-black px-1 py-1 text-left" style={{width:'14%'}}>Marca/Modelo</th>
+                  <th className="border-r border-black px-1 py-1 text-left" style={{width:'10%'}}>Usuário</th>
+                  <th className="border-r border-black px-1 py-1 text-left" style={{width:'12%'}}>Cliente</th>
+                  <th className="border-r border-black px-1 py-1 text-left" style={{width:'20%'}}>CPU</th>
+                  <th className="border-r border-black px-1 py-1 text-center" style={{width:'4%'}}>RAM</th>
+                  <th className="border-r border-black px-1 py-1 text-center" style={{width:'8%'}}>Disco</th>
+                  <th className="border-r border-black px-1 py-1 text-left" style={{width:'7%'}}>Atualiz.</th>
+                  <th className="px-1 py-1 text-left" style={{width:'8%'}}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {equipment.map((item) => (
                   <tr key={item.id} className="border-b border-black">
-                    <td className="border-r border-black px-1 py-1 overflow-hidden" style={{wordBreak:'break-all'}}>{item.name}</td>
-                    <td className="border-r border-black px-1 py-1 overflow-hidden" style={{wordBreak:'break-all'}}>{item.asset_tag || "-"}</td>
-                    <td className="border-r border-black px-1 py-1 overflow-hidden" style={{wordBreak:'break-all'}}>{[item.brand, item.model].filter(Boolean).join(" ") || "-"}</td>
-                    <td className="border-r border-black px-1 py-1 overflow-hidden" style={{wordBreak:'break-all'}}>{item.logged_in_user || "-"}</td>
-                    <td className="border-r border-black px-1 py-1 overflow-hidden" style={{wordBreak:'break-all'}}>{item.client?.full_name || "-"}</td>
-                    <td className="border-r border-black px-1 py-1 overflow-hidden" style={{wordBreak:'break-all'}}>{item.cpu || "-"}</td>
+                    <td className="border-r border-black px-1 py-1"><div className="inv-cell">{item.name}</div></td>
+                    <td className="border-r border-black px-1 py-1"><div className="inv-cell">{item.asset_tag || "-"}</div></td>
+                    <td className="border-r border-black px-1 py-1"><div className="inv-cell">{[item.brand, item.model].filter(Boolean).join(" ") || "-"}</div></td>
+                    <td className="border-r border-black px-1 py-1"><div className="inv-cell">{item.logged_in_user || "-"}</div></td>
+                    <td className="border-r border-black px-1 py-1"><div className="inv-cell">{item.client?.full_name || "-"}</div></td>
+                    <td className="border-r border-black px-1 py-1"><div className="inv-cell">{item.cpu || "-"}</div></td>
                     <td className="border-r border-black px-1 py-1 text-center">{item.ram_total_gb ?? "-"}</td>
                     <td className="border-r border-black px-1 py-1 text-center">
-                      {item.disk_used_gb != null && item.disk_total_gb != null ? `${item.disk_used_gb}/${item.disk_total_gb}` : "-"}
+                      {item.disk_used_gb != null && item.disk_total_gb != null
+                        ? `${Math.round(Number(item.disk_used_gb))}/${Math.round(Number(item.disk_total_gb))}`
+                        : "-"}
                     </td>
-                    <td className="border-r border-black px-1 py-1 overflow-hidden">
+                    <td className="border-r border-black px-1 py-1">
                       {item.hardware_updated_at ? format(new Date(item.hardware_updated_at), "dd/MM/yy", { locale: ptBR }) : "-"}
                     </td>
-                    <td className="px-1 py-1 overflow-hidden" style={{wordBreak:'break-all'}}>{statusLabels[item.status] || item.status}</td>
+                    <td className="px-1 py-1"><div className="inv-cell">{statusLabels[item.status] || item.status}</div></td>
                   </tr>
                 ))}
               </tbody>
