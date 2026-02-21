@@ -270,7 +270,7 @@ Deno.serve(async (req) => {
         const textResp = await fetch(sendTextUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json", token: apiToken },
-          body: JSON.stringify({ number, text }),
+          body: JSON.stringify({ number, text, linkPreview: false }),
         });
         if (textResp.ok) {
           sent++;
