@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Save, Loader2, Mail, Send, TestTube, Inbox } from "lucide-react";
+import { Eye, EyeOff, Save, Loader2, Mail, Send, TestTube, Inbox, MessageCircle } from "lucide-react";
 
 const SystemSettings = () => {
   const { user } = useAuth();
@@ -33,9 +33,16 @@ const SystemSettings = () => {
     notification_enabled: "false",
   });
 
+  const [whatsappForm, setWhatsappForm] = useState({
+    whatsapp_api_url: "",
+    whatsapp_api_token: "",
+    whatsapp_enabled: "false",
+  });
+
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const [testingImap, setTestingImap] = useState(false);
   const [testingSmtp, setTestingSmtp] = useState(false);
+  const [testingWhatsapp, setTestingWhatsapp] = useState(false);
   const [processingEmails, setProcessingEmails] = useState(false);
 
   const { data: settings, isLoading } = useQuery({
@@ -69,6 +76,11 @@ const SystemSettings = () => {
         smtp_from_name: map.smtp_from_name || "",
         notification_enabled: map.notification_enabled || "false",
       });
+      setWhatsappForm({
+        whatsapp_api_url: map.whatsapp_api_url || "",
+        whatsapp_api_token: map.whatsapp_api_token || "",
+        whatsapp_enabled: map.whatsapp_enabled || "false",
+      });
     }
   }, [settings]);
 
@@ -100,6 +112,12 @@ const SystemSettings = () => {
   const handleSaveSmtp = () => {
     saveMutation.mutate(
       Object.entries(smtpForm).map(([key, value]) => ({ key, value }))
+    );
+  };
+
+  const handleSaveWhatsapp = () => {
+    saveMutation.mutate(
+      Object.entries(whatsappForm).map(([key, value]) => ({ key, value }))
     );
   };
 
@@ -208,6 +226,42 @@ const SystemSettings = () => {
     }
   };
 
+  const handleTestWhatsapp = async () => {
+    if (!whatsappForm.whatsapp_api_url || !whatsappForm.whatsapp_api_token) {
+      toast({ title: "Preencha a URL e o Token antes de testar", variant: "destructive" });
+      return;
+    }
+    setTestingWhatsapp(true);
+    try {
+      const statusUrl = `${whatsappForm.whatsapp_api_url.replace(/\/+$/, "")}/instance/status`;
+      const res = await fetch(statusUrl, {
+        method: "GET",
+        headers: { token: whatsappForm.whatsapp_api_token },
+      });
+      const result = await res.json();
+      if (res.ok) {
+        toast({
+          title: "Conexão WhatsApp OK",
+          description: result.status || result.message || JSON.stringify(result),
+        });
+      } else {
+        toast({
+          title: "Falha na conexão WhatsApp",
+          description: result.error || result.message || `Status: ${res.status}`,
+          variant: "destructive",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "Erro ao testar conexão WhatsApp",
+        description: err.message || "Verifique a URL da API",
+        variant: "destructive",
+      });
+    } finally {
+      setTestingWhatsapp(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <AdminLayout>
@@ -237,6 +291,10 @@ const SystemSettings = () => {
             <TabsTrigger value="smtp" className="gap-2">
               <Send className="w-4 h-4" />
               SMTP (Notificações)
+            </TabsTrigger>
+            <TabsTrigger value="whatsapp" className="gap-2">
+              <MessageCircle className="w-4 h-4" />
+              WhatsApp
             </TabsTrigger>
           </TabsList>
 
@@ -401,6 +459,67 @@ const SystemSettings = () => {
                   <Button variant="outline" onClick={handleTestSmtp} disabled={testingSmtp} className="gap-2">
                     {testingSmtp ? <Loader2 className="w-4 h-4 animate-spin" /> : <TestTube className="w-4 h-4" />}
                     Enviar Email de Teste
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="whatsapp">
+            <Card>
+              <CardHeader>
+                <CardTitle>WhatsApp (Whatsapi.my)</CardTitle>
+                <CardDescription>
+                  Configure a integração com WhatsApp para enviar notificações automáticas de chamados via WhatsApp.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="whatsapp_api_url">URL da API</Label>
+                  <Input
+                    id="whatsapp_api_url"
+                    placeholder="https://ipazua.uazapi.com"
+                    value={whatsappForm.whatsapp_api_url}
+                    onChange={(e) => setWhatsappForm((f) => ({ ...f, whatsapp_api_url: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="whatsapp_api_token">Token da Instância</Label>
+                  <div className="relative">
+                    <Input
+                      id="whatsapp_api_token"
+                      type={showPasswords.whatsapp ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={whatsappForm.whatsapp_api_token}
+                      onChange={(e) => setWhatsappForm((f) => ({ ...f, whatsapp_api_token: e.target.value }))}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => togglePassword("whatsapp")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showPasswords.whatsapp ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 pt-2">
+                  <Switch
+                    id="whatsapp_enabled"
+                    checked={whatsappForm.whatsapp_enabled === "true"}
+                    onCheckedChange={(checked) =>
+                      setWhatsappForm((f) => ({ ...f, whatsapp_enabled: checked ? "true" : "false" }))
+                    }
+                  />
+                  <Label htmlFor="whatsapp_enabled">Ativar notificações via WhatsApp</Label>
+                </div>
+                <div className="flex gap-3">
+                  <Button onClick={handleSaveWhatsapp} disabled={saveMutation.isPending} className="gap-2">
+                    {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Salvar
+                  </Button>
+                  <Button variant="outline" onClick={handleTestWhatsapp} disabled={testingWhatsapp} className="gap-2">
+                    {testingWhatsapp ? <Loader2 className="w-4 h-4 animate-spin" /> : <TestTube className="w-4 h-4" />}
+                    Testar Conexão
                   </Button>
                 </div>
               </CardContent>

@@ -422,8 +422,31 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Wait for telegram to finish (best-effort)
-    await telegramPromise;
+    // --- Send WhatsApp notification (fire-and-forget) ---
+    const whatsappPromise = (async () => {
+      try {
+        const whatsappUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-whatsapp`;
+        await fetch(whatsappUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            ticket_id,
+            notification_type: emailType,
+            message,
+            sender_name: senderName,
+            resolution_summary,
+          }),
+        });
+      } catch (err) {
+        console.error("WhatsApp notification failed:", err);
+      }
+    })();
+
+    // Wait for both to finish (best-effort)
+    await Promise.all([telegramPromise, whatsappPromise]);
 
     return new Response(JSON.stringify({ success: true, sent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
