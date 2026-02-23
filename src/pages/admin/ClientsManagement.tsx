@@ -33,6 +33,7 @@ import { Plus, Loader2, Package, TicketCheck, Key, Pencil, Trash2, AlertTriangle
 import { z } from "zod";
 import { Link } from "react-router-dom";
 import ApiIntegrationDialog from "@/components/admin/ApiIntegrationDialog";
+import SectorManagement from "@/components/admin/SectorManagement";
 
 interface Client {
   id: string;
@@ -410,6 +411,12 @@ const ClientsManagement = () => {
                 <Label htmlFor="edit_whatsapp_group_id">Grupo WhatsApp (opcional)</Label>
                 <Input id="edit_whatsapp_group_id" placeholder="Ex: 5511999999999-1234567890@g.us" value={editFormData.whatsapp_group_id} onChange={(e) => setEditFormData({ ...editFormData, whatsapp_group_id: e.target.value })} />
               </div>
+              {editingClient && (
+                <div className="space-y-2">
+                  <Label>Setores</Label>
+                  <SectorManagement clientId={editingClient.id} />
+                </div>
+              )}
               <Button type="submit" className="w-full" disabled={isEditSubmitting}>
                 {isEditSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Salvando...</> : "Salvar Alterações"}
               </Button>

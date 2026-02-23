@@ -41,6 +41,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { z } from "zod";
+import SectorSelect from "@/components/admin/SectorSelect";
 
 
 interface UserProfile {
@@ -98,6 +99,7 @@ const UsersManagement = () => {
     phone: "",
     role: "user",
     parent_client_id: "",
+    sector_id: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -105,7 +107,7 @@ const UsersManagement = () => {
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
-  const [editFormData, setEditFormData] = useState({ full_name: "", phone: "", role: "user", parent_client_id: "" });
+  const [editFormData, setEditFormData] = useState({ full_name: "", phone: "", role: "user", parent_client_id: "", sector_id: "" });
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
   // Delete state
@@ -172,13 +174,16 @@ const UsersManagement = () => {
       if (response.error) throw new Error(response.error.message);
       if (response.data.error) throw new Error(response.data.error);
 
-      // Link to client if selected
-      if (response.data?.user?.id && formData.parent_client_id) {
-        await supabase.from("profiles").update({ parent_client_id: formData.parent_client_id } as any).eq("id", response.data.user.id);
+      // Link to client and sector if selected
+      if (response.data?.user?.id && (formData.parent_client_id || formData.sector_id)) {
+        const profileUpdate: any = {};
+        if (formData.parent_client_id) profileUpdate.parent_client_id = formData.parent_client_id;
+        if (formData.sector_id && formData.sector_id !== "none") profileUpdate.sector_id = formData.sector_id;
+        await supabase.from("profiles").update(profileUpdate).eq("id", response.data.user.id);
       }
 
       toast({ title: "Usuário criado", description: `${formData.full_name} foi criado com sucesso.` });
-      setFormData({ full_name: "", email: "", password: "", phone: "", role: "user", parent_client_id: "" });
+      setFormData({ full_name: "", email: "", password: "", phone: "", role: "user", parent_client_id: "", sector_id: "" });
       setIsDialogOpen(false);
       fetchData();
     } catch (error: any) {
@@ -190,7 +195,7 @@ const UsersManagement = () => {
 
   const openEditDialog = (user: UserProfile) => {
     setEditingUser(user);
-    setEditFormData({ full_name: user.full_name, phone: user.phone || "", role: user.role || "user", parent_client_id: user.parent_client_id || "" });
+    setEditFormData({ full_name: user.full_name, phone: user.phone || "", role: user.role || "user", parent_client_id: user.parent_client_id || "", sector_id: (user as any).sector_id || "" });
     setEditErrors({});
     setIsEditDialogOpen(true);
   };
@@ -218,7 +223,8 @@ const UsersManagement = () => {
           full_name: editFormData.full_name,
           phone: editFormData.phone || null,
           parent_client_id: editFormData.parent_client_id || null,
-        })
+          sector_id: editFormData.sector_id && editFormData.sector_id !== "none" ? editFormData.sector_id : null,
+        } as any)
         .eq("id", editingUser.id);
 
       if (profileError) throw profileError;
@@ -344,6 +350,14 @@ const UsersManagement = () => {
                   </Select>
                   <p className="text-xs text-muted-foreground">Vincule este usuário a um cliente para acesso ao helpdesk.</p>
                 </div>
+                <div className="space-y-2">
+                  <Label>Setor</Label>
+                  <SectorSelect
+                    clientId={formData.parent_client_id || null}
+                    value={formData.sector_id || "none"}
+                    onValueChange={(v) => setFormData({ ...formData, sector_id: v === "none" ? "" : v })}
+                  />
+                </div>
                 <Button type="submit" className="w-full" disabled={isSubmitting}>
                   {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Criando...</> : "Criar Usuário"}
                 </Button>
@@ -466,6 +480,14 @@ const UsersManagement = () => {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">Vincule este usuário a um cliente para agrupar chamados.</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Setor</Label>
+                <SectorSelect
+                  clientId={editFormData.parent_client_id || null}
+                  value={editFormData.sector_id || "none"}
+                  onValueChange={(v) => setEditFormData({ ...editFormData, sector_id: v === "none" ? "" : v })}
+                />
               </div>
               <Button type="submit" className="w-full" disabled={isEditSubmitting}>
                 {isEditSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Salvando...</> : "Salvar Alterações"}

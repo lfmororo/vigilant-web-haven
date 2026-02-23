@@ -14,6 +14,35 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_sectors: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_sectors_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           address: string | null
@@ -137,6 +166,7 @@ export type Database = {
           notes: string | null
           purchase_date: string | null
           ram_total_gb: number | null
+          sector_id: string | null
           serial_number: string | null
           status: Database["public"]["Enums"]["equipment_status"]
           updated_at: string
@@ -161,6 +191,7 @@ export type Database = {
           notes?: string | null
           purchase_date?: string | null
           ram_total_gb?: number | null
+          sector_id?: string | null
           serial_number?: string | null
           status?: Database["public"]["Enums"]["equipment_status"]
           updated_at?: string
@@ -185,6 +216,7 @@ export type Database = {
           notes?: string | null
           purchase_date?: string | null
           ram_total_gb?: number | null
+          sector_id?: string | null
           serial_number?: string | null
           status?: Database["public"]["Enums"]["equipment_status"]
           updated_at?: string
@@ -203,6 +235,13 @@ export type Database = {
             columns: ["equipment_type_id"]
             isOneToOne: false
             referencedRelation: "equipment_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipment_inventory_sector_id_fkey"
+            columns: ["sector_id"]
+            isOneToOne: false
+            referencedRelation: "client_sectors"
             referencedColumns: ["id"]
           },
         ]
@@ -331,6 +370,7 @@ export type Database = {
           neighborhood: string | null
           parent_client_id: string | null
           phone: string | null
+          sector_id: string | null
           updated_at: string
           whatsapp_group_id: string | null
         }
@@ -348,6 +388,7 @@ export type Database = {
           neighborhood?: string | null
           parent_client_id?: string | null
           phone?: string | null
+          sector_id?: string | null
           updated_at?: string
           whatsapp_group_id?: string | null
         }
@@ -365,6 +406,7 @@ export type Database = {
           neighborhood?: string | null
           parent_client_id?: string | null
           phone?: string | null
+          sector_id?: string | null
           updated_at?: string
           whatsapp_group_id?: string | null
         }
@@ -374,6 +416,13 @@ export type Database = {
             columns: ["parent_client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_sector_id_fkey"
+            columns: ["sector_id"]
+            isOneToOne: false
+            referencedRelation: "client_sectors"
             referencedColumns: ["id"]
           },
         ]
@@ -627,6 +676,7 @@ export type Database = {
           is_incident: boolean
           parent_incident_id: string | null
           priority: Database["public"]["Enums"]["ticket_priority"]
+          sector_id: string | null
           status: Database["public"]["Enums"]["ticket_status"]
           technician_signature: string | null
           ticket_number: number
@@ -648,6 +698,7 @@ export type Database = {
           is_incident?: boolean
           parent_incident_id?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
+          sector_id?: string | null
           status?: Database["public"]["Enums"]["ticket_status"]
           technician_signature?: string | null
           ticket_number?: number
@@ -669,6 +720,7 @@ export type Database = {
           is_incident?: boolean
           parent_incident_id?: string | null
           priority?: Database["public"]["Enums"]["ticket_priority"]
+          sector_id?: string | null
           status?: Database["public"]["Enums"]["ticket_status"]
           technician_signature?: string | null
           ticket_number?: number
@@ -709,6 +761,13 @@ export type Database = {
             columns: ["parent_incident_id"]
             isOneToOne: false
             referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_sector_id_fkey"
+            columns: ["sector_id"]
+            isOneToOne: false
+            referencedRelation: "client_sectors"
             referencedColumns: ["id"]
           },
         ]
