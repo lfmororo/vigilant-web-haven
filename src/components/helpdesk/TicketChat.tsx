@@ -82,6 +82,42 @@ const TicketChat = ({ ticketId, isAdmin = false, isStaff = false }: TicketChatPr
     setSending(false);
   };
 
+  const renderMessageContent = (text: string) => {
+    const imageUrlRegex = /(📎\s*)?(https?:\/\/[^\s]+\/ticket-attachments\/[^\s]+)/g;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
+    let keyIdx = 0;
+
+    while ((match = imageUrlRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(<span key={keyIdx++}>{text.slice(lastIndex, match.index)}</span>);
+      }
+      const url = match[2];
+      const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(url) || url.includes("image");
+      if (isImage) {
+        parts.push(
+          <a key={keyIdx++} href={url} target="_blank" rel="noopener noreferrer" className="block my-1">
+            <img src={url} alt="Anexo" className="max-w-[280px] max-h-[200px] rounded border object-contain" />
+          </a>
+        );
+      } else {
+        parts.push(
+          <a key={keyIdx++} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline break-all">
+            📎 {url.split("/").pop()}
+          </a>
+        );
+      }
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(<span key={keyIdx++}>{text.slice(lastIndex)}</span>);
+    }
+
+    return parts.length > 0 ? <>{parts}</> : text;
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto space-y-3 p-4 max-h-[400px]">
@@ -99,7 +135,7 @@ const TicketChat = ({ ticketId, isAdmin = false, isStaff = false }: TicketChatPr
                 msg.is_internal ? "bg-yellow-500/10 border border-yellow-500/20" :
                 isOwn ? "bg-primary text-primary-foreground" : "bg-muted"
               )}>
-                {msg.message}
+                {renderMessageContent(msg.message)}
               </div>
               <span className="text-xs text-muted-foreground mt-1">
                 {msg.sender?.full_name} · {new Date(msg.created_at).toLocaleString("pt-BR")}
