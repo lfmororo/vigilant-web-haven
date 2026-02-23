@@ -16,7 +16,7 @@ import {
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, GripVertical, Pencil, ClipboardList, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Trash2, GripVertical, Pencil, ClipboardList } from "lucide-react";
 
 interface TemplateItem {
   id: string;
@@ -46,6 +46,8 @@ const ChecklistManagement = () => {
   const [newItemKbArticle, setNewItemKbArticle] = useState("");
   const [kbArticles, setKbArticles] = useState<{ id: string; title: string }[]>([]);
   const [saving, setSaving] = useState(false);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
   const fetchKbArticles = async () => {
     const { data } = await supabase
@@ -223,17 +225,29 @@ const ChecklistManagement = () => {
 
                 <div>
                   <Label>Itens do Checklist</Label>
-                  <div className="space-y-2 mt-2">
+                  <div className="space-y-1 mt-2">
                     {items.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded-md p-2">
-                        <div className="flex flex-col shrink-0">
-                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => moveItem(idx, "up")} disabled={idx === 0}>
-                            <ArrowUp className="w-3 h-3" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => moveItem(idx, "down")} disabled={idx === items.length - 1}>
-                            <ArrowDown className="w-3 h-3" />
-                          </Button>
-                        </div>
+                      <div
+                        key={idx}
+                        draggable
+                        onDragStart={() => setDragIdx(idx)}
+                        onDragOver={(e) => { e.preventDefault(); setDragOverIdx(idx); }}
+                        onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (dragIdx === null || dragIdx === idx) return;
+                          const newItems = [...items];
+                          const [moved] = newItems.splice(dragIdx, 1);
+                          newItems.splice(idx, 0, moved);
+                          setItems(newItems);
+                          setDragIdx(null);
+                          setDragOverIdx(null);
+                        }}
+                        className={`flex items-center gap-2 rounded-md p-2 cursor-grab active:cursor-grabbing transition-colors ${
+                          dragOverIdx === idx && dragIdx !== idx ? "bg-primary/10 border border-primary/30" : "bg-muted/50"
+                        } ${dragIdx === idx ? "opacity-50" : ""}`}
+                      >
+                        <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
                         <div className="flex-1">
                           <span className="text-sm">{item.title}</span>
                           {item.kb_article_id && (
