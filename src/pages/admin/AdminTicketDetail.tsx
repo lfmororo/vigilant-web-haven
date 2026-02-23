@@ -23,6 +23,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import SectorSelect from "@/components/admin/SectorSelect";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -45,6 +46,7 @@ const AdminTicketDetail = () => {
   const [pendingClientId, setPendingClientId] = useState<string>("");
   const [pendingEquipmentId, setPendingEquipmentId] = useState<string>("");
   const [clientEquipments, setClientEquipments] = useState<any[]>([]);
+  const [pendingSectorId, setPendingSectorId] = useState<string>("");
   const [showPrint, setShowPrint] = useState(false);
   const [requestingAccess, setRequestingAccess] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ sender_name: string; message: string }>>([]);
@@ -107,7 +109,7 @@ const AdminTicketDetail = () => {
         setPendingAssignedTo(data.assigned_to || "");
         setPendingClientId(data.client_id || "");
         setPendingEquipmentId((data as any).equipment_id || "");
-        setPendingEquipmentId((data as any).equipment_id || "");
+        setPendingSectorId((data as any).sector_id || "");
       } else {
         setTicket(null);
       }
@@ -158,12 +160,14 @@ const AdminTicketDetail = () => {
       .order("name")
       .then(({ data }) => setClientEquipments(data || []));
   }, [pendingClientId, ticket?.client_id]);
+  const resolvedSectorId = pendingSectorId === "none" ? null : (pendingSectorId || null);
   const hasChanges = ticket && (
     pendingStatus !== ticket.status ||
     pendingPriority !== ticket.priority ||
     (pendingAssignedTo || null) !== (ticket.assigned_to || null) ||
     (pendingClientId || null) !== (ticket.client_id || null) ||
-    ((pendingEquipmentId === "none" ? null : pendingEquipmentId) || null) !== ((ticket as any).equipment_id || null)
+    ((pendingEquipmentId === "none" ? null : pendingEquipmentId) || null) !== ((ticket as any).equipment_id || null) ||
+    resolvedSectorId !== ((ticket as any).sector_id || null)
   );
 
   const saveChanges = async () => {
@@ -207,6 +211,10 @@ const AdminTicketDetail = () => {
       (updates as any).equipment_id = resolvedEquipmentId;
       const eq = clientEquipments.find(e => e.id === pendingEquipmentId);
       changes.push(`- Equipamento vinculado: ${eq?.name || "Nenhum"}`);
+    }
+    if (resolvedSectorId !== ((ticket as any).sector_id || null)) {
+      (updates as any).sector_id = resolvedSectorId;
+      changes.push(`- Setor alterado`);
     }
 
     const { error } = await supabase.from("tickets").update(updates as any).eq("id", id!);
@@ -471,6 +479,15 @@ const AdminTicketDetail = () => {
                     </SelectContent>
                   </Select>
                   {clientEquipments.length === 0 && <p className="text-xs text-muted-foreground">Nenhum equipamento ativo cadastrado para este cliente</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Setor</Label>
+                  <SectorSelect
+                    clientId={pendingClientId || ticket?.client_id}
+                    value={pendingSectorId || "none"}
+                    onValueChange={setPendingSectorId}
+                    disabled={updating}
+                  />
                 </div>
                 {hasChanges && (
                   <Button onClick={saveChanges} disabled={updating} className="w-full">

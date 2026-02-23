@@ -44,6 +44,7 @@ import { Plus, Loader2, Eye, Key, Trash2, Pencil, FileText } from "lucide-react"
 import { Link, useSearchParams } from "react-router-dom";
 import ApiIntegrationDialog from "@/components/admin/ApiIntegrationDialog";
 import EquipmentInventoryPrint from "@/components/admin/EquipmentInventoryPrint";
+import SectorSelect from "@/components/admin/SectorSelect";
 
 interface Equipment {
   id: string;
@@ -92,6 +93,7 @@ const emptyForm = {
   model: "",
   serial_number: "",
   client_id: "",
+  sector_id: "",
   location: "",
   status: "active",
   purchase_date: "",
@@ -200,6 +202,7 @@ const EquipmentInventory = () => {
         warranty_until: formData.warranty_until || null,
         notes: formData.notes || null,
         asset_tag: (formData as any).asset_tag || null,
+        sector_id: formData.sector_id && formData.sector_id !== "none" ? formData.sector_id : null,
       };
 
       const { error } = await supabase.from("equipment_inventory").insert(insertData);
@@ -235,6 +238,7 @@ const EquipmentInventory = () => {
         warranty_until: formData.warranty_until || null,
         notes: formData.notes || null,
         asset_tag: (formData as any).asset_tag || null,
+        sector_id: formData.sector_id && formData.sector_id !== "none" ? formData.sector_id : null,
       };
 
       const { error } = await supabase.from("equipment_inventory").update(updateData).eq("id", editTarget.id);
@@ -259,6 +263,7 @@ const EquipmentInventory = () => {
       model: item.model || "",
       serial_number: item.serial_number || "",
       client_id: item.client_id || "",
+      sector_id: (item as any).sector_id || "",
       location: item.location || "",
       status: item.status,
       purchase_date: item.purchase_date || "",
@@ -328,12 +333,20 @@ const EquipmentInventory = () => {
       </div>
       <div className="space-y-2">
         <Label>Cliente</Label>
-        <Select value={formData.client_id} onValueChange={(v) => setFormData({ ...formData, client_id: v })}>
+        <Select value={formData.client_id} onValueChange={(v) => setFormData({ ...formData, client_id: v, sector_id: "" })}>
           <SelectTrigger><SelectValue placeholder="Selecionar cliente" /></SelectTrigger>
           <SelectContent>
             {clients.map((c) => (<SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>))}
           </SelectContent>
         </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Setor</Label>
+        <SectorSelect
+          clientId={formData.client_id || null}
+          value={formData.sector_id || "none"}
+          onValueChange={(v) => setFormData({ ...formData, sector_id: v === "none" ? "" : v })}
+        />
       </div>
       <div className="space-y-2"><Label>Localização</Label><Input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} /></div>
       <div className="grid grid-cols-2 gap-4">
