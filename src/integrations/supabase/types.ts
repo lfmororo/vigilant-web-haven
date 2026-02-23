@@ -19,6 +19,7 @@ export type Database = {
           created_at: string
           id: string
           item_order: number
+          kb_article_id: string | null
           template_id: string
           title: string
         }
@@ -26,6 +27,7 @@ export type Database = {
           created_at?: string
           id?: string
           item_order?: number
+          kb_article_id?: string | null
           template_id: string
           title: string
         }
@@ -33,10 +35,18 @@ export type Database = {
           created_at?: string
           id?: string
           item_order?: number
+          kb_article_id?: string | null
           template_id?: string
           title?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "checklist_template_items_kb_article_id_fkey"
+            columns: ["kb_article_id"]
+            isOneToOne: false
+            referencedRelation: "kb_articles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "checklist_template_items_template_id_fkey"
             columns: ["template_id"]
@@ -690,6 +700,7 @@ export type Database = {
           id: string
           is_completed: boolean
           item_order: number
+          kb_article_id: string | null
           ticket_checklist_id: string
           title: string
         }
@@ -700,6 +711,7 @@ export type Database = {
           id?: string
           is_completed?: boolean
           item_order?: number
+          kb_article_id?: string | null
           ticket_checklist_id: string
           title: string
         }
@@ -710,6 +722,7 @@ export type Database = {
           id?: string
           is_completed?: boolean
           item_order?: number
+          kb_article_id?: string | null
           ticket_checklist_id?: string
           title?: string
         }
@@ -719,6 +732,13 @@ export type Database = {
             columns: ["completed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_checklist_items_kb_article_id_fkey"
+            columns: ["kb_article_id"]
+            isOneToOne: false
+            referencedRelation: "kb_articles"
             referencedColumns: ["id"]
           },
           {

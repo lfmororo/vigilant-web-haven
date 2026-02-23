@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardList, Plus, Trash2, CheckCircle2 } from "lucide-react";
+import { ClipboardList, Plus, Trash2, CheckCircle2, BookOpen } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -24,6 +25,7 @@ interface ChecklistItem {
   is_completed: boolean;
   completed_at: string | null;
   item_order: number;
+  kb_article_id: string | null;
 }
 
 interface TicketChecklist {
@@ -102,6 +104,7 @@ const TicketChecklistComponent = ({ ticketId }: TicketChecklistProps) => {
           ticket_checklist_id: (tc as any).id,
           title: item.title,
           item_order: item.item_order,
+          kb_article_id: item.kb_article_id || null,
         }));
         await supabase.from("ticket_checklist_items" as any).insert(itemsToInsert as any);
       }
@@ -233,18 +236,38 @@ const TicketChecklistComponent = ({ ticketId }: TicketChecklistProps) => {
               {/* Items */}
               <div className="space-y-1">
                 {cl.items.map((item) => (
-                  <label
+                  <div
                     key={item.id}
-                    className="flex items-center gap-2 py-1 px-1 rounded hover:bg-muted/50 cursor-pointer"
+                    className="flex items-center gap-2 py-1 px-1 rounded hover:bg-muted/50"
                   >
-                    <Checkbox
-                      checked={item.is_completed}
-                      onCheckedChange={() => toggleItem(cl.id, item)}
-                    />
-                    <span className={`text-sm ${item.is_completed ? "line-through text-muted-foreground" : ""}`}>
-                      {item.title}
-                    </span>
-                  </label>
+                    <label className="flex items-center gap-2 flex-1 cursor-pointer">
+                      <Checkbox
+                        checked={item.is_completed}
+                        onCheckedChange={() => toggleItem(cl.id, item)}
+                      />
+                      <span className={`text-sm ${item.is_completed ? "line-through text-muted-foreground" : ""}`}>
+                        {item.title}
+                      </span>
+                    </label>
+                    {item.kb_article_id && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <a
+                              href={`/admin/knowledge-base?article=${item.kb_article_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:text-primary/80 shrink-0"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <BookOpen className="w-4 h-4" />
+                            </a>
+                          </TooltipTrigger>
+                          <TooltipContent>Abrir Base de Conhecimento</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
