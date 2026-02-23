@@ -46,6 +46,7 @@ const KnowledgeBase = () => {
   const [editingCat, setEditingCat] = useState<Category | null>(null);
   const [catName, setCatName] = useState("");
   const [catDesc, setCatDesc] = useState("");
+  const [showCatForm, setShowCatForm] = useState(false);
 
   // Articles
   const [articles, setArticles] = useState<Article[]>([]);
@@ -85,8 +86,8 @@ const KnowledgeBase = () => {
   }, []);
 
   // Category CRUD
-  const openCreateCat = () => { setEditingCat(null); setCatName(""); setCatDesc(""); setCatDialogOpen(true); };
-  const openEditCat = (c: Category) => { setEditingCat(c); setCatName(c.name); setCatDesc(c.description || ""); setCatDialogOpen(true); };
+  const openCreateCat = () => { setEditingCat(null); setCatName(""); setCatDesc(""); setShowCatForm(true); setCatDialogOpen(true); };
+  const openEditCat = (c: Category) => { setEditingCat(c); setCatName(c.name); setCatDesc(c.description || ""); setShowCatForm(true); setCatDialogOpen(true); };
 
   const saveCat = async () => {
     if (!catName.trim()) return;
@@ -98,6 +99,7 @@ const KnowledgeBase = () => {
       toast({ title: "Categoria criada!" });
     }
     setCatDialogOpen(false);
+    setShowCatForm(false);
     fetchCategories();
   };
 
@@ -194,9 +196,9 @@ const KnowledgeBase = () => {
           </div>
           <div className="flex gap-2">
             {/* Category management dialog */}
-            <Dialog open={catDialogOpen} onOpenChange={setCatDialogOpen}>
+            <Dialog open={catDialogOpen} onOpenChange={(open) => { setCatDialogOpen(open); if (!open) setShowCatForm(false); }}>
               <DialogTrigger asChild>
-                <Button variant="outline" onClick={openCreateCat}>
+                <Button variant="outline" onClick={() => { setShowCatForm(false); setCatDialogOpen(true); }}>
                   <FolderOpen className="w-4 h-4 mr-2" /> Categorias
                 </Button>
               </DialogTrigger>
@@ -204,13 +206,13 @@ const KnowledgeBase = () => {
                 <DialogHeader>
                   <DialogTitle>{editingCat ? "Editar Categoria" : "Gerenciar Categorias"}</DialogTitle>
                 </DialogHeader>
-                {editingCat || catName ? (
+                {showCatForm ? (
                   <div className="space-y-3">
                     <div><Label>Nome</Label><Input value={catName} onChange={(e) => setCatName(e.target.value)} /></div>
                     <div><Label>Descrição</Label><Input value={catDesc} onChange={(e) => setCatDesc(e.target.value)} /></div>
                     <div className="flex gap-2">
                       <Button onClick={saveCat} className="flex-1">{editingCat ? "Salvar" : "Criar"}</Button>
-                      {editingCat && <Button variant="outline" onClick={() => { setEditingCat(null); setCatName(""); setCatDesc(""); }}>Cancelar</Button>}
+                      <Button variant="outline" onClick={() => { setShowCatForm(false); setEditingCat(null); setCatName(""); setCatDesc(""); }}>Cancelar</Button>
                     </div>
                   </div>
                 ) : (
