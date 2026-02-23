@@ -132,8 +132,22 @@ function parseMimeBody(rawBody: string): string {
       const charset = charsetMatch ? charsetMatch[1] : "utf-8";
       return decodeQuotedPrintable(bodyPart, charset);
     }
+    if (rawBody.includes("Content-Transfer-Encoding: base64")) {
+      const parts = rawBody.split(/\r?\n\r?\n/);
+      const headerPart = parts[0] || "";
+      const bodyPart = parts.slice(1).join("\n\n");
+      const charsetMatch = headerPart.match(/charset=\"?([^\\"\s;]+)\"?/i);
+      const charset = charsetMatch ? charsetMatch[1] : "utf-8";
+      return decodeBase64Content(bodyPart, charset);
+    }
     if (rawBody.includes("<html") || rawBody.includes("<div") || rawBody.includes("<p")) {
       return stripHtml(rawBody);
+    }
+    // Last resort: check if the body looks like base64 (long alphanumeric lines)
+    const lines = rawBody.trim().split(/\r?\n/);
+    const base64Lines = lines.filter(l => /^[A-Za-z0-9+/=\s]{20,}$/.test(l.trim()));
+    if (base64Lines.length > 0 && base64Lines.length >= lines.length * 0.5) {
+      return decodeBase64Content(rawBody, "utf-8");
     }
     return rawBody;
   }
