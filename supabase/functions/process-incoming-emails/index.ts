@@ -143,9 +143,21 @@ function cleanMimeArtifacts(text: string): string {
   return cleaned;
 }
 
-function parseMimeBody(rawBody: string): string {
+interface EmailAttachment {
+  filename: string;
+  contentType: string;
+  data: Uint8Array;
+}
+
+interface ParsedEmail {
+  body: string;
+  attachments: EmailAttachment[];
+}
+
+function parseMimeBodyWithAttachments(rawBody: string): ParsedEmail {
+  const attachments: EmailAttachment[] = [];
+
   const boundaryParamMatch = rawBody.match(/boundary=\"?([^\"\r\n;]+)\"?/i);
-  // Match various boundary formats: ------=_Part, ---- .XXXX, --_000_, etc.
   const boundaryLineMatch = rawBody.match(/(--[-]{0,4}\s*[.\w=]+)/);
   
   if (!boundaryParamMatch && !boundaryLineMatch && !rawBody.includes("NextPart") && !rawBody.includes("boundary") && !rawBody.includes("multipart")) {
@@ -155,7 +167,7 @@ function parseMimeBody(rawBody: string): string {
       const bodyPart = parts.slice(1).join("\n\n");
       const charsetMatch = headerPart.match(/charset=\"?([^\\"\s;]+)\"?/i);
       const charset = charsetMatch ? charsetMatch[1] : "utf-8";
-      return decodeQuotedPrintable(bodyPart, charset);
+      return { body: decodeQuotedPrintable(bodyPart, charset), attachments };
     }
     if (rawBody.includes("Content-Transfer-Encoding: base64")) {
       const parts = rawBody.split(/\r?\n\r?\n/);
@@ -163,38 +175,30 @@ function parseMimeBody(rawBody: string): string {
       const bodyPart = parts.slice(1).join("\n\n");
       const charsetMatch = headerPart.match(/charset=\"?([^\\"\s;]+)\"?/i);
       const charset = charsetMatch ? charsetMatch[1] : "utf-8";
-      return decodeBase64Content(bodyPart, charset);
+      return { body: decodeBase64Content(bodyPart, charset), attachments };
     }
     if (rawBody.includes("<html") || rawBody.includes("<div") || rawBody.includes("<p")) {
-      return stripHtml(rawBody);
+      return { body: stripHtml(rawBody), attachments };
     }
-    // Strip inline MIME attachment blocks (e.g. images sent from iPhone)
-    // These look like: Content-Disposition: inline; filename=... followed by base64 data
     let strippedBody = rawBody.replace(
       /Content-(?:Disposition|Type):[^\r\n]*(?:attachment|inline|image\/|application\/)[^\r\n]*[\r\n]+(?:Content-[^\r\n]+[\r\n]+)*[\r\n]*(?:[A-Za-z0-9+/=\s]{20,}[\r\n]*)+/gi,
       ""
     );
-    // Also strip standalone Content-Type: image/... blocks
     strippedBody = strippedBody.replace(
       /Content-Type:\s*image\/[^\r\n]+[\r\n]+(?:[^\r\n]*[\r\n]+)*?(?:[A-Za-z0-9+/=]{20,}[\r\n]*)+/gi,
       ""
     );
-    // Strip any remaining large base64 blocks (>500 chars of contiguous base64)
     strippedBody = strippedBody.replace(/(?:^|\n)(?:[A-Za-z0-9+/]{60,}[=]{0,2}\r?\n){3,}/gm, "\n");
-    
     strippedBody = strippedBody.replace(/\n{3,}/g, "\n\n").trim();
-    
     if (strippedBody.length > 0 && strippedBody !== rawBody.trim()) {
-      return cleanMimeArtifacts(strippedBody);
+      return { body: cleanMimeArtifacts(strippedBody), attachments };
     }
-
-    // Last resort: check if the body looks like base64 (long alphanumeric lines)
     const lines = rawBody.trim().split(/\r?\n/);
     const base64Lines = lines.filter(l => /^[A-Za-z0-9+/=\s]{20,}$/.test(l.trim()));
     if (base64Lines.length > 0 && base64Lines.length >= lines.length * 0.5) {
-      return decodeBase64Content(rawBody, "utf-8");
+      return { body: decodeBase64Content(rawBody, "utf-8"), attachments };
     }
-    return rawBody;
+    return { body: rawBody, attachments };
   }
 
   let boundary = "";
@@ -217,8 +221,9 @@ function parseMimeBody(rawBody: string): string {
     const sectionBody = section.substring(dividerIdx).replace(/^\r?\n\r?\n/, "");
 
     if (sectionHeader.toLowerCase().includes("multipart/")) {
-      const nestedResult = parseMimeBody(section);
-      if (nestedResult) plainText = nestedResult;
+      const nestedResult = parseMimeBodyWithAttachments(section);
+      if (nestedResult.body) plainText = nestedResult.body;
+      attachments.push(...nestedResult.attachments);
       continue;
     }
 
@@ -229,9 +234,33 @@ function parseMimeBody(rawBody: string): string {
     const charsetMatch = sectionHeader.match(/charset=\"?([^\\"\s;]+)\"?/i);
     const charset = charsetMatch ? charsetMatch[1] : "utf-8";
 
-    if (sectionHeader.toLowerCase().includes("content-disposition: attachment") ||
-        contentType.startsWith("image/") ||
-        contentType.startsWith("application/")) {
+    // Extract image/file attachments
+    const isAttachment = sectionHeader.toLowerCase().includes("content-disposition: attachment") ||
+                         sectionHeader.toLowerCase().includes("content-disposition: inline");
+    const isImage = contentType.startsWith("image/");
+    const isFile = contentType.startsWith("application/") && !contentType.includes("text");
+
+    if (isImage || ((isAttachment || isFile) && transferEncoding === "base64")) {
+      // Extract filename
+      const filenameMatch = sectionHeader.match(/(?:filename|name)=\"?([^\";\r\n]+)\"?/i);
+      let filename = filenameMatch ? filenameMatch[1].trim() : "";
+      if (!filename && isImage) {
+        const ext = contentType.replace("image/", "").replace("jpeg", "jpg");
+        filename = `image_${Date.now()}.${ext}`;
+      }
+      if (!filename) filename = `attachment_${Date.now()}`;
+
+      try {
+        const base64Data = sectionBody.replace(/--\s*$/, "").replace(/\s/g, "").trim();
+        const binary = atob(base64Data);
+        const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+        // Only save if reasonable size (< 10MB)
+        if (bytes.length > 0 && bytes.length < 10 * 1024 * 1024) {
+          attachments.push({ filename: decodeMimeWord(filename), contentType, data: bytes });
+        }
+      } catch (e) {
+        console.error("Error decoding attachment:", e);
+      }
       continue;
     }
 
@@ -250,9 +279,13 @@ function parseMimeBody(rawBody: string): string {
     }
   }
 
-  if (plainText) return plainText.trim();
-  if (htmlText) return stripHtml(htmlText);
-  return rawBody;
+  const body = plainText ? plainText.trim() : (htmlText ? stripHtml(htmlText) : rawBody);
+  return { body, attachments };
+}
+
+// Keep backward-compatible wrapper
+function parseMimeBody(rawBody: string): string {
+  return parseMimeBodyWithAttachments(rawBody).body;
 }
 
 async function imapCommand(conn: Deno.TlsConn, tag: string, cmd: string): Promise<string> {
@@ -421,6 +454,39 @@ async function sendSmtpEmail(
   conn.close();
 }
 
+// ---- Upload email attachments to storage ----
+async function uploadAttachments(
+  supabaseAdmin: any,
+  ticketId: string,
+  attachments: EmailAttachment[]
+): Promise<string[]> {
+  const urls: string[] = [];
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+
+  for (const att of attachments) {
+    try {
+      const safeName = att.filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `${ticketId}/${Date.now()}_${safeName}`;
+      const { error } = await supabaseAdmin.storage
+        .from("ticket-attachments")
+        .upload(path, att.data, {
+          contentType: att.contentType,
+          upsert: false,
+        });
+      if (error) {
+        console.error(`Error uploading attachment ${att.filename}:`, error);
+        continue;
+      }
+      const publicUrl = `${supabaseUrl}/storage/v1/object/public/ticket-attachments/${path}`;
+      urls.push(publicUrl);
+      console.log(`Uploaded attachment: ${att.filename} -> ${publicUrl}`);
+    } catch (e) {
+      console.error(`Error uploading attachment ${att.filename}:`, e);
+    }
+  }
+  return urls;
+}
+
 // ---- Process a single IMAP account ----
 async function processImapAccount(
   account: { id: string; host: string; port: string; username: string; password: string; client_id: string | null; label: string },
@@ -493,9 +559,10 @@ async function processImapAccount(
 
       const bodyMatch = bodyResp.match(/\{(\d+)\}\r\n([\s\S]*?)(?=\r\n[b c]\d+ |\r\n\))/);
       let rawBody = bodyMatch ? bodyMatch[2] : bodyResp.split("\r\n").slice(1).join("\r\n");
-      let bodyText = parseMimeBody(rawBody);
-      bodyText = cleanMimeArtifacts(bodyText);
+      const parsed = parseMimeBodyWithAttachments(rawBody);
+      let bodyText = cleanMimeArtifacts(parsed.body);
       bodyText = bodyText.substring(0, 5000);
+      const emailAttachments = parsed.attachments;
 
       // --- Detect reply to existing ticket ---
       const ticketNumberMatch = subject.match(/#(\d+)/);
@@ -515,10 +582,20 @@ async function processImapAccount(
             .maybeSingle();
 
           if (senderProfile) {
+            // Upload attachments for reply
+            let messageText = bodyText;
+            if (emailAttachments.length > 0) {
+              const attachmentUrls = await uploadAttachments(supabaseAdmin, existingTicket.id, emailAttachments);
+              if (attachmentUrls.length > 0) {
+                const attachmentLinks = attachmentUrls.map(url => `📎 ${url}`).join("\n");
+                messageText = `${bodyText}\n\n${attachmentLinks}`;
+              }
+            }
+
             await supabaseAdmin.from("ticket_messages").insert({
               ticket_id: existingTicket.id,
               sender_id: senderProfile.id,
-              message: bodyText,
+              message: messageText,
               is_internal: false,
             });
 
@@ -671,10 +748,20 @@ async function processImapAccount(
       }).select("id").single();
 
       if (newTicket) {
+        // Upload attachments for new ticket
+        let messageText = bodyText;
+        if (emailAttachments.length > 0) {
+          const attachmentUrls = await uploadAttachments(supabaseAdmin, newTicket.id, emailAttachments);
+          if (attachmentUrls.length > 0) {
+            const attachmentLinks = attachmentUrls.map(url => `📎 ${url}`).join("\n");
+            messageText = `${bodyText}\n\n${attachmentLinks}`;
+          }
+        }
+
         await supabaseAdmin.from("ticket_messages").insert({
           ticket_id: newTicket.id,
           sender_id: senderId,
-          message: bodyText,
+          message: messageText,
           is_internal: false,
         });
       }
