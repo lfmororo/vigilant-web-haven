@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import SectorSelect from "@/components/admin/SectorSelect";
+import TicketChecklistComponent from "@/components/admin/TicketChecklist";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -407,6 +408,8 @@ const AdminTicketDetail = () => {
                 <RecurrencePanel ticketId={ticket.id} />
               </div>
             )}
+
+            {isStaff && <TicketChecklistComponent ticketId={ticket.id} />}
           </div>
 
           <div className="space-y-4">
