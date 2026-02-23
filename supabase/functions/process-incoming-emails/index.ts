@@ -438,6 +438,14 @@ async function processImapAccount(
       const senderName = extractName(fromRaw);
       const subject = decodeMimeWord(subjectRaw);
 
+      // Ignore postmaster/mailer-daemon emails
+      const senderLower = senderEmail.toLowerCase();
+      if (senderLower.startsWith("postmaster@") || senderLower.startsWith("mailer-daemon@")) {
+        console.log(`Ignoring email from ${senderEmail} - marking as seen`);
+        await imapCommand(conn, `s${num}`, `STORE ${num} +FLAGS (\\Seen)`);
+        continue;
+      }
+
       const bodyMatch = bodyResp.match(/\{(\d+)\}\r\n([\s\S]*?)(?=\r\n[b c]\d+ |\r\n\))/);
       let rawBody = bodyMatch ? bodyMatch[2] : bodyResp.split("\r\n").slice(1).join("\r\n");
       let bodyText = parseMimeBody(rawBody);
