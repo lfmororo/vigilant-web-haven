@@ -14,6 +14,7 @@ const COLORS = ["#16a34a", "#2563eb", "#7c3aed", "#db2777", "#ea580c", "#0891b2"
 
 const SatisfactionRankingReport = () => {
   const [clientId, setClientId] = useState("all");
+  const [sectorId, setSectorId] = useState("all");
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
 
@@ -26,14 +27,23 @@ const SatisfactionRankingReport = () => {
   });
 
   const { data: ratings, isLoading } = useQuery({
-    queryKey: ["satisfaction-ratings", clientId, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["satisfaction-ratings", clientId, sectorId, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
+      // If sector filter is active, first get ticket IDs in that sector
+      let sectorTicketIds: string[] | null = null;
+      if (sectorId !== "all") {
+        const { data: sectorTickets } = await supabase.from("tickets").select("id").eq("sector_id", sectorId);
+        sectorTicketIds = sectorTickets?.map(t => t.id) || [];
+        if (!sectorTicketIds.length) return { ratings: [], techRanking: [], metrics: { avg: 0, total: 0, withComment: 0 } };
+      }
+
       let query = supabase
         .from("ticket_ratings")
         .select("id, rating, comment, rated_at, technician_id, client_id, ticket_id")
         .not("rating", "is", null);
 
       if (clientId !== "all") query = query.eq("client_id", clientId);
+      if (sectorTicketIds) query = query.in("ticket_id", sectorTicketIds);
       if (startDate) query = query.gte("rated_at", startDate.toISOString());
       if (endDate) {
         const end = new Date(endDate);
@@ -92,6 +102,7 @@ const SatisfactionRankingReport = () => {
 
   const clearFilters = () => {
     setClientId("all");
+    setSectorId("all");
     setStartDate(undefined);
     setEndDate(undefined);
   };
@@ -111,10 +122,11 @@ const SatisfactionRankingReport = () => {
         <CardContent className="pt-6">
           <ReportFilters
             clients={clients || []}
-            clientId={clientId} setClientId={setClientId}
+            clientId={clientId} setClientId={(v) => { setClientId(v); setSectorId("all"); }}
             startDate={startDate} setStartDate={setStartDate}
             endDate={endDate} setEndDate={setEndDate}
             onClear={clearFilters}
+            sectorId={sectorId} setSectorId={setSectorId}
           />
         </CardContent>
       </Card>
