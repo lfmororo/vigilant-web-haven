@@ -108,22 +108,47 @@ function decodeBase64Content(str: string, charset = "utf-8"): string {
 }
 
 function cleanMimeArtifacts(text: string): string {
-  let cleaned = text.replace(/--[a-zA-Z0-9_=]+(--)?\s*/g, " ");
-  cleaned = cleaned.replace(/Content-Type:\s*[^\r\n]+/gi, "");
-  cleaned = cleaned.replace(/Content-Transfer-Encoding:\s*[^\r\n]+/gi, "");
-  cleaned = cleaned.replace(/MIME-Version:\s*[^\r\n]+/gi, "");
+  // Remove MIME boundary lines (various formats: ------=_Part, ---- .XXXX, --boundary--, etc.)
+  let cleaned = text.replace(/^-{2,}\s*[.\w=]+(--)?\s*$/gm, "");
+  // Remove Content-* headers
+  cleaned = cleaned.replace(/^Content-Type:\s*[^\r\n]+$/gim, "");
+  cleaned = cleaned.replace(/^Content-Transfer-Encoding:\s*[^\r\n]+$/gim, "");
+  cleaned = cleaned.replace(/^Content-Disposition:\s*[^\r\n]+$/gim, "");
+  cleaned = cleaned.replace(/^MIME-Version:\s*[^\r\n]+$/gim, "");
   cleaned = cleaned.replace(/charset=\"?[^\\"\s;]+\"?/gi, "");
+  // Remove mail delivery headers (Reporting-MTA, X-Postfix, Final-Recipient, etc.)
+  cleaned = cleaned.replace(/^(Reporting-MTA|X-Postfix-[^:]*|X-Postfix-Sender|Arrival-Date|Final-Recipient|Original-Recipient|Action|Status|Remote-MTA|Diagnostic-Code|Return-Path|X-Original-To|Received|X-LocaWeb-[^:]*|X-Mailer|X-AuthUser|x-locaweb-id|Thread-Index|Message-ID|boundary):\s*[^\r\n]+$/gim, "");
+  // Remove lines that look like MIME encoded IDs (long base64-like strings)
+  cleaned = cleaned.replace(/^[A-Za-z0-9+/=]{40,}\s*$/gm, "");
+  // Remove "name=" lines for attachments
+  cleaned = cleaned.replace(/^name="[^"]*"\s*$/gim, "");
+  // Remove "This is a multipart message in MIME format." prefix
+  cleaned = cleaned.replace(/This is a multipart message in MIME format\.\s*/gi, "");
+  // Remove HTML tags
   cleaned = cleaned.replace(/<[^>]*>/g, "");
+  // Decode HTML entities
   cleaned = cleaned.replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
-  cleaned = cleaned.replace(/\s{2,}/g, " ").trim();
+  // Remove quoted-printable soft line breaks that weren't decoded
+  cleaned = cleaned.replace(/=\s*$/gm, "");
+  // Decode remaining =XX sequences  
+  cleaned = cleaned.replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => {
+    try {
+      return String.fromCharCode(parseInt(hex, 16));
+    } catch {
+      return "";
+    }
+  });
+  // Collapse multiple blank lines and spaces
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ").trim();
   return cleaned;
 }
 
 function parseMimeBody(rawBody: string): string {
   const boundaryParamMatch = rawBody.match(/boundary=\"?([^\"\r\n;]+)\"?/i);
-  const boundaryLineMatch = rawBody.match(/(------=_[^\r\n\s]+)/);
+  // Match various boundary formats: ------=_Part, ---- .XXXX, --_000_, etc.
+  const boundaryLineMatch = rawBody.match(/(--[-]{0,4}\s*[.\w=]+)/);
   
-  if (!boundaryParamMatch && !boundaryLineMatch && !rawBody.includes("NextPart") && !rawBody.includes("boundary")) {
+  if (!boundaryParamMatch && !boundaryLineMatch && !rawBody.includes("NextPart") && !rawBody.includes("boundary") && !rawBody.includes("multipart")) {
     if (rawBody.includes("Content-Transfer-Encoding: quoted-printable")) {
       const parts = rawBody.split(/\r?\n\r?\n/);
       const headerPart = parts[0] || "";
