@@ -24,6 +24,31 @@ import EquipmentRankingReport from "@/components/admin/reports/EquipmentRankingR
 import UserRankingReport from "@/components/admin/reports/UserRankingReport";
 import SatisfactionRankingReport from "@/components/admin/reports/SatisfactionRankingReport";
 
+const SectorFilterSelect = ({ clientId, sectorId, setSectorId }: { clientId: string; sectorId: string; setSectorId: (v: string) => void }) => {
+  const { data: sectors } = useQuery({
+    queryKey: ["report-sectors-main", clientId],
+    queryFn: async () => {
+      if (clientId === "all") {
+        const { data } = await supabase.from("client_sectors").select("id, name").order("name");
+        return data || [];
+      }
+      const { data } = await supabase.from("client_sectors").select("id, name").eq("client_id", clientId).order("name");
+      return data || [];
+    },
+  });
+  return (
+    <Select value={sectorId} onValueChange={setSectorId}>
+      <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">Todos</SelectItem>
+        {sectors?.map((s) => (
+          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+};
+
 const statusOptions = [
   { value: "all", label: "Todos" },
   { value: "open", label: "Aberto" },
@@ -37,6 +62,7 @@ const TicketReports = () => {
   const [clientId, setClientId] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
   const [technicianId, setTechnicianId] = useState<string>("all");
+  const [sectorId, setSectorId] = useState<string>("all");
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [showPrint, setShowPrint] = useState(false);
@@ -64,7 +90,7 @@ const TicketReports = () => {
 
   // Fetch tickets with filters
   const { data: tickets, isLoading } = useQuery({
-    queryKey: ["report-tickets", clientId, status, technicianId, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["report-tickets", clientId, status, technicianId, sectorId, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       let clientIds: string[] = [];
       if (clientId !== "all") {
@@ -83,6 +109,7 @@ const TicketReports = () => {
       if (clientIds.length > 0) query = query.in("client_id", clientIds);
       if (status !== "all") query = query.eq("status", status as any);
       if (technicianId !== "all") query = query.eq("assigned_to", technicianId);
+      if (sectorId !== "all") query = query.eq("sector_id", sectorId);
       if (startDate) query = query.gte("created_at", startDate.toISOString());
       if (endDate) {
         const end = new Date(endDate);
@@ -109,6 +136,7 @@ const TicketReports = () => {
     setClientId("all");
     setStatus("all");
     setTechnicianId("all");
+    setSectorId("all");
     setStartDate(undefined);
     setEndDate(undefined);
   };
@@ -172,10 +200,10 @@ const TicketReports = () => {
             {/* Filters */}
             <Card>
               <CardContent className="pt-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4 items-end">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Cliente</label>
-                    <Select value={clientId} onValueChange={setClientId}>
+                    <Select value={clientId} onValueChange={(v) => { setClientId(v); setSectorId("all"); }}>
                       <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todos</SelectItem>
@@ -184,6 +212,10 @@ const TicketReports = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Setor</label>
+                    <SectorFilterSelect clientId={clientId} sectorId={sectorId} setSectorId={setSectorId} />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Situação</label>

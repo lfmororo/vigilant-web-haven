@@ -15,6 +15,7 @@ const COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#16a34a", "#0891b2"
 
 const UserRankingReport = () => {
   const [clientId, setClientId] = useState("all");
+  const [sectorId, setSectorId] = useState("all");
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
   const [showPrint, setShowPrint] = useState(false);
@@ -28,7 +29,7 @@ const UserRankingReport = () => {
   });
 
   const { data: tickets, isLoading } = useQuery({
-    queryKey: ["user-ranking", clientId, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["user-ranking", clientId, sectorId, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       let clientIds: string[] = [];
       if (clientId !== "all") {
@@ -40,6 +41,7 @@ const UserRankingReport = () => {
       let q = supabase.from("tickets").select("id, created_by");
 
       if (clientIds.length) q = q.in("client_id", clientIds);
+      if (sectorId !== "all") q = q.eq("sector_id", sectorId);
       if (startDate) q = q.gte("created_at", startDate.toISOString());
       if (endDate) {
         const end = new Date(endDate);
@@ -74,6 +76,7 @@ const UserRankingReport = () => {
 
   const clearFilters = () => {
     setClientId("all");
+    setSectorId("all");
     setStartDate(undefined);
     setEndDate(undefined);
   };
@@ -109,10 +112,11 @@ const UserRankingReport = () => {
         <CardContent className="pt-6">
           <ReportFilters
             clients={clients || []}
-            clientId={clientId} setClientId={setClientId}
+            clientId={clientId} setClientId={(v) => { setClientId(v); setSectorId("all"); }}
             startDate={startDate} setStartDate={setStartDate}
             endDate={endDate} setEndDate={setEndDate}
             onClear={clearFilters}
+            sectorId={sectorId} setSectorId={setSectorId}
           />
         </CardContent>
       </Card>
