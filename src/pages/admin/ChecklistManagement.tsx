@@ -16,7 +16,7 @@ import {
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, GripVertical, Pencil, ClipboardList, BookOpen } from "lucide-react";
+import { Plus, Trash2, GripVertical, Pencil, ClipboardList, BookOpen, Copy } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface TemplateItem {
@@ -185,6 +185,30 @@ const ChecklistManagement = () => {
     }
   };
 
+  const cloneTemplate = async (t: Template) => {
+    try {
+      const { data: newTpl, error } = await supabase
+        .from("checklist_templates" as any)
+        .insert({ name: `${t.name} (cópia)`, description: t.description || null } as any)
+        .select()
+        .single();
+      if (error) throw error;
+      if (t.items.length > 0) {
+        const itemsToInsert = t.items.map((item, idx) => ({
+          template_id: (newTpl as any).id,
+          title: item.title,
+          item_order: idx,
+          kb_article_id: item.kb_article_id || null,
+        }));
+        await supabase.from("checklist_template_items" as any).insert(itemsToInsert as any);
+      }
+      toast({ title: "Checklist clonado com sucesso!" });
+      fetchTemplates();
+    } catch (err: any) {
+      toast({ title: "Erro ao clonar", description: err.message, variant: "destructive" });
+    }
+  };
+
   const deleteTemplate = async (id: string) => {
     const { error } = await supabase.from("checklist_templates" as any).delete().eq("id", id);
     if (error) {
@@ -343,8 +367,11 @@ const ChecklistManagement = () => {
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-base">{t.name}</CardTitle>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(t)}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(t)} title="Editar">
                         <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => cloneTemplate(t)} title="Clonar">
+                        <Copy className="w-4 h-4" />
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
