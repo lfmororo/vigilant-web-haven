@@ -214,7 +214,12 @@ const AdminTicketDetail = () => {
     }
     if (resolvedSectorId !== ((ticket as any).sector_id || null)) {
       (updates as any).sector_id = resolvedSectorId;
-      changes.push(`- Setor alterado`);
+      let sectorName = "Nenhum";
+      if (resolvedSectorId) {
+        const { data: sectorData } = await supabase.from("client_sectors" as any).select("name").eq("id", resolvedSectorId).single();
+        if (sectorData) sectorName = (sectorData as any).name;
+      }
+      changes.push(`- Setor alterado para "${sectorName}"`);
     }
 
     const { error } = await supabase.from("tickets").update(updates as any).eq("id", id!);
