@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      checklist_template_items: {
+        Row: {
+          created_at: string
+          id: string
+          item_order: number
+          template_id: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_order?: number
+          template_id: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_order?: number
+          template_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_template_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       client_sectors: {
         Row: {
           client_id: string
@@ -559,6 +615,93 @@ export type Database = {
           value?: string | null
         }
         Relationships: []
+      }
+      ticket_checklist_items: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          id: string
+          is_completed: boolean
+          item_order: number
+          ticket_checklist_id: string
+          title: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          is_completed?: boolean
+          item_order?: number
+          ticket_checklist_id: string
+          title: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          is_completed?: boolean
+          item_order?: number
+          ticket_checklist_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_checklist_items_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_checklist_items_ticket_checklist_id_fkey"
+            columns: ["ticket_checklist_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_checklists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_checklists: {
+        Row: {
+          created_at: string
+          id: string
+          template_id: string
+          template_name: string
+          ticket_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          template_id: string
+          template_name: string
+          ticket_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          template_id?: string
+          template_name?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_checklists_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_checklists_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ticket_messages: {
         Row: {
