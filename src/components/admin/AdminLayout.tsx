@@ -16,7 +16,8 @@ import {
   Package,
   Settings,
   BarChart3,
-  ClipboardList } from
+  ClipboardList,
+  BookOpen } from
 "lucide-react";
 import fmLogo from "@/assets/fm-techflow-logo.png";
 
@@ -35,6 +36,7 @@ const allNavItems = [
 { label: "Ordens de Serviço", href: "/admin/service-orders", icon: FileText, roles: ["admin", "technician"] },
 { label: "Relatórios", href: "/admin/reports", icon: BarChart3, roles: ["admin", "technician"] },
 { label: "Checklists", href: "/admin/checklists", icon: ClipboardList, roles: ["admin"] },
+{ label: "Base de Conhecimento", href: "/admin/knowledge-base", icon: BookOpen, roles: ["admin", "technician"] },
 { label: "Configurações", href: "/admin/settings", icon: Settings, roles: ["admin"] }];
 
 
