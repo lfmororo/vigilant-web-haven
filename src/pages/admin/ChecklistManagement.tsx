@@ -16,7 +16,7 @@ import {
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, GripVertical, Pencil, ClipboardList } from "lucide-react";
+import { Plus, Trash2, GripVertical, Pencil, ClipboardList, ArrowUp, ArrowDown } from "lucide-react";
 
 interface TemplateItem {
   id: string;
@@ -108,6 +108,14 @@ const ChecklistManagement = () => {
 
   const removeItem = (idx: number) => {
     setItems(items.filter((_, i) => i !== idx));
+  };
+
+  const moveItem = (idx: number, direction: "up" | "down") => {
+    const newItems = [...items];
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= newItems.length) return;
+    [newItems[idx], newItems[targetIdx]] = [newItems[targetIdx], newItems[idx]];
+    setItems(newItems);
   };
 
   const handleSave = async () => {
@@ -218,7 +226,14 @@ const ChecklistManagement = () => {
                   <div className="space-y-2 mt-2">
                     {items.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded-md p-2">
-                        <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <div className="flex flex-col shrink-0">
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => moveItem(idx, "up")} disabled={idx === 0}>
+                            <ArrowUp className="w-3 h-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => moveItem(idx, "down")} disabled={idx === items.length - 1}>
+                            <ArrowDown className="w-3 h-3" />
+                          </Button>
+                        </div>
                         <div className="flex-1">
                           <span className="text-sm">{item.title}</span>
                           {item.kb_article_id && (
