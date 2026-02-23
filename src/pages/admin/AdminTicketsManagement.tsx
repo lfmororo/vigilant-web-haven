@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -14,12 +14,13 @@ import { formatTimeAgo } from "@/lib/formatTimeAgo";
 
 const AdminTicketsManagement = () => {
   const { user, isAdmin } = useAuth();
+  const [searchParams] = useSearchParams();
   const [tickets, setTickets] = useState<any[]>([]);
   const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
   const [lastMessages, setLastMessages] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("open");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "open");
   const [priorityFilter, setPriorityFilter] = useState("all");
 
   useEffect(() => {

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +41,7 @@ const RESOLUTION_COLORS = [
 ];
 
 const AdminHelpdeskDashboard = () => {
+  const navigate = useNavigate();
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
@@ -231,11 +233,11 @@ const AdminHelpdeskDashboard = () => {
 
         {/* Row 1: Status Counters */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <StatusCard icon={<FolderOpen className="w-5 h-5" />} label="Novo" value={metrics.open} color="text-primary" />
-          <StatusCard icon={<Clock className="w-5 h-5" />} label="Atribuído" value={metrics.inProgress} color="text-yellow-400" />
-          <StatusCard icon={<Pause className="w-5 h-5" />} label="Pendente" value={metrics.waiting} color="text-orange-400" />
-          <StatusCard icon={<CheckCircle className="w-5 h-5" />} label="Solucionado" value={metrics.resolved} color="text-green-400" />
-          <StatusCard icon={<TicketCheck className="w-5 h-5" />} label="Total Aberto" value={metrics.totalOpen} color="text-primary" highlight />
+          <StatusCard icon={<FolderOpen className="w-5 h-5" />} label="Novo" value={metrics.open} color="text-primary" onClick={() => navigate("/admin/tickets?status=open")} />
+          <StatusCard icon={<Clock className="w-5 h-5" />} label="Atribuído" value={metrics.inProgress} color="text-yellow-400" onClick={() => navigate("/admin/tickets?status=in_progress")} />
+          <StatusCard icon={<Pause className="w-5 h-5" />} label="Pendente" value={metrics.waiting} color="text-orange-400" onClick={() => navigate("/admin/tickets?status=waiting_client")} />
+          <StatusCard icon={<CheckCircle className="w-5 h-5" />} label="Solucionado" value={metrics.resolved} color="text-green-400" onClick={() => navigate("/admin/tickets?status=resolved")} />
+          <StatusCard icon={<TicketCheck className="w-5 h-5" />} label="Total Aberto" value={metrics.totalOpen} color="text-primary" highlight onClick={() => navigate("/admin/tickets")} />
         </div>
 
         {/* Row 2: Metrics */}
@@ -402,8 +404,8 @@ const AdminHelpdeskDashboard = () => {
   );
 };
 
-const StatusCard = ({ icon, label, value, color, highlight }: { icon: React.ReactNode; label: string; value: number; color: string; highlight?: boolean }) => (
-  <Card className={highlight ? "border-primary/30" : ""}>
+const StatusCard = ({ icon, label, value, color, highlight, onClick }: { icon: React.ReactNode; label: string; value: number; color: string; highlight?: boolean; onClick?: () => void }) => (
+  <Card className={`${highlight ? "border-primary/30" : ""} cursor-pointer transition-colors hover:bg-accent/50`} onClick={onClick}>
     <CardContent className="p-4 flex items-center gap-3">
       <div className={color}>{icon}</div>
       <div>
