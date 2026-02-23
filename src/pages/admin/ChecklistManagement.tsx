@@ -15,12 +15,14 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, GripVertical, Pencil, ClipboardList } from "lucide-react";
 
 interface TemplateItem {
   id: string;
   title: string;
   item_order: number;
+  kb_article_id: string | null;
 }
 
 interface Template {
@@ -39,9 +41,19 @@ const ChecklistManagement = () => {
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [items, setItems] = useState<{ id?: string; title: string }[]>([]);
+  const [items, setItems] = useState<{ id?: string; title: string; kb_article_id?: string | null }[]>([]);
   const [newItemTitle, setNewItemTitle] = useState("");
+  const [newItemKbArticle, setNewItemKbArticle] = useState("");
+  const [kbArticles, setKbArticles] = useState<{ id: string; title: string }[]>([]);
   const [saving, setSaving] = useState(false);
+
+  const fetchKbArticles = async () => {
+    const { data } = await supabase
+      .from("kb_articles" as any)
+      .select("id, title")
+      .order("title");
+    if (data) setKbArticles(data as any[]);
+  };
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -65,7 +77,7 @@ const ChecklistManagement = () => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchTemplates(); }, []);
+  useEffect(() => { fetchTemplates(); fetchKbArticles(); }, []);
 
   const openCreate = () => {
     setEditingTemplate(null);
@@ -73,6 +85,7 @@ const ChecklistManagement = () => {
     setDescription("");
     setItems([]);
     setNewItemTitle("");
+    setNewItemKbArticle("");
     setDialogOpen(true);
   };
 
@@ -80,15 +93,17 @@ const ChecklistManagement = () => {
     setEditingTemplate(t);
     setName(t.name);
     setDescription(t.description || "");
-    setItems(t.items.map((i) => ({ id: i.id, title: i.title })));
+    setItems(t.items.map((i) => ({ id: i.id, title: i.title, kb_article_id: i.kb_article_id })));
     setNewItemTitle("");
+    setNewItemKbArticle("");
     setDialogOpen(true);
   };
 
   const addItem = () => {
     if (!newItemTitle.trim()) return;
-    setItems([...items, { title: newItemTitle.trim() }]);
+    setItems([...items, { title: newItemTitle.trim(), kb_article_id: (newItemKbArticle && newItemKbArticle !== "none") ? newItemKbArticle : null }]);
     setNewItemTitle("");
+    setNewItemKbArticle("");
   };
 
   const removeItem = (idx: number) => {
@@ -124,6 +139,7 @@ const ChecklistManagement = () => {
           template_id: editingTemplate.id,
           title: item.title,
           item_order: idx,
+          kb_article_id: item.kb_article_id || null,
         }));
         await supabase.from("checklist_template_items" as any).insert(itemsToInsert as any);
 
@@ -142,6 +158,7 @@ const ChecklistManagement = () => {
           template_id: (newTpl as any).id,
           title: item.title,
           item_order: idx,
+          kb_article_id: item.kb_article_id || null,
         }));
         await supabase.from("checklist_template_items" as any).insert(itemsToInsert as any);
 
@@ -202,23 +219,41 @@ const ChecklistManagement = () => {
                     {items.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded-md p-2">
                         <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span className="flex-1 text-sm">{item.title}</span>
+                        <div className="flex-1">
+                          <span className="text-sm">{item.title}</span>
+                          {item.kb_article_id && (
+                            <span className="text-xs text-primary ml-2">📖 KB vinculado</span>
+                          )}
+                        </div>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeItem(idx)}>
                           <Trash2 className="w-3.5 h-3.5 text-destructive" />
                         </Button>
                       </div>
                     ))}
                   </div>
-                  <div className="flex gap-2 mt-2">
-                    <Input
-                      value={newItemTitle}
-                      onChange={(e) => setNewItemTitle(e.target.value)}
-                      placeholder="Ex: Instalar Office 365"
-                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addItem())}
-                    />
-                    <Button type="button" variant="outline" onClick={addItem}>
-                      <Plus className="w-4 h-4" />
-                    </Button>
+                  <div className="space-y-2 mt-2">
+                    <div className="flex gap-2">
+                      <Input
+                        value={newItemTitle}
+                        onChange={(e) => setNewItemTitle(e.target.value)}
+                        placeholder="Ex: Instalar Office 365"
+                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addItem())}
+                      />
+                      <Button type="button" variant="outline" onClick={addItem}>
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <Select value={newItemKbArticle} onValueChange={setNewItemKbArticle}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Vincular artigo da Base de Conhecimento (opcional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhum</SelectItem>
+                        {kbArticles.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>{a.title}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
