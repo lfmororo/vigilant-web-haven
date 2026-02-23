@@ -16,7 +16,8 @@ import {
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, GripVertical, Pencil, ClipboardList } from "lucide-react";
+import { Plus, Trash2, GripVertical, Pencil, ClipboardList, BookOpen } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface TemplateItem {
   id: string;
@@ -248,12 +249,42 @@ const ChecklistManagement = () => {
                         } ${dragIdx === idx ? "opacity-50" : ""}`}
                       >
                         <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <span className="text-sm">{item.title}</span>
                           {item.kb_article_id && (
-                            <span className="text-xs text-primary ml-2">📖 KB vinculado</span>
+                            <span className="text-xs text-primary ml-2 truncate">
+                              📖 {kbArticles.find(a => a.id === item.kb_article_id)?.title || "KB vinculado"}
+                            </span>
                           )}
                         </div>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="icon" className={`h-7 w-7 ${item.kb_article_id ? "text-primary" : "text-muted-foreground"}`} title="Vincular artigo KB">
+                              <BookOpen className="w-3.5 h-3.5" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64 p-2" align="end">
+                            <p className="text-xs font-medium mb-2">Vincular Base de Conhecimento</p>
+                            <Select
+                              value={item.kb_article_id || "none"}
+                              onValueChange={(val) => {
+                                const newItems = [...items];
+                                newItems[idx] = { ...newItems[idx], kb_article_id: val === "none" ? null : val };
+                                setItems(newItems);
+                              }}
+                            >
+                              <SelectTrigger className="w-full text-xs h-8">
+                                <SelectValue placeholder="Selecionar artigo" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Nenhum</SelectItem>
+                                {kbArticles.map((a) => (
+                                  <SelectItem key={a.id} value={a.id}>{a.title}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </PopoverContent>
+                        </Popover>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeItem(idx)}>
                           <Trash2 className="w-3.5 h-3.5 text-destructive" />
                         </Button>
