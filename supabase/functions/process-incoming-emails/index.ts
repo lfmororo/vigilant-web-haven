@@ -143,6 +143,26 @@ function parseMimeBody(rawBody: string): string {
     if (rawBody.includes("<html") || rawBody.includes("<div") || rawBody.includes("<p")) {
       return stripHtml(rawBody);
     }
+    // Strip inline MIME attachment blocks (e.g. images sent from iPhone)
+    // These look like: Content-Disposition: inline; filename=... followed by base64 data
+    let strippedBody = rawBody.replace(
+      /Content-(?:Disposition|Type):[^\r\n]*(?:attachment|inline|image\/|application\/)[^\r\n]*[\r\n]+(?:Content-[^\r\n]+[\r\n]+)*[\r\n]*(?:[A-Za-z0-9+/=\s]{20,}[\r\n]*)+/gi,
+      ""
+    );
+    // Also strip standalone Content-Type: image/... blocks
+    strippedBody = strippedBody.replace(
+      /Content-Type:\s*image\/[^\r\n]+[\r\n]+(?:[^\r\n]*[\r\n]+)*?(?:[A-Za-z0-9+/=]{20,}[\r\n]*)+/gi,
+      ""
+    );
+    // Strip any remaining large base64 blocks (>500 chars of contiguous base64)
+    strippedBody = strippedBody.replace(/(?:^|\n)(?:[A-Za-z0-9+/]{60,}[=]{0,2}\r?\n){3,}/gm, "\n");
+    
+    strippedBody = strippedBody.replace(/\n{3,}/g, "\n\n").trim();
+    
+    if (strippedBody.length > 0 && strippedBody !== rawBody.trim()) {
+      return cleanMimeArtifacts(strippedBody);
+    }
+
     // Last resort: check if the body looks like base64 (long alphanumeric lines)
     const lines = rawBody.trim().split(/\r?\n/);
     const base64Lines = lines.filter(l => /^[A-Za-z0-9+/=\s]{20,}$/.test(l.trim()));
