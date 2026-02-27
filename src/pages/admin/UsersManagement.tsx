@@ -430,6 +430,17 @@ const UsersManagement = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={user.is_active !== false}
+                              onCheckedChange={() => handleToggleActive(user)}
+                            />
+                            <span className={`text-xs ${user.is_active !== false ? "text-green-500" : "text-muted-foreground"}`}>
+                              {user.is_active !== false ? "Ativo" : "Inativo"}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
                           {clientName ? (
                             <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-xs">
                               {clientName}
