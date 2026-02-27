@@ -498,6 +498,7 @@ export type Database = {
           email_domain: string | null
           full_name: string
           id: string
+          is_active: boolean
           must_change_password: boolean | null
           neighborhood: string | null
           parent_client_id: string | null
@@ -516,6 +517,7 @@ export type Database = {
           email_domain?: string | null
           full_name: string
           id: string
+          is_active?: boolean
           must_change_password?: boolean | null
           neighborhood?: string | null
           parent_client_id?: string | null
@@ -534,6 +536,7 @@ export type Database = {
           email_domain?: string | null
           full_name?: string
           id?: string
+          is_active?: boolean
           must_change_password?: boolean | null
           neighborhood?: string | null
           parent_client_id?: string | null
