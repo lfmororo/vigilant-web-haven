@@ -130,7 +130,7 @@ const AdminTicketDetail = () => {
         .then(async ({ data: roleData }) => {
           if (roleData && roleData.length > 0) {
             const ids = [...new Set(roleData.map(r => r.user_id))];
-            const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+            const { data: profiles } = await supabase.from("profiles").select("id, full_name, phone").in("id", ids);
             setTechnicians(profiles || []);
           }
         });
