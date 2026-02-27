@@ -410,6 +410,7 @@ const UsersManagement = () => {
                     <TableHead>Nome</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Perfil</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Cliente Vinculado</TableHead>
                     <TableHead>Telefone</TableHead>
                     <TableHead>Criado em</TableHead>
