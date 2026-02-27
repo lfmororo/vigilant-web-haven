@@ -194,6 +194,19 @@ const NewTicket = () => {
     return <HelpdeskLayout><div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></HelpdeskLayout>;
   }
 
+  if (userInactive) {
+    return (
+      <HelpdeskLayout>
+        <div className="max-w-2xl mx-auto text-center py-12">
+          <Power className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+          <h2 className="text-xl font-bold mb-2">Conta Desativada</h2>
+          <p className="text-muted-foreground">Sua conta está desativada e você não pode abrir novos chamados. Entre em contato com o administrador.</p>
+          <Button variant="outline" className="mt-4" onClick={() => navigate(-1)}>Voltar</Button>
+        </div>
+      </HelpdeskLayout>
+    );
+  }
+
   if (!parentClientId) {
     return (
       <HelpdeskLayout>
