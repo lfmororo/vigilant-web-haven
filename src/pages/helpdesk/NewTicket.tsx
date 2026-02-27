@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, AlertTriangle, Info } from "lucide-react";
+import { Loader2, Sparkles, AlertTriangle, Info, Power } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -35,6 +35,7 @@ const NewTicket = () => {
   const [loading, setLoading] = useState(false);
   const [parentClientId, setParentClientId] = useState<string | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [userInactive, setUserInactive] = useState(false);
   const [classifying, setClassifying] = useState(false);
   const [classified, setClassified] = useState(false);
   const [checkingIncident, setCheckingIncident] = useState(false);
@@ -49,9 +50,10 @@ const NewTicket = () => {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("parent_client_id").eq("id", user.id).maybeSingle()
+    supabase.from("profiles").select("parent_client_id, is_active").eq("id", user.id).maybeSingle()
       .then(({ data }) => {
         setParentClientId(data?.parent_client_id || null);
+        if (data?.is_active === false) setUserInactive(true);
         setLoadingProfile(false);
       });
   }, [user]);
@@ -190,6 +192,19 @@ const NewTicket = () => {
 
   if (loadingProfile) {
     return <HelpdeskLayout><div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></HelpdeskLayout>;
+  }
+
+  if (userInactive) {
+    return (
+      <HelpdeskLayout>
+        <div className="max-w-2xl mx-auto text-center py-12">
+          <Power className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+          <h2 className="text-xl font-bold mb-2">Conta Desativada</h2>
+          <p className="text-muted-foreground">Sua conta está desativada e você não pode abrir novos chamados. Entre em contato com o administrador.</p>
+          <Button variant="outline" className="mt-4" onClick={() => navigate(-1)}>Voltar</Button>
+        </div>
+      </HelpdeskLayout>
+    );
   }
 
   if (!parentClientId) {

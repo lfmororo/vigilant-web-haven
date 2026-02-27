@@ -651,9 +651,15 @@ async function processImapAccount(
 
       const { data: existingProfile } = await supabaseAdmin
         .from("profiles")
-        .select("id, parent_client_id")
+        .select("id, parent_client_id, is_active")
         .eq("email", senderEmail)
         .maybeSingle();
+
+      // Skip inactive users - ignore their emails
+      if (existingProfile && existingProfile.is_active === false) {
+        console.log(`Skipping email from inactive user: ${senderEmail}`);
+        continue;
+      }
 
       let senderId: string;
 

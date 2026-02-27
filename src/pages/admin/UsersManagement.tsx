@@ -29,7 +29,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
+import { Plus, Loader2, Eye, EyeOff, Pencil, Trash2, Power } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,6 +53,7 @@ interface UserProfile {
   created_at: string;
   role?: string;
   parent_client_id?: string | null;
+  is_active?: boolean;
 }
 
 interface ClientRecord {
@@ -280,6 +282,21 @@ const UsersManagement = () => {
     }
   };
 
+  const handleToggleActive = async (user: UserProfile) => {
+    const newStatus = !user.is_active;
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ is_active: newStatus } as any)
+        .eq("id", user.id);
+      if (error) throw error;
+      toast({ title: newStatus ? "Usuário ativado" : "Usuário desativado", description: `${user.full_name} foi ${newStatus ? "ativado" : "desativado"} com sucesso.` });
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao alterar status", description: error.message });
+    }
+  };
+
   const filteredUsers = filterRole === "all" ? users : users.filter((u) => u.role === filterRole);
 
   const getClientName = (clientId: string | null | undefined) => {
@@ -393,6 +410,7 @@ const UsersManagement = () => {
                     <TableHead>Nome</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Perfil</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Cliente Vinculado</TableHead>
                     <TableHead>Telefone</TableHead>
                     <TableHead>Criado em</TableHead>
@@ -410,6 +428,17 @@ const UsersManagement = () => {
                           <Badge variant="outline" className={roleBadgeColors[user.role || "user"] || ""}>
                             {roleLabels[user.role || "user"] || user.role}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={user.is_active !== false}
+                              onCheckedChange={() => handleToggleActive(user)}
+                            />
+                            <span className={`text-xs ${user.is_active !== false ? "text-green-500" : "text-muted-foreground"}`}>
+                              {user.is_active !== false ? "Ativo" : "Inativo"}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell>
                           {clientName ? (
