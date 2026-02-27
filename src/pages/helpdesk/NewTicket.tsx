@@ -35,6 +35,7 @@ const NewTicket = () => {
   const [loading, setLoading] = useState(false);
   const [parentClientId, setParentClientId] = useState<string | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [userInactive, setUserInactive] = useState(false);
   const [classifying, setClassifying] = useState(false);
   const [classified, setClassified] = useState(false);
   const [checkingIncident, setCheckingIncident] = useState(false);
@@ -49,9 +50,10 @@ const NewTicket = () => {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("parent_client_id").eq("id", user.id).maybeSingle()
+    supabase.from("profiles").select("parent_client_id, is_active").eq("id", user.id).maybeSingle()
       .then(({ data }) => {
         setParentClientId(data?.parent_client_id || null);
+        if (data?.is_active === false) setUserInactive(true);
         setLoadingProfile(false);
       });
   }, [user]);
