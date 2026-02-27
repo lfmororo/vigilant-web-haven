@@ -53,6 +53,7 @@ interface UserProfile {
   created_at: string;
   role?: string;
   parent_client_id?: string | null;
+  is_active?: boolean;
 }
 
 interface ClientRecord {
