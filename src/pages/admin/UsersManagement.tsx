@@ -252,6 +252,19 @@ const UsersManagement = () => {
         }
       }
 
+      // If phone was added or changed, send ticket summary via WhatsApp
+      const oldPhone = editingUser.phone || "";
+      const newPhone = editFormData.phone || "";
+      if (newPhone && newPhone !== oldPhone) {
+        supabase.functions.invoke("send-user-ticket-summary", {
+          body: { user_id: editingUser.id, phone: newPhone },
+        }).then((res) => {
+          if (res.data && !res.data.skipped && !res.data.error) {
+            toast({ title: "Resumo enviado", description: `Resumo de chamados enviado via WhatsApp para ${newPhone}.` });
+          }
+        }).catch(() => {});
+      }
+
       toast({ title: "Usuário atualizado", description: `${editFormData.full_name} foi atualizado com sucesso.` });
       setIsEditDialogOpen(false);
       setEditingUser(null);
