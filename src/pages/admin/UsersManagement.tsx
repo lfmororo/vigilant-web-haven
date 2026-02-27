@@ -184,6 +184,13 @@ const UsersManagement = () => {
         await supabase.from("profiles").update(profileUpdate).eq("id", response.data.user.id);
       }
 
+      // If phone provided, send open tickets summary via WhatsApp
+      if (formData.phone && response.data?.user?.id) {
+        supabase.functions.invoke("send-user-ticket-summary", {
+          body: { user_id: response.data.user.id, phone: formData.phone },
+        }).catch(() => {});
+      }
+
       toast({ title: "Usuário criado", description: `${formData.full_name} foi criado com sucesso.` });
       setFormData({ full_name: "", email: "", password: "", phone: "", role: "user", parent_client_id: "", sector_id: "" });
       setIsDialogOpen(false);
