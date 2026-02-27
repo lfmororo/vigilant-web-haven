@@ -29,7 +29,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
+import { Plus, Loader2, Eye, EyeOff, Pencil, Trash2, Power } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
