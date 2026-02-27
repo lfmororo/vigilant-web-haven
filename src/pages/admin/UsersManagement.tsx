@@ -184,6 +184,13 @@ const UsersManagement = () => {
         await supabase.from("profiles").update(profileUpdate).eq("id", response.data.user.id);
       }
 
+      // If phone provided, send open tickets summary via WhatsApp
+      if (formData.phone && response.data?.user?.id) {
+        supabase.functions.invoke("send-user-ticket-summary", {
+          body: { user_id: response.data.user.id, phone: formData.phone },
+        }).catch(() => {});
+      }
+
       toast({ title: "Usuário criado", description: `${formData.full_name} foi criado com sucesso.` });
       setFormData({ full_name: "", email: "", password: "", phone: "", role: "user", parent_client_id: "", sector_id: "" });
       setIsDialogOpen(false);
@@ -250,6 +257,19 @@ const UsersManagement = () => {
             .insert({ user_id: editingUser.id, role: editFormData.role as any });
           if (roleError) throw roleError;
         }
+      }
+
+      // If phone was added or changed, send ticket summary via WhatsApp
+      const oldPhone = editingUser.phone || "";
+      const newPhone = editFormData.phone || "";
+      if (newPhone && newPhone !== oldPhone) {
+        supabase.functions.invoke("send-user-ticket-summary", {
+          body: { user_id: editingUser.id, phone: newPhone },
+        }).then((res) => {
+          if (res.data && !res.data.skipped && !res.data.error) {
+            toast({ title: "Resumo enviado", description: `Resumo de chamados enviado via WhatsApp para ${newPhone}.` });
+          }
+        }).catch(() => {});
       }
 
       toast({ title: "Usuário atualizado", description: `${editFormData.full_name} foi atualizado com sucesso.` });
