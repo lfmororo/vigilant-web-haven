@@ -130,7 +130,7 @@ const AdminTicketDetail = () => {
         .then(async ({ data: roleData }) => {
           if (roleData && roleData.length > 0) {
             const ids = [...new Set(roleData.map(r => r.user_id))];
-            const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+            const { data: profiles } = await supabase.from("profiles").select("id, full_name, phone").in("id", ids);
             setTechnicians(profiles || []);
           }
         });
@@ -278,6 +278,16 @@ const AdminTicketDetail = () => {
     supabase.functions.invoke("notify-ticket-update", {
       body: { ticket_id: id, sender_id: user.id, message: emailMessage, is_internal: false, notification_type: finalNotificationType, pdf_url: pdfUrl },
     }).catch(() => {});
+
+    // Send ticket summary to newly assigned technician via WhatsApp
+    if (technicianJustAssigned && pendingAssignedTo) {
+      const techProfile = technicians.find(t => t.id === pendingAssignedTo);
+      if (techProfile?.phone) {
+        supabase.functions.invoke("send-user-ticket-summary", {
+          body: { user_id: pendingAssignedTo, phone: techProfile.phone },
+        }).catch(() => {});
+      }
+    }
 
     toast({ title: "Alterações salvas!" });
     fetchTicket();
