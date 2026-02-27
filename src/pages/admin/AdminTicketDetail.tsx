@@ -279,6 +279,16 @@ const AdminTicketDetail = () => {
       body: { ticket_id: id, sender_id: user.id, message: emailMessage, is_internal: false, notification_type: finalNotificationType, pdf_url: pdfUrl },
     }).catch(() => {});
 
+    // Send ticket summary to newly assigned technician via WhatsApp
+    if (technicianJustAssigned && pendingAssignedTo) {
+      const techProfile = technicians.find(t => t.id === pendingAssignedTo);
+      if (techProfile?.phone) {
+        supabase.functions.invoke("send-user-ticket-summary", {
+          body: { user_id: pendingAssignedTo, phone: techProfile.phone },
+        }).catch(() => {});
+      }
+    }
+
     toast({ title: "Alterações salvas!" });
     fetchTicket();
     fetchChatMessages();
