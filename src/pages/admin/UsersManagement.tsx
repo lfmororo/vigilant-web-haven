@@ -282,6 +282,21 @@ const UsersManagement = () => {
     }
   };
 
+  const handleToggleActive = async (user: UserProfile) => {
+    const newStatus = !user.is_active;
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ is_active: newStatus } as any)
+        .eq("id", user.id);
+      if (error) throw error;
+      toast({ title: newStatus ? "Usuário ativado" : "Usuário desativado", description: `${user.full_name} foi ${newStatus ? "ativado" : "desativado"} com sucesso.` });
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao alterar status", description: error.message });
+    }
+  };
+
   const filteredUsers = filterRole === "all" ? users : users.filter((u) => u.role === filterRole);
 
   const getClientName = (clientId: string | null | undefined) => {
