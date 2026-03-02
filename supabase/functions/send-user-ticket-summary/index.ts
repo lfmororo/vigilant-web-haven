@@ -66,26 +66,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch open tickets for this user's client
-    let tickets: any[] = [];
-    if (profile.parent_client_id) {
-      const { data } = await supabaseAdmin
-        .from("tickets")
-        .select("ticket_number, title, priority, status, created_at, assigned_to")
-        .eq("client_id", profile.parent_client_id)
-        .in("status", ["open", "in_progress", "waiting_client"])
-        .order("created_at", { ascending: false });
-      tickets = data || [];
-    } else {
-      // If no client linked, check tickets created by this user
-      const { data } = await supabaseAdmin
-        .from("tickets")
-        .select("ticket_number, title, priority, status, created_at, assigned_to")
-        .eq("created_by", user_id)
-        .in("status", ["open", "in_progress", ["waiting_client"]])
-        .order("created_at", { ascending: false });
-      tickets = data || [];
-    }
+    // Fetch open tickets created by this user
+    const { data } = await supabaseAdmin
+      .from("tickets")
+      .select("ticket_number, title, priority, status, created_at, assigned_to")
+      .eq("created_by", user_id)
+      .in("status", ["open", "in_progress", "waiting_client"])
+      .order("created_at", { ascending: false });
+    const tickets = data || [];
 
     if (tickets.length === 0) {
       console.log("No open tickets for user, skipping");
