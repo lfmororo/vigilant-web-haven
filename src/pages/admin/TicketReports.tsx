@@ -13,18 +13,19 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import TicketStatusBadge from "@/components/helpdesk/TicketStatusBadge";
 import PriorityBadge from "@/components/helpdesk/PriorityBadge";
 import { format, differenceInHours } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon, Printer, RotateCcw, BarChart3, TicketCheck, CheckCircle, Clock } from "lucide-react";
+import { CalendarIcon, Printer, RotateCcw, BarChart3, TicketCheck, CheckCircle, Clock, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TicketReportPrint from "@/components/admin/TicketReportPrint";
 import EquipmentRankingReport from "@/components/admin/reports/EquipmentRankingReport";
 import UserRankingReport from "@/components/admin/reports/UserRankingReport";
 import SatisfactionRankingReport from "@/components/admin/reports/SatisfactionRankingReport";
 
-const SectorFilterSelect = ({ clientId, sectorId, setSectorId }: { clientId: string; sectorId: string; setSectorId: (v: string) => void }) => {
+const SectorMultiSelect = ({ clientId, sectorIds, setSectorIds }: { clientId: string; sectorIds: string[]; setSectorIds: (v: string[]) => void }) => {
   const { data: sectors } = useQuery({
     queryKey: ["report-sectors-main", clientId],
     queryFn: async () => {
@@ -36,16 +37,50 @@ const SectorFilterSelect = ({ clientId, sectorId, setSectorId }: { clientId: str
       return data || [];
     },
   });
+
+  const toggleSector = (id: string) => {
+    if (sectorIds.includes(id)) {
+      setSectorIds(sectorIds.filter(s => s !== id));
+    } else {
+      setSectorIds([...sectorIds, id]);
+    }
+  };
+
+  const label = sectorIds.length === 0
+    ? "Todos"
+    : sectorIds.length === 1
+      ? sectors?.find(s => s.id === sectorIds[0])?.name || "1 setor"
+      : `${sectorIds.length} setores`;
+
   return (
-    <Select value={sectorId} onValueChange={setSectorId}>
-      <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">Todos</SelectItem>
-        {sectors?.map((s) => (
-          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="w-full justify-between font-normal">
+          <span className="truncate">{label}</span>
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-2 max-h-60 overflow-auto" align="start">
+        {!sectors?.length ? (
+          <p className="text-xs text-muted-foreground p-2">Nenhum setor</p>
+        ) : (
+          sectors.map(s => (
+            <label key={s.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded cursor-pointer text-sm">
+              <Checkbox
+                checked={sectorIds.includes(s.id)}
+                onCheckedChange={() => toggleSector(s.id)}
+              />
+              {s.name}
+            </label>
+          ))
+        )}
+        {sectorIds.length > 0 && (
+          <Button variant="ghost" size="sm" className="w-full mt-1 text-xs" onClick={() => setSectorIds([])}>
+            Limpar seleção
+          </Button>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 };
 
