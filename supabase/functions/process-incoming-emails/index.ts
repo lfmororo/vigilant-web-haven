@@ -63,6 +63,7 @@ function parseHeaders(headerText: string): Record<string, string> {
   // Unfold headers: continuation lines start with whitespace (handles \r\n, \n, tab, spaces)
   const unfolded = headerText.replace(/\r?\n[ \t]+/g, " ");
   const lines = unfolded.split(/\r?\n/);
+  let parsedCount = 0;
   for (const line of lines) {
     const idx = line.indexOf(":");
     if (idx > 0) {
@@ -72,8 +73,10 @@ function parseHeaders(headerText: string): Record<string, string> {
       if (!headers[key]) {
         headers[key] = val;
       }
+      parsedCount++;
     }
   }
+  console.log(`[parseHeaders] total lines=${lines.length}, parsed=${parsedCount}, keys=${Object.keys(headers).length}, from="${(headers["from"] || "").substring(0, 80)}", subject="${(headers["subject"] || "").substring(0, 80)}"`);
   return headers;
 }
 
