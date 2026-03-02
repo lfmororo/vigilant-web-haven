@@ -63,6 +63,7 @@ function parseHeaders(headerText: string): Record<string, string> {
   // Unfold headers: continuation lines start with whitespace (handles \r\n, \n, tab, spaces)
   const unfolded = headerText.replace(/\r?\n[ \t]+/g, " ");
   const lines = unfolded.split(/\r?\n/);
+  let parsedCount = 0;
   for (const line of lines) {
     const idx = line.indexOf(":");
     if (idx > 0) {
@@ -72,8 +73,10 @@ function parseHeaders(headerText: string): Record<string, string> {
       if (!headers[key]) {
         headers[key] = val;
       }
+      parsedCount++;
     }
   }
+  console.log(`[parseHeaders] total lines=${lines.length}, parsed=${parsedCount}, keys=${Object.keys(headers).length}, from="${(headers["from"] || "").substring(0, 80)}", subject="${(headers["subject"] || "").substring(0, 80)}"`);
   return headers;
 }
 
@@ -595,24 +598,26 @@ async function processImapAccount(
       
       const headers = parseHeaders(headerText);
 
+      // Log all parsed header keys for debugging
+      console.log(`[PARSED-HEADERS] keys: ${Object.keys(headers).join(", ")}`);
+
       // Fallback: extract From/Subject directly from headerText if parseHeaders missed them
       let fromRaw = headers["from"] || "";
       let subjectRaw = headers["subject"] || "";
       
       if (!fromRaw) {
-        // Direct regex extraction from raw header text
-        const fromMatch = headerText.match(/^From:\s*(.+?)$/im);
+        const fromMatch = headerText.match(/^From:\s*(.+)$/im);
         if (fromMatch) fromRaw = fromMatch[1].trim();
       }
       if (!subjectRaw) {
-        const subjectMatch = headerText.match(/^Subject:\s*(.+?)$/im);
+        const subjectMatch = headerText.match(/^Subject:\s*(.+)$/im);
         subjectRaw = subjectMatch ? subjectMatch[1].trim() : "Sem assunto";
       }
       if (!subjectRaw) subjectRaw = "Sem assunto";
       
       // If still no From, try Return-Path as last resort
       if (!fromRaw) {
-        const rpMatch = headerText.match(/^Return-Path:\s*(.+?)$/im);
+        const rpMatch = headerText.match(/^Return-Path:\s*(.+)$/im);
         if (rpMatch) fromRaw = rpMatch[1].trim();
       }
 
