@@ -294,6 +294,18 @@ Deno.serve(async (req) => {
       groupId = clientRecord?.whatsapp_group_id || "";
     }
 
+    // Fetch sector phone if ticket has a sector
+    if (ticket.sector_id) {
+      const { data: sectorRecord } = await supabaseAdmin
+        .from("client_sectors")
+        .select("phone")
+        .eq("id", ticket.sector_id)
+        .single();
+      if (sectorRecord?.phone) {
+        individualPhones.add(cleanPhone(sectorRecord.phone));
+      }
+    }
+
     let sent = 0;
     const sendTextUrl = `${apiUrl.replace(/\/+$/, "")}/send/text`;
     const sendMediaUrl = `${apiUrl.replace(/\/+$/, "")}/send/media`;
