@@ -549,6 +549,14 @@ async function processImapAccount(
       const senderName = extractName(fromRaw);
       const subject = decodeMimeWord(subjectRaw);
 
+      // Skip emails with no valid sender email
+      if (!senderEmail || !senderEmail.includes("@")) {
+        console.log(`Skipping email with invalid/empty sender: "${fromRaw}" -> "${senderEmail}"`);
+        await imapCommand(conn, `s${num}`, `STORE ${num} +FLAGS (\\Seen)`);
+        result.errors++;
+        continue;
+      }
+
       // Ignore postmaster/mailer-daemon emails
       const senderLower = senderEmail.toLowerCase();
       if (senderLower.startsWith("postmaster@") || senderLower.startsWith("mailer-daemon@")) {
