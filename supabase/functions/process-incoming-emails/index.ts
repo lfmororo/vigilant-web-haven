@@ -47,14 +47,32 @@ function extractName(from: string): string {
 function decodeMimeWord(str: string): string {
   return str.replace(/=\?([^?]+)\?(Q|B)\?([^?]+)\?=/gi, (_, charset, encoding, encoded) => {
     if (encoding.toUpperCase() === "B") {
-      return new TextDecoder(charset).decode(
-        Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0))
+      try {
+        return new TextDecoder(charset).decode(
+          Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0))
+        );
+      } catch { return encoded; }
+    }
+    // Quoted-Printable: decode hex bytes then interpret as charset
+    const raw = encoded.replace(/_/g, " ");
+    const bytes: number[] = [];
+    let i = 0;
+    while (i < raw.length) {
+      if (raw[i] === "=" && i + 2 < raw.length) {
+        bytes.push(parseInt(raw.substring(i + 1, i + 3), 16));
+        i += 3;
+      } else {
+        bytes.push(raw.charCodeAt(i));
+        i++;
+      }
+    }
+    try {
+      return new TextDecoder(charset).decode(new Uint8Array(bytes));
+    } catch {
+      return raw.replace(/=([0-9A-Fa-f]{2})/g, (_, hex: string) =>
+        String.fromCharCode(parseInt(hex, 16))
       );
     }
-    const decoded = encoded.replace(/_/g, " ").replace(/=([0-9A-Fa-f]{2})/g, (_: string, hex: string) =>
-      String.fromCharCode(parseInt(hex, 16))
-    );
-    return decoded;
   });
 }
 
