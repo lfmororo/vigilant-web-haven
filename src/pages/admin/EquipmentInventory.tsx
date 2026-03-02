@@ -444,6 +444,7 @@ const EquipmentInventory = () => {
             ) : equipment.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">Nenhum equipamento cadastrado</p>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
