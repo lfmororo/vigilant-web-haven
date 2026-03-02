@@ -311,9 +311,10 @@ async function imapCommand(conn: Deno.TlsConn, tag: string, cmd: string): Promis
   await conn.write(encoder.encode(`${tag} ${cmd}\r\n`));
 
   let fullResponse = "";
-  const buf = new Uint8Array(8192);
+  const buf = new Uint8Array(32768);
+  const maxSize = 512 * 1024; // 512KB safety limit
   
-  while (true) {
+  while (fullResponse.length < maxSize) {
     const n = await conn.read(buf);
     if (!n) break;
     fullResponse += decoder.decode(buf.subarray(0, n));
