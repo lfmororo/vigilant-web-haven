@@ -22,6 +22,7 @@ interface Filters {
   status: string;
   startDate?: Date;
   endDate?: Date;
+  sectorIds?: string[];
 }
 
 interface Metrics {
