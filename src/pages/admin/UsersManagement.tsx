@@ -424,6 +424,7 @@ const UsersManagement = () => {
             ) : filteredUsers.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">Nenhum usuário encontrado</p>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
