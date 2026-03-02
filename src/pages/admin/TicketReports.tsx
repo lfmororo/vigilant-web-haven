@@ -199,8 +199,8 @@ const TicketReports = () => {
     const clientName = clientId !== "all" && clients
       ? clients.find((c) => c.id === clientId)?.full_name || "Todos"
       : "Todos";
-    return { clientName, status, startDate, endDate };
-  }, [clientId, status, startDate, endDate, clients]);
+    return { clientName, status, startDate, endDate, sectorIds };
+  }, [clientId, status, startDate, endDate, clients, sectorIds]);
 
   if (showPrint && tickets) {
     return (
