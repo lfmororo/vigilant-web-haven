@@ -579,9 +579,13 @@ async function processImapAccount(
         headerText = lines.slice(startIdx >= 0 ? startIdx + 1 : 1).join("\r\n");
       }
       
-      // Debug: log first 200 chars of raw header response if parsing fails
-      if (!headerText.includes("From") && !headerText.includes("from")) {
-        console.log(`[DEBUG] Header parse failed. Raw response (first 500 chars): ${headerResp.substring(0, 500)}`);
+      // Debug: always log header extraction details
+      const headerLen = headerText.length;
+      const hasFrom = headerText.includes("From:") || headerText.includes("from:");
+      console.log(`[HEADER-DEBUG] headerText length=${headerLen}, hasFrom=${hasFrom}, first 300 chars: ${headerText.substring(0, 300).replace(/\r?\n/g, "\\n")}`);
+      
+      if (!hasFrom) {
+        console.log(`[DEBUG] Raw headerResp first 500 chars: ${headerResp.substring(0, 500).replace(/\r?\n/g, "\\n")}`);
       }
       
       const headers = parseHeaders(headerText);
