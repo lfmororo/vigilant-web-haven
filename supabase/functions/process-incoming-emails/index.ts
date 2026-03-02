@@ -566,6 +566,8 @@ async function processImapAccount(
       const senderName = extractName(fromRaw);
       const subject = decodeMimeWord(subjectRaw);
 
+      console.log(`[EMAIL] From raw: "${fromRaw}" | Parsed: email="${senderEmail}", name="${senderName}" | Subject: "${subject}"`);
+
       // Skip emails with no valid sender email
       if (!senderEmail || !senderEmail.includes("@")) {
         console.log(`Skipping email with invalid/empty sender: "${fromRaw}" -> "${senderEmail}"`);
