@@ -485,6 +485,7 @@ const UsersManagement = () => {
                   })}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>
