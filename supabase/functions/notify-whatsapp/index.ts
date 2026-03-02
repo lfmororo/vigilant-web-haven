@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
     const { data: ticket } = await supabaseAdmin
       .from("tickets")
       .select(
-        "ticket_number, title, client_id, assigned_to, created_by, priority, equipment_type_id"
+        "ticket_number, title, description, client_id, assigned_to, created_by, priority, equipment_type_id"
       )
       .eq("id", ticket_id)
       .single();
@@ -264,13 +264,19 @@ Deno.serve(async (req) => {
       }
     }
 
+    // For technician_assigned, use ticket description as the message content
+    const notifType = notification_type || "ticket_updated";
+    const messageContent = notifType === "technician_assigned"
+      ? (ticket.description || message || `${senderName} enviou uma atualização.`)
+      : (message || `${senderName} enviou uma atualização.`);
+
     const text = buildMessage(
-      notification_type || "ticket_updated",
+      notifType,
       ticket.ticket_number,
       ticket.title,
       category,
       priority,
-      message || `${senderName} enviou uma atualização.`,
+      messageContent,
       senderName,
       ticketLink,
       resolution_summary,
