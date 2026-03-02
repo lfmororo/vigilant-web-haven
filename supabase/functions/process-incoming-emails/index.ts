@@ -311,9 +311,10 @@ async function imapCommand(conn: Deno.TlsConn, tag: string, cmd: string): Promis
   await conn.write(encoder.encode(`${tag} ${cmd}\r\n`));
 
   let fullResponse = "";
-  const buf = new Uint8Array(8192);
+  const buf = new Uint8Array(32768);
+  const maxSize = 512 * 1024; // 512KB safety limit
   
-  while (true) {
+  while (fullResponse.length < maxSize) {
     const n = await conn.read(buf);
     if (!n) break;
     fullResponse += decoder.decode(buf.subarray(0, n));
@@ -556,8 +557,33 @@ async function processImapAccount(
       const headerResp = await imapCommand(conn, `b${num}`, `FETCH ${num} BODY[HEADER]`);
       const bodyResp = await imapCommand(conn, `c${num}`, `FETCH ${num} BODY[TEXT]`);
 
-      const headerMatch = headerResp.match(/\{(\d+)\}\r\n([\s\S]*?)(?=\r\n[b c]\d+ |\r\n\))/);
-      const headerText = headerMatch ? headerMatch[2] : headerResp;
+      // More robust header extraction - try multiple patterns
+      let headerText = "";
+      const headerMatch1 = headerResp.match(/\{(\d+)\}\r\n([\s\S]*?)(?=\r\n[b c]\d+ |\r\n\))/);
+      const headerMatch2 = headerResp.match(/\{(\d+)\}\r\n([\s\S]+?)(?:\r\n\)\r\n|\r\nb\d+ OK)/);
+      const headerMatch3 = headerResp.match(/BODY\[HEADER\]\s*\{(\d+)\}\r\n([\s\S]+)/);
+      
+      if (headerMatch1 && headerMatch1[2].includes("From")) {
+        headerText = headerMatch1[2];
+      } else if (headerMatch2 && headerMatch2[2].includes("From")) {
+        headerText = headerMatch2[2];
+      } else if (headerMatch3) {
+        // Extract by byte count
+        const byteCount = parseInt(headerMatch3[1], 10);
+        const content = headerMatch3[2];
+        headerText = content.substring(0, byteCount);
+      } else {
+        // Last resort: skip first line (FETCH response line) and use rest
+        const lines = headerResp.split("\r\n");
+        const startIdx = lines.findIndex(l => /^\{?\d+\}?$/.test(l.trim()) || l.includes("BODY[HEADER]"));
+        headerText = lines.slice(startIdx >= 0 ? startIdx + 1 : 1).join("\r\n");
+      }
+      
+      // Debug: log first 200 chars of raw header response if parsing fails
+      if (!headerText.includes("From") && !headerText.includes("from")) {
+        console.log(`[DEBUG] Header parse failed. Raw response (first 500 chars): ${headerResp.substring(0, 500)}`);
+      }
+      
       const headers = parseHeaders(headerText);
 
       const fromRaw = headers["from"] || "";
