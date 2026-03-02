@@ -88,6 +88,7 @@ const TicketReportPrint = ({ tickets, filters, metrics, onClose }: TicketReportP
 
   const activeFilters: string[] = [];
   if (filters.clientName !== "Todos") activeFilters.push(`Cliente: ${filters.clientName}`);
+  if (sectorNames.length > 0) activeFilters.push(`Setores: ${sectorNames.join(", ")}`);
   if (filters.status !== "all") activeFilters.push(`Status: ${statusLabels[filters.status] || filters.status}`);
   if (filters.startDate) activeFilters.push(`De: ${format(filters.startDate, "dd/MM/yyyy")}`);
   if (filters.endDate) activeFilters.push(`Até: ${format(filters.endDate, "dd/MM/yyyy")}`);
