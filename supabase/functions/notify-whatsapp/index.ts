@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
     const { data: ticket } = await supabaseAdmin
       .from("tickets")
       .select(
-        "ticket_number, title, description, client_id, assigned_to, created_by, priority, equipment_type_id"
+        "ticket_number, title, description, client_id, assigned_to, created_by, priority, equipment_type_id, sector_id"
       )
       .eq("id", ticket_id)
       .single();
@@ -292,6 +292,18 @@ Deno.serve(async (req) => {
         .eq("id", ticket.client_id)
         .single();
       groupId = clientRecord?.whatsapp_group_id || "";
+    }
+
+    // Fetch sector phone if ticket has a sector
+    if (ticket.sector_id) {
+      const { data: sectorRecord } = await supabaseAdmin
+        .from("client_sectors")
+        .select("phone")
+        .eq("id", ticket.sector_id)
+        .single();
+      if (sectorRecord?.phone) {
+        individualPhones.add(cleanPhone(sectorRecord.phone));
+      }
     }
 
     let sent = 0;

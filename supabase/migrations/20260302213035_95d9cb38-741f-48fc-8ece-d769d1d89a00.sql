@@ -1,0 +1,1 @@
+ALTER TABLE public.client_sectors ADD COLUMN phone text DEFAULT NULL;
