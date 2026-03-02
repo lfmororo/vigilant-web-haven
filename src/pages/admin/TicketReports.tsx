@@ -250,7 +250,7 @@ const TicketReports = () => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Setor</label>
-                    <SectorFilterSelect clientId={clientId} sectorId={sectorId} setSectorId={setSectorId} />
+                    <SectorMultiSelect clientId={clientId} sectorIds={sectorIds} setSectorIds={setSectorIds} />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Situação</label>
