@@ -60,13 +60,18 @@ function decodeMimeWord(str: string): string {
 
 function parseHeaders(headerText: string): Record<string, string> {
   const headers: Record<string, string> = {};
-  const lines = headerText.replace(/\r\n\s+/g, " ").split(/\r?\n/);
+  // Unfold headers: continuation lines start with whitespace (handles \r\n, \n, tab, spaces)
+  const unfolded = headerText.replace(/\r?\n[ \t]+/g, " ");
+  const lines = unfolded.split(/\r?\n/);
   for (const line of lines) {
     const idx = line.indexOf(":");
     if (idx > 0) {
       const key = line.substring(0, idx).trim().toLowerCase();
       const val = line.substring(idx + 1).trim();
-      headers[key] = val;
+      // Only keep first occurrence (e.g. first "From:")
+      if (!headers[key]) {
+        headers[key] = val;
+      }
     }
   }
   return headers;
