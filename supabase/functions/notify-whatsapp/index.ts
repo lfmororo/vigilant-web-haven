@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
     const { data: ticket } = await supabaseAdmin
       .from("tickets")
       .select(
-        "ticket_number, title, description, client_id, assigned_to, created_by, priority, equipment_type_id"
+        "ticket_number, title, description, client_id, assigned_to, created_by, priority, equipment_type_id, sector_id"
       )
       .eq("id", ticket_id)
       .single();
