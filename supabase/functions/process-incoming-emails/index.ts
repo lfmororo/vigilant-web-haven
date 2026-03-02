@@ -16,9 +16,26 @@ function generatePassword(length = 12): string {
 }
 
 function extractEmail(from: string): string {
-  const match = from.match(/<([^>]+)>/);
+  // Decode MIME-encoded words first
+  const decoded = from.replace(/=\?([^?]+)\?(Q|B)\?([^?]+)\?=/gi, (_, charset, encoding, encoded) => {
+    if (encoding.toUpperCase() === "B") {
+      try {
+        return new TextDecoder(charset).decode(
+          Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0))
+        );
+      } catch { return encoded; }
+    }
+    return encoded.replace(/_/g, " ").replace(/=([0-9A-Fa-f]{2})/g, (_: string, hex: string) =>
+      String.fromCharCode(parseInt(hex, 16))
+    );
+  });
+  // Try <email> format
+  const match = decoded.match(/<([^>]+@[^>]+)>/);
   if (match) return match[1].trim().toLowerCase();
-  return from.trim().toLowerCase();
+  // Try bare email
+  const emailMatch = decoded.match(/[\w.\-+]+@[\w.\-]+\.\w+/);
+  if (emailMatch) return emailMatch[0].trim().toLowerCase();
+  return decoded.trim().toLowerCase();
 }
 
 function extractName(from: string): string {
