@@ -13,18 +13,19 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import TicketStatusBadge from "@/components/helpdesk/TicketStatusBadge";
 import PriorityBadge from "@/components/helpdesk/PriorityBadge";
 import { format, differenceInHours } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon, Printer, RotateCcw, BarChart3, TicketCheck, CheckCircle, Clock } from "lucide-react";
+import { CalendarIcon, Printer, RotateCcw, BarChart3, TicketCheck, CheckCircle, Clock, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TicketReportPrint from "@/components/admin/TicketReportPrint";
 import EquipmentRankingReport from "@/components/admin/reports/EquipmentRankingReport";
 import UserRankingReport from "@/components/admin/reports/UserRankingReport";
 import SatisfactionRankingReport from "@/components/admin/reports/SatisfactionRankingReport";
 
-const SectorFilterSelect = ({ clientId, sectorId, setSectorId }: { clientId: string; sectorId: string; setSectorId: (v: string) => void }) => {
+const SectorMultiSelect = ({ clientId, sectorIds, setSectorIds }: { clientId: string; sectorIds: string[]; setSectorIds: (v: string[]) => void }) => {
   const { data: sectors } = useQuery({
     queryKey: ["report-sectors-main", clientId],
     queryFn: async () => {
@@ -36,16 +37,50 @@ const SectorFilterSelect = ({ clientId, sectorId, setSectorId }: { clientId: str
       return data || [];
     },
   });
+
+  const toggleSector = (id: string) => {
+    if (sectorIds.includes(id)) {
+      setSectorIds(sectorIds.filter(s => s !== id));
+    } else {
+      setSectorIds([...sectorIds, id]);
+    }
+  };
+
+  const label = sectorIds.length === 0
+    ? "Todos"
+    : sectorIds.length === 1
+      ? sectors?.find(s => s.id === sectorIds[0])?.name || "1 setor"
+      : `${sectorIds.length} setores`;
+
   return (
-    <Select value={sectorId} onValueChange={setSectorId}>
-      <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">Todos</SelectItem>
-        {sectors?.map((s) => (
-          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="w-full justify-between font-normal">
+          <span className="truncate">{label}</span>
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-2 max-h-60 overflow-auto" align="start">
+        {!sectors?.length ? (
+          <p className="text-xs text-muted-foreground p-2">Nenhum setor</p>
+        ) : (
+          sectors.map(s => (
+            <label key={s.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded cursor-pointer text-sm">
+              <Checkbox
+                checked={sectorIds.includes(s.id)}
+                onCheckedChange={() => toggleSector(s.id)}
+              />
+              {s.name}
+            </label>
+          ))
+        )}
+        {sectorIds.length > 0 && (
+          <Button variant="ghost" size="sm" className="w-full mt-1 text-xs" onClick={() => setSectorIds([])}>
+            Limpar seleção
+          </Button>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 };
 
@@ -62,7 +97,7 @@ const TicketReports = () => {
   const [clientId, setClientId] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
   const [technicianId, setTechnicianId] = useState<string>("all");
-  const [sectorId, setSectorId] = useState<string>("all");
+  const [sectorIds, setSectorIds] = useState<string[]>([]);
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [showPrint, setShowPrint] = useState(false);
@@ -90,7 +125,7 @@ const TicketReports = () => {
 
   // Fetch tickets with filters
   const { data: tickets, isLoading } = useQuery({
-    queryKey: ["report-tickets", clientId, status, technicianId, sectorId, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["report-tickets", clientId, status, technicianId, sectorIds, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       let clientIds: string[] = [];
       if (clientId !== "all") {
@@ -109,7 +144,7 @@ const TicketReports = () => {
       if (clientIds.length > 0) query = query.in("client_id", clientIds);
       if (status !== "all") query = query.eq("status", status as any);
       if (technicianId !== "all") query = query.eq("assigned_to", technicianId);
-      if (sectorId !== "all") query = query.eq("sector_id", sectorId);
+      if (sectorIds.length > 0) query = query.in("sector_id", sectorIds);
       if (startDate) query = query.gte("created_at", startDate.toISOString());
       if (endDate) {
         const end = new Date(endDate);
@@ -136,7 +171,7 @@ const TicketReports = () => {
     setClientId("all");
     setStatus("all");
     setTechnicianId("all");
-    setSectorId("all");
+    setSectorIds([]);
     setStartDate(undefined);
     setEndDate(undefined);
   };
@@ -164,8 +199,8 @@ const TicketReports = () => {
     const clientName = clientId !== "all" && clients
       ? clients.find((c) => c.id === clientId)?.full_name || "Todos"
       : "Todos";
-    return { clientName, status, startDate, endDate };
-  }, [clientId, status, startDate, endDate, clients]);
+    return { clientName, status, startDate, endDate, sectorIds };
+  }, [clientId, status, startDate, endDate, clients, sectorIds]);
 
   if (showPrint && tickets) {
     return (
@@ -203,7 +238,7 @@ const TicketReports = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4 items-end">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Cliente</label>
-                    <Select value={clientId} onValueChange={(v) => { setClientId(v); setSectorId("all"); }}>
+                    <Select value={clientId} onValueChange={(v) => { setClientId(v); setSectorIds([]); }}>
                       <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todos</SelectItem>
@@ -215,7 +250,7 @@ const TicketReports = () => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Setor</label>
-                    <SectorFilterSelect clientId={clientId} sectorId={sectorId} setSectorId={setSectorId} />
+                    <SectorMultiSelect clientId={clientId} sectorIds={sectorIds} setSectorIds={setSectorIds} />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Situação</label>
