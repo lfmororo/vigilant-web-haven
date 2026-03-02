@@ -595,18 +595,36 @@ async function processImapAccount(
       
       const headers = parseHeaders(headerText);
 
-      const fromRaw = headers["from"] || "";
-      const subjectRaw = headers["subject"] || "Sem assunto";
+      // Fallback: extract From/Subject directly from headerText if parseHeaders missed them
+      let fromRaw = headers["from"] || "";
+      let subjectRaw = headers["subject"] || "";
+      
+      if (!fromRaw) {
+        // Direct regex extraction from raw header text
+        const fromMatch = headerText.match(/^From:\s*(.+?)$/im);
+        if (fromMatch) fromRaw = fromMatch[1].trim();
+      }
+      if (!subjectRaw) {
+        const subjectMatch = headerText.match(/^Subject:\s*(.+?)$/im);
+        subjectRaw = subjectMatch ? subjectMatch[1].trim() : "Sem assunto";
+      }
+      if (!subjectRaw) subjectRaw = "Sem assunto";
+      
+      // If still no From, try Return-Path as last resort
+      if (!fromRaw) {
+        const rpMatch = headerText.match(/^Return-Path:\s*(.+?)$/im);
+        if (rpMatch) fromRaw = rpMatch[1].trim();
+      }
+
       const senderEmail = extractEmail(fromRaw);
       const senderName = extractName(fromRaw);
       const subject = decodeMimeWord(subjectRaw);
 
       console.log(`[EMAIL] From raw: "${fromRaw}" | Parsed: email="${senderEmail}", name="${senderName}" | Subject: "${subject}"`);
 
-      // Skip emails with no valid sender email
+      // Skip emails with no valid sender email (do NOT mark as seen so we can retry)
       if (!senderEmail || !senderEmail.includes("@")) {
         console.log(`Skipping email with invalid/empty sender: "${fromRaw}" -> "${senderEmail}"`);
-        await imapCommand(conn, `s${num}`, `STORE ${num} +FLAGS (\\Seen)`);
         result.errors++;
         continue;
       }
