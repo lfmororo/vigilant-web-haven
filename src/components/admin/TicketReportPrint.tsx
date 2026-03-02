@@ -63,6 +63,7 @@ const formatAvgTime = (hours: number) => {
 
 const TicketReportPrint = ({ tickets, filters, metrics, onClose }: TicketReportPrintProps) => {
   const [company, setCompany] = useState<Record<string, string>>({});
+  const [sectorNames, setSectorNames] = useState<string[]>([]);
 
   useEffect(() => {
     supabase.from("system_settings").select("key, value")
@@ -72,6 +73,13 @@ const TicketReportPrint = ({ tickets, filters, metrics, onClose }: TicketReportP
         data?.forEach(s => { if (s.value) map[s.key] = s.value; });
         setCompany(map);
       });
+
+    // Fetch sector names if filtered
+    if (filters.sectorIds?.length) {
+      supabase.from("client_sectors").select("id, name").in("id", filters.sectorIds).then(({ data }) => {
+        setSectorNames(data?.map(s => s.name) || []);
+      });
+    }
 
     const handleAfterPrint = () => onClose();
     window.addEventListener("afterprint", handleAfterPrint);
