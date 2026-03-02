@@ -264,13 +264,19 @@ Deno.serve(async (req) => {
       }
     }
 
+    // For technician_assigned, use ticket description as the message content
+    const notifType = notification_type || "ticket_updated";
+    const messageContent = notifType === "technician_assigned"
+      ? (ticket.description || message || `${senderName} enviou uma atualização.`)
+      : (message || `${senderName} enviou uma atualização.`);
+
     const text = buildMessage(
-      notification_type || "ticket_updated",
+      notifType,
       ticket.ticket_number,
       ticket.title,
       category,
       priority,
-      message || `${senderName} enviou uma atualização.`,
+      messageContent,
       senderName,
       ticketLink,
       resolution_summary,
