@@ -350,6 +350,7 @@ const TicketReports = () => {
                 ) : !tickets?.length ? (
                   <p className="text-center text-muted-foreground py-8">Nenhum chamado encontrado.</p>
                 ) : (
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
