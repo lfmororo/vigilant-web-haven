@@ -97,7 +97,7 @@ const TicketReports = () => {
   const [clientId, setClientId] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
   const [technicianId, setTechnicianId] = useState<string>("all");
-  const [sectorId, setSectorId] = useState<string>("all");
+  const [sectorIds, setSectorIds] = useState<string[]>([]);
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [showPrint, setShowPrint] = useState(false);
