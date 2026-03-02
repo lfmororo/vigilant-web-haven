@@ -15,7 +15,7 @@ const COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#16a34a", "#0891b2"
 
 const EquipmentRankingReport = () => {
   const [clientId, setClientId] = useState("all");
-  const [sectorId, setSectorId] = useState("all");
+  const [sectorIds, setSectorIds] = useState<string[]>([]);
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
   const [showPrint, setShowPrint] = useState(false);
@@ -29,7 +29,7 @@ const EquipmentRankingReport = () => {
   });
 
   const { data: tickets, isLoading } = useQuery({
-    queryKey: ["equip-ranking", clientId, sectorId, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["equip-ranking", clientId, sectorIds, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       let clientIds: string[] = [];
       if (clientId !== "all") {
@@ -44,7 +44,7 @@ const EquipmentRankingReport = () => {
       `);
 
       if (clientIds.length) q = q.in("client_id", clientIds);
-      if (sectorId !== "all") q = q.eq("sector_id", sectorId);
+      if (sectorIds.length > 0) q = q.in("sector_id", sectorIds);
       if (startDate) q = q.gte("created_at", startDate.toISOString());
       if (endDate) {
         const end = new Date(endDate);
@@ -71,7 +71,7 @@ const EquipmentRankingReport = () => {
 
   const clearFilters = () => {
     setClientId("all");
-    setSectorId("all");
+    setSectorIds([]);
     setStartDate(undefined);
     setEndDate(undefined);
   };
@@ -107,11 +107,11 @@ const EquipmentRankingReport = () => {
         <CardContent className="pt-6">
           <ReportFilters
             clients={clients || []}
-            clientId={clientId} setClientId={(v) => { setClientId(v); setSectorId("all"); }}
+            clientId={clientId} setClientId={(v) => { setClientId(v); setSectorIds([]); }}
             startDate={startDate} setStartDate={setStartDate}
             endDate={endDate} setEndDate={setEndDate}
             onClear={clearFilters}
-            sectorId={sectorId} setSectorId={setSectorId}
+            sectorIds={sectorIds} setSectorIds={setSectorIds}
           />
         </CardContent>
       </Card>

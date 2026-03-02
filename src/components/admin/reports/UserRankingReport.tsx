@@ -15,7 +15,7 @@ const COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#16a34a", "#0891b2"
 
 const UserRankingReport = () => {
   const [clientId, setClientId] = useState("all");
-  const [sectorId, setSectorId] = useState("all");
+  const [sectorIds, setSectorIds] = useState<string[]>([]);
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
   const [showPrint, setShowPrint] = useState(false);
@@ -29,7 +29,7 @@ const UserRankingReport = () => {
   });
 
   const { data: tickets, isLoading } = useQuery({
-    queryKey: ["user-ranking", clientId, sectorId, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["user-ranking", clientId, sectorIds, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       let clientIds: string[] = [];
       if (clientId !== "all") {
@@ -41,7 +41,7 @@ const UserRankingReport = () => {
       let q = supabase.from("tickets").select("id, created_by");
 
       if (clientIds.length) q = q.in("client_id", clientIds);
-      if (sectorId !== "all") q = q.eq("sector_id", sectorId);
+      if (sectorIds.length > 0) q = q.in("sector_id", sectorIds);
       if (startDate) q = q.gte("created_at", startDate.toISOString());
       if (endDate) {
         const end = new Date(endDate);
@@ -52,7 +52,6 @@ const UserRankingReport = () => {
       const { data: ticketData } = await q;
       if (!ticketData?.length) return [];
 
-      // Fetch creator names separately
       const creatorIds = [...new Set(ticketData.map(t => t.created_by).filter(Boolean))] as string[];
       const profileMap: Record<string, string> = {};
       if (creatorIds.length) {
@@ -60,7 +59,6 @@ const UserRankingReport = () => {
         profiles?.forEach(p => { profileMap[p.id] = p.full_name; });
       }
 
-      // Build ranking
       const map: Record<string, { name: string; count: number }> = {};
       ticketData.forEach((t) => {
         const key = t.created_by || "unknown";
@@ -76,7 +74,7 @@ const UserRankingReport = () => {
 
   const clearFilters = () => {
     setClientId("all");
-    setSectorId("all");
+    setSectorIds([]);
     setStartDate(undefined);
     setEndDate(undefined);
   };
@@ -112,11 +110,11 @@ const UserRankingReport = () => {
         <CardContent className="pt-6">
           <ReportFilters
             clients={clients || []}
-            clientId={clientId} setClientId={(v) => { setClientId(v); setSectorId("all"); }}
+            clientId={clientId} setClientId={(v) => { setClientId(v); setSectorIds([]); }}
             startDate={startDate} setStartDate={setStartDate}
             endDate={endDate} setEndDate={setEndDate}
             onClear={clearFilters}
-            sectorId={sectorId} setSectorId={setSectorId}
+            sectorIds={sectorIds} setSectorIds={setSectorIds}
           />
         </CardContent>
       </Card>

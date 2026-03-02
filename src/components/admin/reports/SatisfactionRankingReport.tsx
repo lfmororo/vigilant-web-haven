@@ -14,7 +14,7 @@ const COLORS = ["#16a34a", "#2563eb", "#7c3aed", "#db2777", "#ea580c", "#0891b2"
 
 const SatisfactionRankingReport = () => {
   const [clientId, setClientId] = useState("all");
-  const [sectorId, setSectorId] = useState("all");
+  const [sectorIds, setSectorIds] = useState<string[]>([]);
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
 
@@ -27,12 +27,12 @@ const SatisfactionRankingReport = () => {
   });
 
   const { data: ratings, isLoading } = useQuery({
-    queryKey: ["satisfaction-ratings", clientId, sectorId, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["satisfaction-ratings", clientId, sectorIds, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
-      // If sector filter is active, first get ticket IDs in that sector
+      // If sector filter is active, first get ticket IDs in those sectors
       let sectorTicketIds: string[] | null = null;
-      if (sectorId !== "all") {
-        const { data: sectorTickets } = await supabase.from("tickets").select("id").eq("sector_id", sectorId);
+      if (sectorIds.length > 0) {
+        const { data: sectorTickets } = await supabase.from("tickets").select("id").in("sector_id", sectorIds);
         sectorTicketIds = sectorTickets?.map(t => t.id) || [];
         if (!sectorTicketIds.length) return { ratings: [], techRanking: [], metrics: { avg: 0, total: 0, withComment: 0 } };
       }
@@ -54,7 +54,6 @@ const SatisfactionRankingReport = () => {
       const { data } = await query;
       if (!data?.length) return { ratings: [], techRanking: [], metrics: { avg: 0, total: 0, withComment: 0 } };
 
-      // Fetch technician names
       const techIds = [...new Set(data.map(r => r.technician_id).filter(Boolean))] as string[];
       const techMap: Record<string, string> = {};
       if (techIds.length) {
@@ -62,7 +61,6 @@ const SatisfactionRankingReport = () => {
         profiles?.forEach(p => { techMap[p.id] = p.full_name; });
       }
 
-      // Fetch ticket info
       const ticketIds = data.map(r => r.ticket_id);
       const ticketMap: Record<string, { ticket_number: number; title: string }> = {};
       if (ticketIds.length) {
@@ -70,7 +68,6 @@ const SatisfactionRankingReport = () => {
         tickets?.forEach(t => { ticketMap[t.id] = { ticket_number: t.ticket_number, title: t.title }; });
       }
 
-      // Build technician ranking
       const techStats: Record<string, { name: string; total: number; count: number; ratings: number[] }> = {};
       data.forEach(r => {
         const techId = r.technician_id || "unassigned";
@@ -102,7 +99,7 @@ const SatisfactionRankingReport = () => {
 
   const clearFilters = () => {
     setClientId("all");
-    setSectorId("all");
+    setSectorIds([]);
     setStartDate(undefined);
     setEndDate(undefined);
   };
@@ -122,11 +119,11 @@ const SatisfactionRankingReport = () => {
         <CardContent className="pt-6">
           <ReportFilters
             clients={clients || []}
-            clientId={clientId} setClientId={(v) => { setClientId(v); setSectorId("all"); }}
+            clientId={clientId} setClientId={(v) => { setClientId(v); setSectorIds([]); }}
             startDate={startDate} setStartDate={setStartDate}
             endDate={endDate} setEndDate={setEndDate}
             onClear={clearFilters}
-            sectorId={sectorId} setSectorId={setSectorId}
+            sectorIds={sectorIds} setSectorIds={setSectorIds}
           />
         </CardContent>
       </Card>
