@@ -125,7 +125,7 @@ const TicketReports = () => {
 
   // Fetch tickets with filters
   const { data: tickets, isLoading } = useQuery({
-    queryKey: ["report-tickets", clientId, status, technicianId, sectorId, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["report-tickets", clientId, status, technicianId, sectorIds, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       let clientIds: string[] = [];
       if (clientId !== "all") {
