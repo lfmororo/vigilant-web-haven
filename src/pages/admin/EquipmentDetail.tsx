@@ -245,6 +245,7 @@ const EquipmentDetail = () => {
             {tickets.length === 0 ? (
               <p className="text-center text-muted-foreground py-4">Nenhum ticket relacionado</p>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
