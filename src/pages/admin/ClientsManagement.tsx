@@ -340,6 +340,7 @@ const ClientsManagement = () => {
             ) : clients.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">Nenhum cliente cadastrado</p>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -380,6 +381,7 @@ const ClientsManagement = () => {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

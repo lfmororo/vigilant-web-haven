@@ -94,6 +94,7 @@ const ClientTicketsList = () => {
             ) : !parentClientId ? (
               <p className="text-center text-muted-foreground py-8">Seu usuário não está vinculado a nenhum cliente.</p>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -124,6 +125,7 @@ const ClientTicketsList = () => {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

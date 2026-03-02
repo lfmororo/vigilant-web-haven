@@ -245,6 +245,7 @@ const EquipmentDetail = () => {
             {tickets.length === 0 ? (
               <p className="text-center text-muted-foreground py-4">Nenhum ticket relacionado</p>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -269,6 +270,7 @@ const EquipmentDetail = () => {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -280,6 +282,7 @@ const EquipmentDetail = () => {
             {serviceOrders.length === 0 ? (
               <p className="text-center text-muted-foreground py-4">Nenhuma OS relacionada</p>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -302,6 +305,7 @@ const EquipmentDetail = () => {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>
