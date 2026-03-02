@@ -144,7 +144,7 @@ const TicketReports = () => {
       if (clientIds.length > 0) query = query.in("client_id", clientIds);
       if (status !== "all") query = query.eq("status", status as any);
       if (technicianId !== "all") query = query.eq("assigned_to", technicianId);
-      if (sectorId !== "all") query = query.eq("sector_id", sectorId);
+      if (sectorIds.length > 0) query = query.in("sector_id", sectorIds);
       if (startDate) query = query.gte("created_at", startDate.toISOString());
       if (endDate) {
         const end = new Date(endDate);
