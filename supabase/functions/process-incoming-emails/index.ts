@@ -60,13 +60,18 @@ function decodeMimeWord(str: string): string {
 
 function parseHeaders(headerText: string): Record<string, string> {
   const headers: Record<string, string> = {};
-  const lines = headerText.replace(/\r\n\s+/g, " ").split(/\r?\n/);
+  // Unfold headers: continuation lines start with whitespace (handles \r\n, \n, tab, spaces)
+  const unfolded = headerText.replace(/\r?\n[ \t]+/g, " ");
+  const lines = unfolded.split(/\r?\n/);
   for (const line of lines) {
     const idx = line.indexOf(":");
     if (idx > 0) {
       const key = line.substring(0, idx).trim().toLowerCase();
       const val = line.substring(idx + 1).trim();
-      headers[key] = val;
+      // Only keep first occurrence (e.g. first "From:")
+      if (!headers[key]) {
+        headers[key] = val;
+      }
     }
   }
   return headers;
@@ -579,25 +584,47 @@ async function processImapAccount(
         headerText = lines.slice(startIdx >= 0 ? startIdx + 1 : 1).join("\r\n");
       }
       
-      // Debug: log first 200 chars of raw header response if parsing fails
-      if (!headerText.includes("From") && !headerText.includes("from")) {
-        console.log(`[DEBUG] Header parse failed. Raw response (first 500 chars): ${headerResp.substring(0, 500)}`);
+      // Debug: always log header extraction details
+      const headerLen = headerText.length;
+      const hasFrom = headerText.includes("From:") || headerText.includes("from:");
+      console.log(`[HEADER-DEBUG] headerText length=${headerLen}, hasFrom=${hasFrom}, first 300 chars: ${headerText.substring(0, 300).replace(/\r?\n/g, "\\n")}`);
+      
+      if (!hasFrom) {
+        console.log(`[DEBUG] Raw headerResp first 500 chars: ${headerResp.substring(0, 500).replace(/\r?\n/g, "\\n")}`);
       }
       
       const headers = parseHeaders(headerText);
 
-      const fromRaw = headers["from"] || "";
-      const subjectRaw = headers["subject"] || "Sem assunto";
+      // Fallback: extract From/Subject directly from headerText if parseHeaders missed them
+      let fromRaw = headers["from"] || "";
+      let subjectRaw = headers["subject"] || "";
+      
+      if (!fromRaw) {
+        // Direct regex extraction from raw header text
+        const fromMatch = headerText.match(/^From:\s*(.+?)$/im);
+        if (fromMatch) fromRaw = fromMatch[1].trim();
+      }
+      if (!subjectRaw) {
+        const subjectMatch = headerText.match(/^Subject:\s*(.+?)$/im);
+        subjectRaw = subjectMatch ? subjectMatch[1].trim() : "Sem assunto";
+      }
+      if (!subjectRaw) subjectRaw = "Sem assunto";
+      
+      // If still no From, try Return-Path as last resort
+      if (!fromRaw) {
+        const rpMatch = headerText.match(/^Return-Path:\s*(.+?)$/im);
+        if (rpMatch) fromRaw = rpMatch[1].trim();
+      }
+
       const senderEmail = extractEmail(fromRaw);
       const senderName = extractName(fromRaw);
       const subject = decodeMimeWord(subjectRaw);
 
       console.log(`[EMAIL] From raw: "${fromRaw}" | Parsed: email="${senderEmail}", name="${senderName}" | Subject: "${subject}"`);
 
-      // Skip emails with no valid sender email
+      // Skip emails with no valid sender email (do NOT mark as seen so we can retry)
       if (!senderEmail || !senderEmail.includes("@")) {
         console.log(`Skipping email with invalid/empty sender: "${fromRaw}" -> "${senderEmail}"`);
-        await imapCommand(conn, `s${num}`, `STORE ${num} +FLAGS (\\Seen)`);
         result.errors++;
         continue;
       }
