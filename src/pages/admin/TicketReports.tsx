@@ -171,7 +171,7 @@ const TicketReports = () => {
     setClientId("all");
     setStatus("all");
     setTechnicianId("all");
-    setSectorId("all");
+    setSectorIds([]);
     setStartDate(undefined);
     setEndDate(undefined);
   };
