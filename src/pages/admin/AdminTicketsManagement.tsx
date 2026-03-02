@@ -149,6 +149,7 @@ const AdminTicketsManagement = () => {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

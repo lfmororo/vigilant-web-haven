@@ -108,6 +108,7 @@ const AdminServiceOrders = () => {
                   })}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

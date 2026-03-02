@@ -70,6 +70,7 @@ const ClientServiceOrders = () => {
                   })}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

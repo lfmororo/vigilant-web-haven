@@ -383,6 +383,7 @@ const TicketReports = () => {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>

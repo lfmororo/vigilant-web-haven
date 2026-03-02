@@ -381,6 +381,7 @@ const ClientsManagement = () => {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

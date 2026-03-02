@@ -521,6 +521,7 @@ const EquipmentInventory = () => {
                   })}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

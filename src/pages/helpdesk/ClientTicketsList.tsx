@@ -125,6 +125,7 @@ const ClientTicketsList = () => {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>
