@@ -270,6 +270,7 @@ const EquipmentDetail = () => {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>
