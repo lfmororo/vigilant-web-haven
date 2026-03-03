@@ -338,7 +338,7 @@ Deno.serve(async (req) => {
               number,
               type: "button",
               text: "Precisa de Suporte?",
-              choices: ["Falar com Suporte|wa.me/+5585986801458"],
+              choices: ["Falar com Suporte|https://wa.me/5585986801458?text=Preciso%20de%20Suporte"],
               footerText: "Escolha uma opção",
             }),
           });
