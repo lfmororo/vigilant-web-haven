@@ -307,10 +307,12 @@ Deno.serve(async (req) => {
     }
 
     let sent = 0;
-    const sendTextUrl = `${apiUrl.replace(/\/+$/, "")}/send/text`;
-    const sendMediaUrl = `${apiUrl.replace(/\/+$/, "")}/send/media`;
+    const baseApiUrl = apiUrl.replace(/\/+$/, "");
+    const sendTextUrl = `${baseApiUrl}/send/text`;
+    const sendMediaUrl = `${baseApiUrl}/send/media`;
+    const sendMenuUrl = `${baseApiUrl}/send/menu`;
 
-    // Helper to send text + optional PDF document
+    // Helper to send text + button + optional PDF document
     const sendToNumber = async (number: string) => {
       try {
         // Send text message
@@ -325,6 +327,29 @@ Deno.serve(async (req) => {
         } else {
           const errBody = await textResp.text();
           console.error(`WhatsApp text failed for ${number}: ${textResp.status} ${errBody}`);
+        }
+
+        // Send support button
+        try {
+          const menuResp = await fetch(sendMenuUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", token: apiToken },
+            body: JSON.stringify({
+              number,
+              type: "button",
+              text: "Precisa de Suporte?",
+              choices: ["Falar com Suporte|wa.me/+5585986801458"],
+              footerText: "Escolha uma opção",
+            }),
+          });
+          if (menuResp.ok) {
+            console.log(`WhatsApp button sent to ${number}`);
+          } else {
+            const errBody = await menuResp.text();
+            console.error(`WhatsApp button failed for ${number}: ${menuResp.status} ${errBody}`);
+          }
+        } catch (btnErr) {
+          console.error(`WhatsApp button error for ${number}:`, btnErr);
         }
 
         // Send PDF document if available (only for resolved/closed tickets)
