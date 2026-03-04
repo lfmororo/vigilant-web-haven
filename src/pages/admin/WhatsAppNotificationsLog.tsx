@@ -197,7 +197,7 @@ const WhatsAppNotificationsLog = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredLogs.map((log: any) => (
+                     {paginatedLogs.map((log: any) => (
                       <TableRow key={log.id}>
                         <TableCell className="whitespace-nowrap">
                           <div className="flex items-center gap-1.5 text-sm">
@@ -251,6 +251,33 @@ const WhatsAppNotificationsLog = () => {
                 </Table>
               )}
             </ScrollArea>
+            {/* Pagination */}
+            {filteredLogs.length > ITEMS_PER_PAGE && (
+              <div className="flex items-center justify-between border-t px-4 py-3">
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredLogs.length)} de {filteredLogs.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border bg-background hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Anterior
+                  </button>
+                  <span className="text-sm text-muted-foreground">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border bg-background hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
+                  >
+                    Próximo <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
