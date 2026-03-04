@@ -1028,6 +1028,50 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_notification_logs: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          message_preview: string | null
+          notification_type: string
+          recipient_phone: string
+          status: string
+          ticket_id: string | null
+          ticket_number: number | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_preview?: string | null
+          notification_type: string
+          recipient_phone: string
+          status?: string
+          ticket_id?: string | null
+          ticket_number?: number | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_preview?: string | null
+          notification_type?: string
+          recipient_phone?: string
+          status?: string
+          ticket_id?: string | null
+          ticket_number?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_notification_logs_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

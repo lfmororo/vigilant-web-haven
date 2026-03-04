@@ -312,6 +312,23 @@ Deno.serve(async (req) => {
     const sendMediaUrl = `${baseApiUrl}/send/media`;
     const sendMenuUrl = `${baseApiUrl}/send/menu`;
 
+    // Helper to log notification
+    const logNotification = async (recipientPhone: string, status: string, errorMessage?: string) => {
+      try {
+        await supabaseAdmin.from("whatsapp_notification_logs").insert({
+          ticket_id,
+          ticket_number: ticket.ticket_number,
+          notification_type: notifType,
+          recipient_phone: recipientPhone,
+          message_preview: text.substring(0, 300),
+          status,
+          error_message: errorMessage || null,
+        });
+      } catch (logErr) {
+        console.error("Failed to log WhatsApp notification:", logErr);
+      }
+    };
+
     // Helper to send text + button + optional PDF document
     const sendToNumber = async (number: string) => {
       try {
@@ -324,9 +341,11 @@ Deno.serve(async (req) => {
         if (textResp.ok) {
           sent++;
           console.log(`WhatsApp text sent to ${number}`);
+          await logNotification(number, "sent");
         } else {
           const errBody = await textResp.text();
           console.error(`WhatsApp text failed for ${number}: ${textResp.status} ${errBody}`);
+          await logNotification(number, "failed", `${textResp.status}: ${errBody}`);
         }
 
         // Send support button
@@ -374,6 +393,7 @@ Deno.serve(async (req) => {
         }
       } catch (err) {
         console.error(`WhatsApp error for ${number}:`, err);
+        await logNotification(number, "failed", String(err));
       }
     };
 
