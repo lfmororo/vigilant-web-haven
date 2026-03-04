@@ -512,6 +512,7 @@ const EquipmentInventory = () => {
                             <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>
+                        <TableCell>
                           <Badge variant="outline" className={statusColors[item.status] || ""}>
                             {statusLabels[item.status] || item.status}
                           </Badge>
