@@ -845,6 +845,7 @@ export type Database = {
           id: string
           rated_at: string
           rating: number | null
+          rating_source: string | null
           rating_token: string
           technician_id: string | null
           ticket_id: string
@@ -856,6 +857,7 @@ export type Database = {
           id?: string
           rated_at?: string
           rating?: number | null
+          rating_source?: string | null
           rating_token?: string
           technician_id?: string | null
           ticket_id: string
@@ -867,6 +869,7 @@ export type Database = {
           id?: string
           rated_at?: string
           rating?: number | null
+          rating_source?: string | null
           rating_token?: string
           technician_id?: string | null
           ticket_id?: string

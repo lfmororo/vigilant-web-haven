@@ -39,7 +39,7 @@ const SatisfactionRankingReport = () => {
 
       let query = supabase
         .from("ticket_ratings")
-        .select("id, rating, comment, rated_at, technician_id, client_id, ticket_id")
+        .select("id, rating, comment, rated_at, technician_id, client_id, ticket_id, rating_source")
         .not("rating", "is", null);
 
       if (clientId !== "all") query = query.eq("client_id", clientId);
@@ -91,6 +91,7 @@ const SatisfactionRankingReport = () => {
         technician_name: techMap[r.technician_id || ""] || "Não atribuído",
         ticket_number: ticketMap[r.ticket_id]?.ticket_number || 0,
         ticket_title: ticketMap[r.ticket_id]?.title || "-",
+        source: (r as any).rating_source || "email",
       })).sort((a, b) => new Date(b.rated_at).getTime() - new Date(a.rated_at).getTime());
 
       return { ratings: enrichedRatings, techRanking, metrics: { avg: avgRating, total: totalRatings, withComment } };
@@ -226,6 +227,7 @@ const SatisfactionRankingReport = () => {
                     <TableHead>Ticket</TableHead>
                     <TableHead>Técnico</TableHead>
                     <TableHead className="text-center">Nota</TableHead>
+                    <TableHead className="text-center">Origem</TableHead>
                     <TableHead>Comentário</TableHead>
                     <TableHead>Data</TableHead>
                   </TableRow>
@@ -238,6 +240,13 @@ const SatisfactionRankingReport = () => {
                       <TableCell className="text-center">
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-sm font-bold ${getRatingColor(r.rating)}`}>
                           {r.rating}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          r.source === "whatsapp" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                        }`}>
+                          {r.source === "whatsapp" ? "📱 WhatsApp" : "📧 Email"}
                         </span>
                       </TableCell>
                       <TableCell className="max-w-[300px] truncate text-muted-foreground">

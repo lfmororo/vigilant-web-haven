@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
       const sanitizedComment = comment.substring(0, 1000).trim();
       await supabaseAdmin
         .from("ticket_ratings")
-        .update({ rating: ratingNum, comment: sanitizedComment || null, rated_at: new Date().toISOString() })
+        .update({ rating: ratingNum, comment: sanitizedComment || null, rated_at: new Date().toISOString(), rating_source: "email" })
         .eq("id", existing.id);
 
       const emoji = ratingNum >= 8 ? "🎉" : ratingNum >= 5 ? "👍" : "😔";
