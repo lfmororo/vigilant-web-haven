@@ -63,6 +63,18 @@ const WhatsAppNotificationsLog = () => {
     return matchesSearch && matchesType && matchesStatus;
   });
 
+  // Reset page when filters change
+  const filteredWithReset = useMemo(() => {
+    setCurrentPage(1);
+    return filteredLogs;
+  }, [search, typeFilter, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / ITEMS_PER_PAGE));
+  const paginatedLogs = filteredLogs.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   const stats = {
     total: logs?.length || 0,
     sent: logs?.filter((l: any) => l.status === "sent").length || 0,
