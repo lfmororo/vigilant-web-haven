@@ -461,7 +461,7 @@ const SystemSettings = () => {
         </div>
 
         <Tabs defaultValue="imap" className="space-y-4">
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="imap" className="gap-2">
               <Mail className="w-4 h-4" />
               Email de Captura
@@ -473,6 +473,10 @@ const SystemSettings = () => {
             <TabsTrigger value="whatsapp" className="gap-2">
               <MessageCircle className="w-4 h-4" />
               WhatsApp
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="gap-2">
+              <Bell className="w-4 h-4" />
+              Notificações
             </TabsTrigger>
           </TabsList>
 
