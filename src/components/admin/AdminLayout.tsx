@@ -17,7 +17,8 @@ import {
   Settings,
   BarChart3,
   ClipboardList,
-  BookOpen } from
+  BookOpen,
+  MessageSquare } from
 "lucide-react";
 import fmLogo from "@/assets/fm-techflow-logo.png";
 
