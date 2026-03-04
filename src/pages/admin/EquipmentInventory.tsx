@@ -455,9 +455,10 @@ const EquipmentInventory = () => {
                     <TableHead>Processador</TableHead>
                     <TableHead>Memória</TableHead>
                     <TableHead>Disco</TableHead>
-                    <TableHead>Usuário Logado</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
+                     <TableHead>Usuário Logado</TableHead>
+                     <TableHead>Últ. Atualização Agente</TableHead>
+                     <TableHead>Status</TableHead>
+                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
