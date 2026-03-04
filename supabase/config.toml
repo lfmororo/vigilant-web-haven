@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.request-remote-access]
 verify_jwt = false
+
+[functions.whatsapp-webhook]
+verify_jwt = false
