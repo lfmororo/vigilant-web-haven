@@ -464,10 +464,19 @@ Deno.serve(async (req) => {
     }
     console.log("Sending emails to:", recipients.map(r => r.email));
 
-    // Load SMTP settings
+    // Load system settings
     const { data: settingsData } = await supabaseAdmin.from("system_settings").select("key, value");
     const settings: Record<string, string> = {};
     settingsData?.forEach((s: any) => { settings[s.key] = s.value || ""; });
+
+    // Check if this notification type is enabled
+    const notifTypeKey = `notif_${notification_type || "ticket_updated"}`;
+    if (settings[notifTypeKey] === "false") {
+      console.log(`Notification type ${notifTypeKey} is disabled, skipping`);
+      return new Response(JSON.stringify({ success: true, skipped: "disabled" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const smtpHost = settings.smtp_host;
     const smtpPort = parseInt(settings.smtp_port || "587", 10);
