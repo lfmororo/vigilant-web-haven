@@ -301,7 +301,52 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ success: true, sent }), {
+    // --- Send WhatsApp poll ---
+    const whatsappEnabled = settings.whatsapp_enabled === "true";
+    const whatsappApiUrl = settings.whatsapp_api_url;
+    const whatsappApiToken = settings.whatsapp_api_token;
+    let whatsappSent = 0;
+
+    if (whatsappEnabled && whatsappApiUrl && whatsappApiToken) {
+      const sendMenuUrl = `${whatsappApiUrl.replace(/\/+$/, "")}/send/menu`;
+
+      // Collect client phones
+      for (const recipient of clientRecipients) {
+        const { data: profile } = await supabaseAdmin
+          .from("profiles")
+          .select("phone")
+          .eq("id", recipient.id)
+          .single();
+
+        const phone = profile?.phone?.replace(/[\s\-\(\)\+]/g, "");
+        if (!phone || phone.length < 10) continue;
+
+        try {
+          const pollResp = await fetch(sendMenuUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", token: whatsappApiToken },
+            body: JSON.stringify({
+              number: phone,
+              type: "poll",
+              text: `⭐ *Avalie o atendimento do Chamado #${ticket.ticket_number}*\n\n📋 ${ticket.title}\n${technicianName ? `👤 Técnico: ${technicianName}\n` : ""}\nO que achou do atendimento?`,
+              choices: ["Ótimo", "Bom", "Regular", "Péssimo"],
+              selectableCount: 1,
+            }),
+          });
+          if (pollResp.ok) {
+            console.log(`WhatsApp poll sent to ${phone}`);
+            whatsappSent++;
+          } else {
+            const errBody = await pollResp.text();
+            console.error(`WhatsApp poll failed for ${phone}: ${pollResp.status} ${errBody}`);
+          }
+        } catch (err) {
+          console.error(`WhatsApp poll error for ${phone}:`, err);
+        }
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, sent, whatsappSent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
