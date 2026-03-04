@@ -39,7 +39,7 @@ const SatisfactionRankingReport = () => {
 
       let query = supabase
         .from("ticket_ratings")
-        .select("id, rating, comment, rated_at, technician_id, client_id, ticket_id")
+        .select("id, rating, comment, rated_at, technician_id, client_id, ticket_id, rating_source")
         .not("rating", "is", null);
 
       if (clientId !== "all") query = query.eq("client_id", clientId);
