@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import NotificationsTab from "@/components/admin/NotificationsTab";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Save, Loader2, Mail, Send, TestTube, Inbox, MessageCircle, Plus, Trash2, Edit2, X, Check } from "lucide-react";
+import { Eye, EyeOff, Save, Loader2, Mail, Send, TestTube, Inbox, MessageCircle, Plus, Trash2, Edit2, X, Check, Bell } from "lucide-react";
 
 interface ImapAccount {
   id: string;
@@ -461,7 +462,7 @@ const SystemSettings = () => {
         </div>
 
         <Tabs defaultValue="imap" className="space-y-4">
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="imap" className="gap-2">
               <Mail className="w-4 h-4" />
               Email de Captura
@@ -473,6 +474,10 @@ const SystemSettings = () => {
             <TabsTrigger value="whatsapp" className="gap-2">
               <MessageCircle className="w-4 h-4" />
               WhatsApp
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="gap-2">
+              <Bell className="w-4 h-4" />
+              Notificações
             </TabsTrigger>
           </TabsList>
 
@@ -722,6 +727,11 @@ const SystemSettings = () => {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Notifications Tab */}
+          <TabsContent value="notifications">
+            <NotificationsTab settings={settings} saveMutation={saveMutation} user={user} />
           </TabsContent>
         </Tabs>
       </div>

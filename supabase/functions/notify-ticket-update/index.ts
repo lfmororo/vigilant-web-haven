@@ -464,10 +464,19 @@ Deno.serve(async (req) => {
     }
     console.log("Sending emails to:", recipients.map(r => r.email));
 
-    // Load SMTP settings
+    // Load system settings
     const { data: settingsData } = await supabaseAdmin.from("system_settings").select("key, value");
     const settings: Record<string, string> = {};
     settingsData?.forEach((s: any) => { settings[s.key] = s.value || ""; });
+
+    // Check if this notification type is enabled
+    const notifTypeKey = `notif_${notification_type || "ticket_updated"}`;
+    if (settings[notifTypeKey] === "false") {
+      console.log(`Notification type ${notifTypeKey} is disabled, skipping`);
+      return new Response(JSON.stringify({ success: true, skipped: "disabled" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const smtpHost = settings.smtp_host;
     const smtpPort = parseInt(settings.smtp_port || "587", 10);
@@ -580,7 +589,8 @@ Deno.serve(async (req) => {
     })();
 
     // Send satisfaction survey when ticket is closed (fire-and-forget)
-    const surveyPromise = emailType === "ticket_closed" ? (async () => {
+    const surveyEnabled = settings.notif_satisfaction_survey !== "false";
+    const surveyPromise = (emailType === "ticket_closed" && surveyEnabled) ? (async () => {
       try {
         const surveyUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-satisfaction-survey`;
         await fetch(surveyUrl, {
@@ -597,7 +607,8 @@ Deno.serve(async (req) => {
     })() : Promise.resolve();
 
     // Send out-of-hours notification for new tickets
-    const outOfHoursPromise = (emailType === "ticket_opened" && !isWithinBusinessHours()) ? (async () => {
+    const outOfHoursEnabled = settings.notif_out_of_hours !== "false";
+    const outOfHoursPromise = (emailType === "ticket_opened" && !isWithinBusinessHours() && outOfHoursEnabled) ? (async () => {
       try {
         const nextDay = getNextBusinessDay();
         // Send to ticket creator only
