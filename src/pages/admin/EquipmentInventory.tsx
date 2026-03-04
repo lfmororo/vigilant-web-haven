@@ -40,7 +40,8 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Eye, Key, Trash2, Pencil, FileText } from "lucide-react";
+import { Plus, Loader2, Eye, Key, Trash2, Pencil, FileText, Clock } from "lucide-react";
+import { formatTimeAgo } from "@/lib/formatTimeAgo";
 import { Link, useSearchParams } from "react-router-dom";
 import ApiIntegrationDialog from "@/components/admin/ApiIntegrationDialog";
 import EquipmentInventoryPrint from "@/components/admin/EquipmentInventoryPrint";
@@ -454,9 +455,10 @@ const EquipmentInventory = () => {
                     <TableHead>Processador</TableHead>
                     <TableHead>Memória</TableHead>
                     <TableHead>Disco</TableHead>
-                    <TableHead>Usuário Logado</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
+                     <TableHead>Usuário Logado</TableHead>
+                     <TableHead>Últ. Atualização Agente</TableHead>
+                     <TableHead>Status</TableHead>
+                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -500,6 +502,16 @@ const EquipmentInventory = () => {
                           ) : "-"}
                         </TableCell>
                         <TableCell className="text-xs">{item.logged_in_user || "-"}</TableCell>
+                        <TableCell className="text-xs">
+                          {item.hardware_updated_at ? (
+                            <span className="flex items-center gap-1" title={new Date(item.hardware_updated_at).toLocaleString("pt-BR")}>
+                              <Clock className="w-3 h-3 text-muted-foreground" />
+                              {formatTimeAgo(item.hardware_updated_at)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline" className={statusColors[item.status] || ""}>
                             {statusLabels[item.status] || item.status}
