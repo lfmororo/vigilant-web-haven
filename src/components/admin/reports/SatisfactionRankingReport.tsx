@@ -242,6 +242,13 @@ const SatisfactionRankingReport = () => {
                           {r.rating}
                         </span>
                       </TableCell>
+                      <TableCell className="text-center">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          r.source === "whatsapp" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                        }`}>
+                          {r.source === "whatsapp" ? "📱 WhatsApp" : "📧 Email"}
+                        </span>
+                      </TableCell>
                       <TableCell className="max-w-[300px] truncate text-muted-foreground">
                         {r.comment || "-"}
                       </TableCell>
