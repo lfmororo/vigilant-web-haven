@@ -502,7 +502,16 @@ const EquipmentInventory = () => {
                           ) : "-"}
                         </TableCell>
                         <TableCell className="text-xs">{item.logged_in_user || "-"}</TableCell>
-                        <TableCell>
+                        <TableCell className="text-xs">
+                          {item.hardware_updated_at ? (
+                            <span className="flex items-center gap-1" title={new Date(item.hardware_updated_at).toLocaleString("pt-BR")}>
+                              <Clock className="w-3 h-3 text-muted-foreground" />
+                              {formatTimeAgo(item.hardware_updated_at)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
                           <Badge variant="outline" className={statusColors[item.status] || ""}>
                             {statusLabels[item.status] || item.status}
                           </Badge>
