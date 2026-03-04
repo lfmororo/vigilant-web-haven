@@ -91,6 +91,7 @@ const SatisfactionRankingReport = () => {
         technician_name: techMap[r.technician_id || ""] || "Não atribuído",
         ticket_number: ticketMap[r.ticket_id]?.ticket_number || 0,
         ticket_title: ticketMap[r.ticket_id]?.title || "-",
+        source: (r as any).rating_source || "email",
       })).sort((a, b) => new Date(b.rated_at).getTime() - new Date(a.rated_at).getTime());
 
       return { ratings: enrichedRatings, techRanking, metrics: { avg: avgRating, total: totalRatings, withComment } };
