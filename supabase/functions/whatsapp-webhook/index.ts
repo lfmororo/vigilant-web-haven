@@ -20,6 +20,79 @@ function cleanPhone(phone: string): string {
   return phone.replace(/[\s\-\(\)\+]/g, "");
 }
 
+function extractPollData(body: any): { voterPhone: string; selectedOption: string } {
+  let voterPhone = "";
+  let selectedOption = "";
+
+  // uazapi format: { EventType: "poll_vote" | "messages.upsert", event: { ... } }
+  const eventType = body.EventType || body.eventType || body.event_type || "";
+  const eventData = body.event || body.data || body;
+
+  console.log(`EventType: "${eventType}"`);
+
+  // Handle poll_vote EventType from uazapi
+  if (eventType === "poll_vote" || eventType === "poll.vote") {
+    // uazapi poll_vote: event.Voter, event.SelectedOption / event.Vote
+    if (eventData.Voter) {
+      voterPhone = cleanPhone(String(eventData.Voter).replace(/@.*/, ""));
+    } else if (eventData.voter) {
+      voterPhone = cleanPhone(String(eventData.voter).replace(/@.*/, ""));
+    } else if (eventData.Chat) {
+      voterPhone = cleanPhone(String(eventData.Chat).replace(/@.*/, ""));
+    } else if (eventData.chatid) {
+      voterPhone = cleanPhone(String(eventData.chatid).replace(/@.*/, ""));
+    } else if (eventData.Sender) {
+      voterPhone = cleanPhone(String(eventData.Sender).replace(/@.*/, ""));
+    }
+
+    selectedOption = eventData.SelectedOption || eventData.selectedOption || eventData.Vote || eventData.vote || "";
+    if (!selectedOption && eventData.SelectedOptions) {
+      const opts = eventData.SelectedOptions;
+      selectedOption = Array.isArray(opts) ? (opts[0]?.Name || opts[0]?.name || opts[0] || "") : "";
+    }
+    if (!selectedOption && eventData.selectedOptions) {
+      const opts = eventData.selectedOptions;
+      selectedOption = Array.isArray(opts) ? (opts[0]?.name || opts[0]?.Name || opts[0] || "") : "";
+    }
+  }
+
+  // Handle messages.upsert with poll data
+  if (!selectedOption && (eventType === "messages.upsert" || eventType === "messages_upsert")) {
+    const msg = eventData.message || eventData.Message || eventData;
+    const pollUpdate = msg.pollUpdateMessage || msg.PollUpdateMessage || msg.pollUpdate || msg.PollUpdate;
+    
+    if (pollUpdate) {
+      if (msg.key?.remoteJid) {
+        voterPhone = cleanPhone(String(msg.key.remoteJid).replace(/@.*/, ""));
+      } else if (msg.Key?.RemoteJid) {
+        voterPhone = cleanPhone(String(msg.Key.RemoteJid).replace(/@.*/, ""));
+      }
+      
+      const votes = pollUpdate.vote || pollUpdate.Vote || pollUpdate.selectedOptions || pollUpdate.SelectedOptions || [];
+      if (Array.isArray(votes) && votes.length > 0) {
+        selectedOption = votes[0]?.name || votes[0]?.Name || votes[0] || "";
+      } else if (typeof votes === "string") {
+        selectedOption = votes;
+      }
+    }
+  }
+
+  // Flat format fallback
+  if (!voterPhone) {
+    const from = body.from || body.From || eventData.from || eventData.From || "";
+    if (from) voterPhone = cleanPhone(String(from).replace(/@.*/, ""));
+  }
+  if (!selectedOption) {
+    selectedOption = body.selectedOption || body.SelectedOption || body.vote || body.Vote || "";
+  }
+  if (!selectedOption && (body.selectedOptions || body.SelectedOptions)) {
+    const opts = body.selectedOptions || body.SelectedOptions;
+    selectedOption = Array.isArray(opts) ? (opts[0]?.name || opts[0]?.Name || opts[0] || "") : "";
+  }
+
+  return { voterPhone, selectedOption: String(selectedOption).trim() };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -27,62 +100,26 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    console.log("whatsapp-webhook received:", JSON.stringify(body).substring(0, 500));
+    const bodyStr = JSON.stringify(body);
+    console.log("whatsapp-webhook received:", bodyStr.substring(0, 800));
 
-    // uazapi sends poll vote data in different formats; handle common ones
-    // Typical structure: { event: "messages.upsert", data: { ... } }
-    // or direct message object with pollUpdate/poll info
+    // Skip delivery/read receipts early
+    const eventType = body.EventType || body.eventType || "";
+    if (eventType === "messages_update" || eventType === "message_revoke" || eventType === "presence") {
+      return new Response(JSON.stringify({ success: true, skipped: "irrelevant_event" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Extract poll vote info from webhook payload
-    let voterPhone = "";
-    let selectedOption = "";
-
-    // Handle uazapi webhook format
-    if (body.event === "poll.vote" || body.event === "messages.upsert") {
-      const data = body.data || body;
-      
-      // Try to extract voter phone and selected option
-      if (data.voter) {
-        voterPhone = cleanPhone(data.voter.replace(/@.*/, ""));
-      } else if (data.key?.remoteJid) {
-        voterPhone = cleanPhone(data.key.remoteJid.replace(/@.*/, ""));
-      } else if (data.from) {
-        voterPhone = cleanPhone(String(data.from).replace(/@.*/, ""));
-      }
-
-      // Get selected option from various possible formats
-      if (data.selectedOption) {
-        selectedOption = data.selectedOption;
-      } else if (data.vote) {
-        selectedOption = Array.isArray(data.vote) ? data.vote[0] : data.vote;
-      } else if (data.selectedOptions && Array.isArray(data.selectedOptions)) {
-        selectedOption = data.selectedOptions[0]?.name || data.selectedOptions[0] || "";
-      }
-    }
-
-    // Also handle flat format
-    if (!voterPhone && body.from) {
-      voterPhone = cleanPhone(String(body.from).replace(/@.*/, ""));
-    }
-    if (!selectedOption && body.selectedOption) {
-      selectedOption = body.selectedOption;
-    }
-    if (!selectedOption && body.vote) {
-      selectedOption = Array.isArray(body.vote) ? body.vote[0] : body.vote;
-    }
-    if (!selectedOption && body.selectedOptions) {
-      selectedOption = Array.isArray(body.selectedOptions) 
-        ? (body.selectedOptions[0]?.name || body.selectedOptions[0] || "")
-        : "";
-    }
+    const { voterPhone, selectedOption } = extractPollData(body);
 
     if (!voterPhone || !selectedOption) {
-      console.log("Not a poll vote or missing data, ignoring webhook");
+      console.log(`Not a poll vote or missing data. voterPhone="${voterPhone}", selectedOption="${selectedOption}"`);
       return new Response(JSON.stringify({ success: true, skipped: "not_poll_vote" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -99,35 +136,47 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Find the profile by phone number
+    // Find the profile by phone number - try multiple formats
+    const phonesToTry = [voterPhone];
+    if (!voterPhone.startsWith("55") && voterPhone.length <= 11) {
+      phonesToTry.push(`55${voterPhone}`);
+    }
+    if (voterPhone.startsWith("55")) {
+      phonesToTry.push(voterPhone.substring(2));
+    }
+
+    let profile: any = null;
+
+    // Direct match first
     const { data: profiles } = await supabaseAdmin
       .from("profiles")
-      .select("id, parent_client_id")
-      .or(`phone.eq.${voterPhone},phone.eq.+${voterPhone},phone.eq.+55${voterPhone}`);
+      .select("id, parent_client_id, phone")
+      .or(phonesToTry.map(p => `phone.ilike.%${p}%`).join(","));
 
-    if (!profiles || profiles.length === 0) {
-      // Try partial match
+    if (profiles && profiles.length > 0) {
+      profile = profiles[0];
+    } else {
+      // Partial match fallback
       const { data: allProfiles } = await supabaseAdmin
         .from("profiles")
         .select("id, phone, parent_client_id")
         .not("phone", "is", null);
 
-      const matched = allProfiles?.find(p => {
+      profile = allProfiles?.find(p => {
         const clean = cleanPhone(p.phone || "");
         return clean === voterPhone || clean.endsWith(voterPhone) || voterPhone.endsWith(clean);
       });
-
-      if (!matched) {
-        console.log(`No profile found for phone ${voterPhone}`);
-        return new Response(JSON.stringify({ success: true, skipped: "no_profile" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      profiles.push(matched);
     }
 
-    const profile = profiles[0];
+    if (!profile) {
+      console.log(`No profile found for phone ${voterPhone}`);
+      return new Response(JSON.stringify({ success: true, skipped: "no_profile" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`Matched profile ${profile.id} (phone: ${profile.phone}), client: ${profile.parent_client_id}`);
+
     const clientId = profile.parent_client_id;
 
     // Find the most recent pending ticket_rating for this client
