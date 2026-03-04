@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import NotificationsTab from "@/components/admin/NotificationsTab";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
