@@ -227,6 +227,7 @@ const SatisfactionRankingReport = () => {
                     <TableHead>Ticket</TableHead>
                     <TableHead>Técnico</TableHead>
                     <TableHead className="text-center">Nota</TableHead>
+                    <TableHead className="text-center">Origem</TableHead>
                     <TableHead>Comentário</TableHead>
                     <TableHead>Data</TableHead>
                   </TableRow>
