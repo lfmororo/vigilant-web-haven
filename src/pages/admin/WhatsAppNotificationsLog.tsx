@@ -250,6 +250,7 @@ const WhatsAppNotificationsLog = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </ScrollArea>
             {/* Pagination */}
