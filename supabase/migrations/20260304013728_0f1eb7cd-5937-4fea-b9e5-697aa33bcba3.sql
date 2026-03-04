@@ -1,0 +1,1 @@
+ALTER TABLE public.ticket_ratings ADD COLUMN IF NOT EXISTS rating_source text DEFAULT 'email';
