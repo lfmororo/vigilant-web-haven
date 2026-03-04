@@ -185,6 +185,7 @@ const WhatsAppNotificationsLog = () => {
                   <p>Nenhuma notificação encontrada</p>
                 </div>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -249,6 +250,7 @@ const WhatsAppNotificationsLog = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </ScrollArea>
             {/* Pagination */}
