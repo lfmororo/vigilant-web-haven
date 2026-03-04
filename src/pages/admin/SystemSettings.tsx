@@ -727,6 +727,11 @@ const SystemSettings = () => {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Notifications Tab */}
+          <TabsContent value="notifications">
+            <NotificationsTab settings={settings} saveMutation={saveMutation} user={user} />
+          </TabsContent>
         </Tabs>
       </div>
     </AdminLayout>
