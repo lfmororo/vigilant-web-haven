@@ -588,9 +588,9 @@ Deno.serve(async (req) => {
       }
     })();
 
-    // Send satisfaction survey when ticket is closed (fire-and-forget)
+    // Send satisfaction survey when ticket is resolved or closed (fire-and-forget)
     const surveyEnabled = settings.notif_satisfaction_survey !== "false";
-    const surveyPromise = (emailType === "ticket_closed" && surveyEnabled) ? (async () => {
+    const surveyPromise = ((emailType === "ticket_closed" || emailType === "ticket_resolved") && surveyEnabled) ? (async () => {
       try {
         const surveyUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-satisfaction-survey`;
         await fetch(surveyUrl, {

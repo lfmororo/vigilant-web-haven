@@ -250,9 +250,9 @@ Deno.serve(async (req) => {
     const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
     const ticketLink = `${baseUrl}/helpdesk/tickets/${ticket_id}`;
 
-    // Fetch satisfaction survey link for closed tickets
+    // Fetch satisfaction survey link for resolved/closed tickets
     let surveyLink = "";
-    if ((notification_type || "ticket_updated") === "ticket_closed") {
+    if ((notification_type || "ticket_updated") === "ticket_closed" || (notification_type || "ticket_updated") === "ticket_resolved") {
       const { data: ratingRecord } = await supabaseAdmin
         .from("ticket_ratings")
         .select("rating_token")
