@@ -30,10 +30,13 @@ const notificationTypeColors: Record<string, string> = {
   signature_requested: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
 };
 
+const ITEMS_PER_PAGE = 20;
+
 const WhatsAppNotificationsLog = () => {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { data: logs, isLoading } = useQuery({
     queryKey: ["whatsapp-logs"],
