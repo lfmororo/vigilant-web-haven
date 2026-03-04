@@ -40,7 +40,8 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Eye, Key, Trash2, Pencil, FileText } from "lucide-react";
+import { Plus, Loader2, Eye, Key, Trash2, Pencil, FileText, Clock } from "lucide-react";
+import { formatTimeAgo } from "@/lib/formatTimeAgo";
 import { Link, useSearchParams } from "react-router-dom";
 import ApiIntegrationDialog from "@/components/admin/ApiIntegrationDialog";
 import EquipmentInventoryPrint from "@/components/admin/EquipmentInventoryPrint";
