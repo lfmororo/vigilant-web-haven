@@ -281,27 +281,7 @@ Deno.serve(async (req) => {
     const ratingBaseUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/submit-rating`;
     const subject = `Avalie seu atendimento - Chamado #${ticket.ticket_number}`;
 
-    let sent = 0;
-    for (const recipient of clientRecipients) {
-      try {
-        const html = buildSurveyEmail(
-          recipient.full_name,
-          ticket.ticket_number,
-          ticket.title,
-          technicianName,
-          ratingBaseUrl,
-          token,
-          smtpFromName
-        );
-        await sendSmtpEmail(smtpHost, smtpPort, smtpUser, smtpPassword, smtpFromName, recipient.email, subject, html);
-        console.log(`Satisfaction survey sent to ${recipient.email}`);
-        sent++;
-      } catch (err) {
-        console.error(`Failed to send survey to ${recipient.email}:`, err);
-      }
-    }
-
-    // --- Send WhatsApp poll ---
+    // --- Send WhatsApp poll FIRST (fast) ---
     const whatsappEnabled = settings.whatsapp_enabled === "true";
     const whatsappApiUrl = settings.whatsapp_api_url;
     const whatsappApiToken = settings.whatsapp_api_token;
@@ -309,8 +289,8 @@ Deno.serve(async (req) => {
 
     if (whatsappEnabled && whatsappApiUrl && whatsappApiToken) {
       const sendMenuUrl = `${whatsappApiUrl.replace(/\/+$/, "")}/send/menu`;
+      const phonesProcessed = new Set<string>();
 
-      // Collect client phones
       for (const recipient of clientRecipients) {
         const { data: profile } = await supabaseAdmin
           .from("profiles")
@@ -319,7 +299,8 @@ Deno.serve(async (req) => {
           .single();
 
         const phone = profile?.phone?.replace(/[\s\-\(\)\+]/g, "");
-        if (!phone || phone.length < 10) continue;
+        if (!phone || phone.length < 10 || phonesProcessed.has(phone)) continue;
+        phonesProcessed.add(phone);
 
         try {
           const pollResp = await fetch(sendMenuUrl, {
@@ -343,6 +324,27 @@ Deno.serve(async (req) => {
         } catch (err) {
           console.error(`WhatsApp poll error for ${phone}:`, err);
         }
+      }
+    }
+
+    // --- Send emails ---
+    let sent = 0;
+    for (const recipient of clientRecipients) {
+      try {
+        const html = buildSurveyEmail(
+          recipient.full_name,
+          ticket.ticket_number,
+          ticket.title,
+          technicianName,
+          ratingBaseUrl,
+          token,
+          smtpFromName
+        );
+        await sendSmtpEmail(smtpHost, smtpPort, smtpUser, smtpPassword, smtpFromName, recipient.email, subject, html);
+        console.log(`Satisfaction survey sent to ${recipient.email}`);
+        sent++;
+      } catch (err) {
+        console.error(`Failed to send survey to ${recipient.email}:`, err);
       }
     }
 
