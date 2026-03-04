@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, Search, Filter, Phone, Clock, Hash } from "lucide-react";
+import { MessageSquare, Search, Filter, Phone, Clock, Hash, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -30,10 +30,13 @@ const notificationTypeColors: Record<string, string> = {
   signature_requested: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
 };
 
+const ITEMS_PER_PAGE = 20;
+
 const WhatsAppNotificationsLog = () => {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { data: logs, isLoading } = useQuery({
     queryKey: ["whatsapp-logs"],
@@ -59,6 +62,18 @@ const WhatsAppNotificationsLog = () => {
     const matchesStatus = statusFilter === "all" || log.status === statusFilter;
     return matchesSearch && matchesType && matchesStatus;
   });
+
+  // Reset page when filters change
+  const filteredWithReset = useMemo(() => {
+    setCurrentPage(1);
+    return filteredLogs;
+  }, [search, typeFilter, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / ITEMS_PER_PAGE));
+  const paginatedLogs = filteredLogs.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const stats = {
     total: logs?.length || 0,
@@ -182,7 +197,7 @@ const WhatsAppNotificationsLog = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredLogs.map((log: any) => (
+                     {paginatedLogs.map((log: any) => (
                       <TableRow key={log.id}>
                         <TableCell className="whitespace-nowrap">
                           <div className="flex items-center gap-1.5 text-sm">
@@ -236,6 +251,33 @@ const WhatsAppNotificationsLog = () => {
                 </Table>
               )}
             </ScrollArea>
+            {/* Pagination */}
+            {filteredLogs.length > ITEMS_PER_PAGE && (
+              <div className="flex items-center justify-between border-t px-4 py-3">
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredLogs.length)} de {filteredLogs.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border bg-background hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Anterior
+                  </button>
+                  <span className="text-sm text-muted-foreground">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border bg-background hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
+                  >
+                    Próximo <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
