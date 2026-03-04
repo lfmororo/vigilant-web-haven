@@ -589,7 +589,8 @@ Deno.serve(async (req) => {
     })();
 
     // Send satisfaction survey when ticket is closed (fire-and-forget)
-    const surveyPromise = emailType === "ticket_closed" ? (async () => {
+    const surveyEnabled = settings.notif_satisfaction_survey !== "false";
+    const surveyPromise = (emailType === "ticket_closed" && surveyEnabled) ? (async () => {
       try {
         const surveyUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-satisfaction-survey`;
         await fetch(surveyUrl, {
@@ -606,7 +607,8 @@ Deno.serve(async (req) => {
     })() : Promise.resolve();
 
     // Send out-of-hours notification for new tickets
-    const outOfHoursPromise = (emailType === "ticket_opened" && !isWithinBusinessHours()) ? (async () => {
+    const outOfHoursEnabled = settings.notif_out_of_hours !== "false";
+    const outOfHoursPromise = (emailType === "ticket_opened" && !isWithinBusinessHours() && outOfHoursEnabled) ? (async () => {
       try {
         const nextDay = getNextBusinessDay();
         // Send to ticket creator only
