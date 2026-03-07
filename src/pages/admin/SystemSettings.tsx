@@ -52,6 +52,7 @@ const SystemSettings = () => {
     whatsapp_api_url: "",
     whatsapp_api_token: "",
     whatsapp_enabled: "false",
+    admin_contact_phone: "",
   });
 
   // IMAP accounts state
