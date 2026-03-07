@@ -52,6 +52,7 @@ const SystemSettings = () => {
     whatsapp_api_url: "",
     whatsapp_api_token: "",
     whatsapp_enabled: "false",
+    admin_contact_phone: "",
   });
 
   // IMAP accounts state
@@ -129,6 +130,7 @@ const SystemSettings = () => {
         whatsapp_api_url: map.whatsapp_api_url || "",
         whatsapp_api_token: map.whatsapp_api_token || "",
         whatsapp_enabled: map.whatsapp_enabled || "false",
+        admin_contact_phone: map.admin_contact_phone || "",
       });
     }
   }, [settings]);
@@ -710,6 +712,11 @@ const SystemSettings = () => {
                       {showPasswords.whatsapp ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="admin_contact_phone">Telefone de Contato (exibido nas notificações)</Label>
+                  <Input id="admin_contact_phone" placeholder="5585986801458" value={whatsappForm.admin_contact_phone} onChange={(e) => setWhatsappForm((f) => ({ ...f, admin_contact_phone: e.target.value }))} />
+                  <p className="text-xs text-muted-foreground">Número exibido nas mensagens para que os destinatários saibam como entrar em contato com o suporte.</p>
                 </div>
                 <div className="flex items-center gap-3 pt-2">
                   <Switch id="whatsapp_enabled" checked={whatsappForm.whatsapp_enabled === "true"} onCheckedChange={(checked) => setWhatsappForm((f) => ({ ...f, whatsapp_enabled: checked ? "true" : "false" }))} />

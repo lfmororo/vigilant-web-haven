@@ -20,7 +20,8 @@ function buildMessage(
   senderName: string,
   ticketLink: string,
   resolutionSummary?: string,
-  surveyLink?: string
+  surveyLink?: string,
+  adminPhone?: string
 ): string {
   const priorityEmojis: Record<string, string> = {
     Baixa: "🟢 Baixa",
@@ -32,9 +33,15 @@ function buildMessage(
 
   const linkLine = ticketLink ? `\n\n🔗 ${ticketLink}` : "";
 
+  const botFooter = adminPhone
+    ? `\n\n━━━━━━━━━━━━━━━━━━━━━\n🤖 _Esta é uma mensagem automática. Não responda por aqui._\n📞 _Para falar com o suporte: ${adminPhone}_`
+    : `\n\n━━━━━━━━━━━━━━━━━━━━━\n🤖 _Esta é uma mensagem automática. Não responda por aqui._`;
+
+  let baseMsg = "";
+
   if (type === "ticket_opened" || type === "technician_assigned") {
     const heading = type === "technician_assigned" ? `🔧 *Chamado Atribuído a Você*` : `🆕 *Novo Chamado*`;
-    return [
+    baseMsg = [
       heading,
       ``,
       `📋 *Ticket:* #${ticketNumber}`,
@@ -48,10 +55,8 @@ function buildMessage(
     ]
       .filter(Boolean)
       .join("\n") + linkLine;
-  }
-
-  if (type === "ticket_updated") {
-    return [
+  } else if (type === "ticket_updated") {
+    baseMsg = [
       `🔄 *Chamado Atualizado*`,
       ``,
       `📋 *Ticket:* #${ticketNumber}`,
@@ -61,9 +66,7 @@ function buildMessage(
       `💬 *Mensagem:*`,
       message,
     ].join("\n") + linkLine;
-  }
-
-  if (type === "ticket_resolved") {
+  } else if (type === "ticket_resolved") {
     const lines = [
       `✅ *Chamado Resolvido*`,
       ``,
@@ -74,10 +77,8 @@ function buildMessage(
     if (resolutionSummary) {
       lines.push("", `📄 *Resumo da Resolução:*`, resolutionSummary);
     }
-    return lines.join("\n") + linkLine;
-  }
-
-  if (type === "ticket_closed") {
+    baseMsg = lines.join("\n") + linkLine;
+  } else if (type === "ticket_closed") {
     const lines = [
       `📁 *Chamado Encerrado*`,
       ``,
@@ -101,11 +102,9 @@ function buildMessage(
         `👉 ${surveyLink}`
       );
     }
-    return lines.join("\n") + linkLine;
-  }
-
-  if (type === "signature_requested") {
-    return [
+    baseMsg = lines.join("\n") + linkLine;
+  } else if (type === "signature_requested") {
+    baseMsg = [
       `✍️ *Assinatura Solicitada*`,
       ``,
       `📋 *Ticket:* #${ticketNumber}`,
@@ -115,9 +114,11 @@ function buildMessage(
       `O técnico finalizou o atendimento e registrou sua assinatura.`,
       `Por favor, acesse o chamado para assinar e encerrar o atendimento.`,
     ].join("\n") + linkLine;
+  } else {
+    baseMsg = `🔔 *Notificação do Chamado #${ticketNumber}*\n\n${message}` + linkLine;
   }
 
-  return `🔔 *Notificação do Chamado #${ticketNumber}*\n\n${message}` + linkLine;
+  return baseMsg + botFooter;
 }
 
 Deno.serve(async (req) => {
@@ -270,6 +271,9 @@ Deno.serve(async (req) => {
       ? (ticket.description || message || `${senderName} enviou uma atualização.`)
       : (message || `${senderName} enviou uma atualização.`);
 
+    // Get admin phone for bot footer
+    const adminContactPhone = settings.admin_contact_phone || "";
+
     const text = buildMessage(
       notifType,
       ticket.ticket_number,
@@ -280,7 +284,8 @@ Deno.serve(async (req) => {
       senderName,
       ticketLink,
       resolution_summary,
-      surveyLink
+      surveyLink,
+      adminContactPhone
     );
 
     // Fetch client's WhatsApp group ID from clients table
