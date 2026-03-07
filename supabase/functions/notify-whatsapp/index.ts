@@ -118,7 +118,11 @@ function buildMessage(
     ].join("\n") + linkLine;
   }
 
-  return `🔔 *Notificação do Chamado #${ticketNumber}*\n\n${message}` + linkLine;
+  const botFooter = adminPhone
+    ? `\n\n━━━━━━━━━━━━━━━━━━━━━\n🤖 _Esta é uma mensagem automática enviada por um robô. Não responda por aqui._\n📞 _Para falar com o suporte, entre em contato: ${adminPhone}_`
+    : `\n\n━━━━━━━━━━━━━━━━━━━━━\n🤖 _Esta é uma mensagem automática enviada por um robô. Não responda por aqui._`;
+
+  return (`🔔 *Notificação do Chamado #${ticketNumber}*\n\n${message}` + linkLine) + botFooter;
 }
 
 Deno.serve(async (req) => {
