@@ -130,6 +130,7 @@ const SystemSettings = () => {
         whatsapp_api_url: map.whatsapp_api_url || "",
         whatsapp_api_token: map.whatsapp_api_token || "",
         whatsapp_enabled: map.whatsapp_enabled || "false",
+        admin_contact_phone: map.admin_contact_phone || "",
       });
     }
   }, [settings]);
