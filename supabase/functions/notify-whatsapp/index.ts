@@ -20,7 +20,8 @@ function buildMessage(
   senderName: string,
   ticketLink: string,
   resolutionSummary?: string,
-  surveyLink?: string
+  surveyLink?: string,
+  adminPhone?: string
 ): string {
   const priorityEmojis: Record<string, string> = {
     Baixa: "🟢 Baixa",
