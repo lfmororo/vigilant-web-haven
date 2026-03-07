@@ -271,6 +271,9 @@ Deno.serve(async (req) => {
       ? (ticket.description || message || `${senderName} enviou uma atualização.`)
       : (message || `${senderName} enviou uma atualização.`);
 
+    // Get admin phone for bot footer
+    const adminContactPhone = settings.admin_contact_phone || "";
+
     const text = buildMessage(
       notifType,
       ticket.ticket_number,
@@ -281,7 +284,8 @@ Deno.serve(async (req) => {
       senderName,
       ticketLink,
       resolution_summary,
-      surveyLink
+      surveyLink,
+      adminContactPhone
     );
 
     // Fetch client's WhatsApp group ID from clients table
