@@ -33,9 +33,15 @@ function buildMessage(
 
   const linkLine = ticketLink ? `\n\n🔗 ${ticketLink}` : "";
 
+  const botFooter = adminPhone
+    ? `\n\n━━━━━━━━━━━━━━━━━━━━━\n🤖 _Esta é uma mensagem automática. Não responda por aqui._\n📞 _Para falar com o suporte: ${adminPhone}_`
+    : `\n\n━━━━━━━━━━━━━━━━━━━━━\n🤖 _Esta é uma mensagem automática. Não responda por aqui._`;
+
+  let baseMsg = "";
+
   if (type === "ticket_opened" || type === "technician_assigned") {
     const heading = type === "technician_assigned" ? `🔧 *Chamado Atribuído a Você*` : `🆕 *Novo Chamado*`;
-    return [
+    baseMsg = [
       heading,
       ``,
       `📋 *Ticket:* #${ticketNumber}`,
@@ -49,10 +55,8 @@ function buildMessage(
     ]
       .filter(Boolean)
       .join("\n") + linkLine;
-  }
-
-  if (type === "ticket_updated") {
-    return [
+  } else if (type === "ticket_updated") {
+    baseMsg = [
       `🔄 *Chamado Atualizado*`,
       ``,
       `📋 *Ticket:* #${ticketNumber}`,
@@ -62,9 +66,7 @@ function buildMessage(
       `💬 *Mensagem:*`,
       message,
     ].join("\n") + linkLine;
-  }
-
-  if (type === "ticket_resolved") {
+  } else if (type === "ticket_resolved") {
     const lines = [
       `✅ *Chamado Resolvido*`,
       ``,
@@ -75,10 +77,8 @@ function buildMessage(
     if (resolutionSummary) {
       lines.push("", `📄 *Resumo da Resolução:*`, resolutionSummary);
     }
-    return lines.join("\n") + linkLine;
-  }
-
-  if (type === "ticket_closed") {
+    baseMsg = lines.join("\n") + linkLine;
+  } else if (type === "ticket_closed") {
     const lines = [
       `📁 *Chamado Encerrado*`,
       ``,
@@ -102,11 +102,9 @@ function buildMessage(
         `👉 ${surveyLink}`
       );
     }
-    return lines.join("\n") + linkLine;
-  }
-
-  if (type === "signature_requested") {
-    return [
+    baseMsg = lines.join("\n") + linkLine;
+  } else if (type === "signature_requested") {
+    baseMsg = [
       `✍️ *Assinatura Solicitada*`,
       ``,
       `📋 *Ticket:* #${ticketNumber}`,
@@ -116,13 +114,11 @@ function buildMessage(
       `O técnico finalizou o atendimento e registrou sua assinatura.`,
       `Por favor, acesse o chamado para assinar e encerrar o atendimento.`,
     ].join("\n") + linkLine;
+  } else {
+    baseMsg = `🔔 *Notificação do Chamado #${ticketNumber}*\n\n${message}` + linkLine;
   }
 
-  const botFooter = adminPhone
-    ? `\n\n━━━━━━━━━━━━━━━━━━━━━\n🤖 _Esta é uma mensagem automática enviada por um robô. Não responda por aqui._\n📞 _Para falar com o suporte, entre em contato: ${adminPhone}_`
-    : `\n\n━━━━━━━━━━━━━━━━━━━━━\n🤖 _Esta é uma mensagem automática enviada por um robô. Não responda por aqui._`;
-
-  return (`🔔 *Notificação do Chamado #${ticketNumber}*\n\n${message}` + linkLine) + botFooter;
+  return baseMsg + botFooter;
 }
 
 Deno.serve(async (req) => {
