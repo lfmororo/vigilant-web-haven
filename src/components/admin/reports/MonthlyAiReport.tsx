@@ -108,19 +108,82 @@ const MonthlyAiReport = () => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
     const clientName = clients?.find(c => c.id === clientId)?.full_name || "";
+    const monthLabel = monthNames[parseInt(month)];
+    const selectedSectorNames = sectorIds.length > 0
+      ? sectors?.filter(s => sectorIds.includes(s.id)).map(s => s.name).join(", ") || ""
+      : "";
+    const logoUrl = `${window.location.origin}/fm-techflow-logo-email.png`;
+
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Relatório Mensal - ${clientName}</title>
 <style>
-body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333; }
-h1 { color: #1a1a2e; border-bottom: 2px solid #1a1a2e; padding-bottom: 8px; }
-h2 { color: #16213e; margin-top: 24px; }
-h3 { color: #0f3460; }
-strong { color: #1a1a2e; }
-ul, ol { padding-left: 20px; }
-li { margin-bottom: 4px; }
-@media print { body { margin: 0; } }
+  @page { size: landscape; margin: 15mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; padding: 0; font-size: 13px; line-height: 1.6; }
+
+  .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1a1a2e; padding-bottom: 16px; margin-bottom: 24px; }
+  .header-logo img { height: 50px; }
+  .header-info { text-align: right; }
+  .header-info .company { font-size: 18px; font-weight: 700; color: #1a1a2e; }
+  .header-info .contact { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+  .report-title { text-align: center; margin-bottom: 20px; }
+  .report-title h1 { font-size: 20px; color: #1a1a2e; margin-bottom: 4px; }
+  .report-title .subtitle { font-size: 13px; color: #64748b; }
+  .report-title .filters { font-size: 12px; color: #0f3460; margin-top: 4px; font-style: italic; }
+
+  .meta-bar { display: flex; gap: 24px; justify-content: center; background: #f1f5f9; border-radius: 8px; padding: 10px 20px; margin-bottom: 24px; font-size: 13px; }
+  .meta-bar .meta-item { display: flex; align-items: center; gap: 6px; }
+  .meta-bar .meta-label { font-weight: 600; color: #475569; }
+  .meta-bar .meta-value { color: #1a1a2e; font-weight: 700; }
+
+  .content { columns: 2; column-gap: 32px; }
+  .content > * { break-inside: avoid; }
+
+  h1 { font-size: 18px; color: #1a1a2e; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin: 20px 0 10px 0; }
+  h2 { font-size: 15px; color: #0f3460; margin: 16px 0 8px 0; padding-left: 8px; border-left: 3px solid #3b82f6; }
+  h3 { font-size: 13px; color: #334155; margin: 12px 0 6px 0; }
+  p { margin-bottom: 8px; text-align: justify; }
+  strong { color: #1a1a2e; }
+  em { color: #475569; }
+
+  ul, ol { padding-left: 18px; margin-bottom: 8px; }
+  li { margin-bottom: 3px; }
+
+  .footer { margin-top: 30px; border-top: 2px solid #e2e8f0; padding-top: 12px; text-align: center; font-size: 10px; color: #94a3b8; }
+  .footer .brand { font-weight: 600; color: #1a1a2e; }
+
+  @media print {
+    body { margin: 0; }
+    .content { columns: 2; }
+  }
 </style></head>
-<body>${markdownToHtml(report || "")}</body></html>`;
+<body>
+  <div class="header">
+    <div class="header-logo"><img src="${logoUrl}" alt="FM TechFlow" /></div>
+    <div class="header-info">
+      <div class="company">FM TechFlow</div>
+      <div class="contact">contato@fmtechflow.com.br</div>
+    </div>
+  </div>
+
+  <div class="report-title">
+    <h1>Relatório Mensal de Atendimentos</h1>
+    <div class="subtitle">${clientName} — ${monthLabel} de ${year}</div>
+    ${selectedSectorNames ? `<div class="filters">Setores: ${selectedSectorNames}</div>` : ""}
+  </div>
+
+  <div class="meta-bar">
+    <div class="meta-item"><span class="meta-label">Total de Chamados:</span><span class="meta-value">${ticketCount}</span></div>
+    <div class="meta-item"><span class="meta-label">Período:</span><span class="meta-value">${monthLabel}/${year}</span></div>
+  </div>
+
+  <div class="content">${markdownToHtml(report || "")}</div>
+
+  <div class="footer">
+    Documento gerado automaticamente por <span class="brand">FM TechFlow</span> em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+  </div>
+</body></html>`;
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.onload = () => printWindow.print();
