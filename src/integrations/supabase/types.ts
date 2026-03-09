@@ -565,6 +565,47 @@ export type Database = {
           },
         ]
       }
+      quote_items: {
+        Row: {
+          created_at: string | null
+          description: string
+          id: string
+          item_order: number | null
+          quantity: number
+          quote_id: string
+          total_price: number | null
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          id?: string
+          item_order?: number | null
+          quantity?: number
+          quote_id: string
+          total_price?: number | null
+          unit_price?: number
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          id?: string
+          item_order?: number | null
+          quantity?: number
+          quote_id?: string
+          total_price?: number | null
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_items_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quote_sender_profiles: {
         Row: {
           address: string | null
@@ -597,6 +638,66 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      quotes: {
+        Row: {
+          client_id: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          notes: string | null
+          quote_number: number
+          sender_profile_id: string | null
+          status: string
+          title: string
+          total: number | null
+          updated_at: string | null
+          validity_days: number | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          quote_number?: number
+          sender_profile_id?: string | null
+          status?: string
+          title?: string
+          total?: number | null
+          updated_at?: string | null
+          validity_days?: number | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          quote_number?: number
+          sender_profile_id?: string | null
+          status?: string
+          title?: string
+          total?: number | null
+          updated_at?: string | null
+          validity_days?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotes_sender_profile_id_fkey"
+            columns: ["sender_profile_id"]
+            isOneToOne: false
+            referencedRelation: "quote_sender_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       service_orders: {
         Row: {
