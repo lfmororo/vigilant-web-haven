@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -31,7 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Upload, Building2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, Building2, FileText } from "lucide-react";
 
 interface SenderProfile {
   id: string;
@@ -45,6 +46,7 @@ interface SenderProfile {
 
 const QuoteSenderProfiles = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [profiles, setProfiles] = useState<SenderProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -193,13 +195,18 @@ const QuoteSenderProfiles = () => {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold">Orçamentos - Empresas Emissoras</h1>
             <p className="text-muted-foreground">
               Cadastre as empresas que irão emitir propostas/orçamentos
             </p>
           </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate("/admin/quotes/new")}>
+              <FileText className="w-4 h-4 mr-2" />
+              Criar Orçamento
+            </Button>
 
           <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) resetForm(); setDialogOpen(open); }}>
             <DialogTrigger asChild>
@@ -302,6 +309,7 @@ const QuoteSenderProfiles = () => {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         <Card>
