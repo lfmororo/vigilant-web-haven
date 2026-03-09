@@ -46,6 +46,7 @@ interface SenderProfile {
 
 const QuoteSenderProfiles = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [profiles, setProfiles] = useState<SenderProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
