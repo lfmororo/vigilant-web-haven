@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Building2, Download } from "lucide-react";
+import { ArrowLeft, Building2, Download, Pencil } from "lucide-react";
 import { generateQuotePdf } from "@/lib/generateQuotePdf";
 
 const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -116,10 +116,16 @@ const QuoteDetail = () => {
             </div>
             <p className="text-muted-foreground">{quote.title || "Proposta Comercial"}</p>
           </div>
-          <Button onClick={handleExportPdf} disabled={exporting}>
-            <Download className="w-4 h-4 mr-2" />
-            {exporting ? "Gerando..." : "Exportar PDF"}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate(`/admin/quotes/${id}/edit`)}>
+              <Pencil className="w-4 h-4 mr-2" />
+              Editar
+            </Button>
+            <Button onClick={handleExportPdf} disabled={exporting}>
+              <Download className="w-4 h-4 mr-2" />
+              {exporting ? "Gerando..." : "Exportar PDF"}
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
