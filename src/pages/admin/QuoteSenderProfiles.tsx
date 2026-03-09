@@ -193,13 +193,14 @@ const QuoteSenderProfiles = () => {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold">Orçamentos - Empresas Emissoras</h1>
             <p className="text-muted-foreground">
               Cadastre as empresas que irão emitir propostas/orçamentos
             </p>
           </div>
+          <div className="flex gap-2">
 
           <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) resetForm(); setDialogOpen(open); }}>
             <DialogTrigger asChild>
