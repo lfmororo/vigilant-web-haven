@@ -402,6 +402,10 @@ const TicketReports = () => {
           <TabsContent value="satisfaction">
             <SatisfactionRankingReport />
           </TabsContent>
+
+          <TabsContent value="monthly">
+            <MonthlyAiReport />
+          </TabsContent>
         </Tabs>
       </div>
     </AdminLayout>
