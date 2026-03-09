@@ -24,6 +24,7 @@ import TicketReports from "./pages/admin/TicketReports";
 import ChecklistManagement from "./pages/admin/ChecklistManagement";
 import KnowledgeBase from "./pages/admin/KnowledgeBase";
 import WhatsAppNotificationsLog from "./pages/admin/WhatsAppNotificationsLog";
+import QuoteSenderProfiles from "./pages/admin/QuoteSenderProfiles";
 import HelpdeskDashboard from "./pages/helpdesk/HelpdeskDashboard";
 import ClientTicketsList from "./pages/helpdesk/ClientTicketsList";
 import NewTicket from "./pages/helpdesk/NewTicket";
@@ -64,6 +65,7 @@ const App = () => (
               <Route path="/admin/checklists" element={<AuthGuard requireAdmin><ChecklistManagement /></AuthGuard>} />
               <Route path="/admin/knowledge-base" element={<AuthGuard requireAdmin><KnowledgeBase /></AuthGuard>} />
               <Route path="/admin/whatsapp-logs" element={<AuthGuard requireAdmin><WhatsAppNotificationsLog /></AuthGuard>} />
+              <Route path="/admin/quotes" element={<AuthGuard requireAdmin><QuoteSenderProfiles /></AuthGuard>} />
               <Route path="/admin/settings" element={<AuthGuard requireAdmin><SystemSettings /></AuthGuard>} />
               <Route path="*" element={<NotFound />} />
             </Routes>

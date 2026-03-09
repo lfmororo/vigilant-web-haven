@@ -18,7 +18,8 @@ import {
   BarChart3,
   ClipboardList,
   BookOpen,
-  MessageSquare } from
+  MessageSquare,
+  Receipt } from
 "lucide-react";
 import fmLogo from "@/assets/fm-techflow-logo.png";
 
@@ -39,6 +40,7 @@ const allNavItems = [
 { label: "Checklists", href: "/admin/checklists", icon: ClipboardList, roles: ["admin"] },
 { label: "Base de Conhecimento", href: "/admin/knowledge-base", icon: BookOpen, roles: ["admin", "technician"] },
 { label: "WhatsApp Log", href: "/admin/whatsapp-logs", icon: MessageSquare, roles: ["admin"] },
+{ label: "Orçamentos", href: "/admin/quotes", icon: Receipt, roles: ["admin"] },
 { label: "Configurações", href: "/admin/settings", icon: Settings, roles: ["admin"] }];
 
 
