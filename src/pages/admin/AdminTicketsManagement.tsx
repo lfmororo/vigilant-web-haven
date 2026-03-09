@@ -25,7 +25,7 @@ const AdminTicketsManagement = () => {
 
   useEffect(() => {
     let query = supabase.from("tickets")
-      .select("*, client:clients!tickets_client_id_fkey(full_name), assigned:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name)")
+      .select("*, client:clients!tickets_client_id_fkey(full_name), assigned:profiles!tickets_assigned_to_fkey(full_name), equipment_type:equipment_types(name), sector:client_sectors!tickets_sector_id_fkey(name)")
       .order("created_at", { ascending: false });
 
     if (!isAdmin && user) {
@@ -116,36 +116,38 @@ const AdminTicketsManagement = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>Título</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Criador</TableHead>
-                    <TableHead>Equipamento</TableHead>
-                    <TableHead>Técnico</TableHead>
-                    <TableHead>Prioridade</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Tempo Aberto</TableHead>
-                    <TableHead>Sem Interação</TableHead>
-                    <TableHead>Data</TableHead>
+                     <TableHead>#</TableHead>
+                     <TableHead>Título</TableHead>
+                     <TableHead>Cliente</TableHead>
+                     <TableHead>Setor</TableHead>
+                     <TableHead>Criador</TableHead>
+                     <TableHead>Equipamento</TableHead>
+                     <TableHead>Técnico</TableHead>
+                     <TableHead>Prioridade</TableHead>
+                     <TableHead>Status</TableHead>
+                     <TableHead>Tempo Aberto</TableHead>
+                     <TableHead>Sem Interação</TableHead>
+                     <TableHead>Data</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Nenhum chamado encontrado</TableCell></TableRow>
-                  ) : filtered.map((t) => (
-                    <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50">
-                      <TableCell><Link to={`/admin/tickets/${t.id}`} className="font-mono text-xs">{t.ticket_number}</Link></TableCell>
-                      <TableCell><Link to={`/admin/tickets/${t.id}`} className="font-medium hover:underline">{t.title}</Link></TableCell>
-                      <TableCell className="text-muted-foreground">{t.client?.full_name || "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">{creatorNames[t.created_by] || "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">{t.equipment_type?.name || "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">{t.assigned?.full_name || "Não atribuído"}</TableCell>
-                      <TableCell><PriorityBadge priority={t.priority} /></TableCell>
-                      <TableCell><TicketStatusBadge status={t.status} /></TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(t.created_at)}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(lastMessages[t.id] || t.created_at)}</TableCell>
-                      <TableCell className="text-muted-foreground">{new Date(t.created_at).toLocaleDateString("pt-BR")}</TableCell>
-                    </TableRow>
+                     <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">Nenhum chamado encontrado</TableCell></TableRow>
+                   ) : filtered.map((t) => (
+                     <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50">
+                       <TableCell><Link to={`/admin/tickets/${t.id}`} className="font-mono text-xs">{t.ticket_number}</Link></TableCell>
+                       <TableCell><Link to={`/admin/tickets/${t.id}`} className="font-medium hover:underline">{t.title}</Link></TableCell>
+                       <TableCell className="text-muted-foreground">{t.client?.full_name || "-"}</TableCell>
+                       <TableCell className="text-muted-foreground">{t.sector?.name || "-"}</TableCell>
+                       <TableCell className="text-muted-foreground">{creatorNames[t.created_by] || "-"}</TableCell>
+                       <TableCell className="text-muted-foreground">{t.equipment_type?.name || "-"}</TableCell>
+                       <TableCell className="text-muted-foreground">{t.assigned?.full_name || "Não atribuído"}</TableCell>
+                       <TableCell><PriorityBadge priority={t.priority} /></TableCell>
+                       <TableCell><TicketStatusBadge status={t.status} /></TableCell>
+                       <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(t.created_at)}</TableCell>
+                       <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(lastMessages[t.id] || t.created_at)}</TableCell>
+                       <TableCell className="text-muted-foreground">{new Date(t.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                     </TableRow>
                   ))}
                 </TableBody>
               </Table>

@@ -30,7 +30,7 @@ const ClientTicketsList = () => {
         setParentClientId(clientId);
         if (!clientId) { setLoading(false); return; }
 
-        supabase.from("tickets").select("*, equipment_type:equipment_types(name)")
+        supabase.from("tickets").select("*, equipment_type:equipment_types(name), sector:client_sectors!tickets_sector_id_fkey(name)")
           .eq("client_id", clientId).order("created_at", { ascending: false })
           .then(async ({ data: ticketData }) => {
             const tks = ticketData || [];
@@ -98,30 +98,32 @@ const ClientTicketsList = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>Título</TableHead>
-                    <TableHead>Equipamento</TableHead>
-                    <TableHead>Prioridade</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Tempo Aberto</TableHead>
-                    <TableHead>Sem Interação</TableHead>
-                    <TableHead>Data</TableHead>
+                     <TableHead>#</TableHead>
+                     <TableHead>Título</TableHead>
+                     <TableHead>Setor</TableHead>
+                     <TableHead>Equipamento</TableHead>
+                     <TableHead>Prioridade</TableHead>
+                     <TableHead>Status</TableHead>
+                     <TableHead>Tempo Aberto</TableHead>
+                     <TableHead>Sem Interação</TableHead>
+                     <TableHead>Data</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhum chamado encontrado</TableCell></TableRow>
-                  ) : filtered.map((t) => (
-                    <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50" onClick={() => window.location.href = `/helpdesk/tickets/${t.id}`}>
-                      <TableCell className="font-mono text-xs">{t.ticket_number}</TableCell>
-                      <TableCell className="font-medium">{t.title}</TableCell>
-                      <TableCell className="text-muted-foreground">{t.equipment_type?.name || "-"}</TableCell>
-                      <TableCell><PriorityBadge priority={t.priority} /></TableCell>
-                      <TableCell><TicketStatusBadge status={t.status} /></TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(t.created_at)}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(lastMessages[t.id] || t.created_at)}</TableCell>
-                      <TableCell className="text-muted-foreground">{new Date(t.created_at).toLocaleDateString("pt-BR")}</TableCell>
-                    </TableRow>
+                     <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Nenhum chamado encontrado</TableCell></TableRow>
+                   ) : filtered.map((t) => (
+                     <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50" onClick={() => window.location.href = `/helpdesk/tickets/${t.id}`}>
+                       <TableCell className="font-mono text-xs">{t.ticket_number}</TableCell>
+                       <TableCell className="font-medium">{t.title}</TableCell>
+                       <TableCell className="text-muted-foreground">{t.sector?.name || "-"}</TableCell>
+                       <TableCell className="text-muted-foreground">{t.equipment_type?.name || "-"}</TableCell>
+                       <TableCell><PriorityBadge priority={t.priority} /></TableCell>
+                       <TableCell><TicketStatusBadge status={t.status} /></TableCell>
+                       <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(t.created_at)}</TableCell>
+                       <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(lastMessages[t.id] || t.created_at)}</TableCell>
+                       <TableCell className="text-muted-foreground">{new Date(t.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
