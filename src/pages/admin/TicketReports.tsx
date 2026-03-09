@@ -24,6 +24,7 @@ import TicketReportPrint from "@/components/admin/TicketReportPrint";
 import EquipmentRankingReport from "@/components/admin/reports/EquipmentRankingReport";
 import UserRankingReport from "@/components/admin/reports/UserRankingReport";
 import SatisfactionRankingReport from "@/components/admin/reports/SatisfactionRankingReport";
+import MonthlyAiReport from "@/components/admin/reports/MonthlyAiReport";
 
 const SectorMultiSelect = ({ clientId, sectorIds, setSectorIds }: { clientId: string; sectorIds: string[]; setSectorIds: (v: string[]) => void }) => {
   const { data: sectors } = useQuery({
