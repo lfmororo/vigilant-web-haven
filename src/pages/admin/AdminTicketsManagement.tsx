@@ -132,21 +132,22 @@ const AdminTicketsManagement = () => {
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Nenhum chamado encontrado</TableCell></TableRow>
-                  ) : filtered.map((t) => (
-                    <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50">
-                      <TableCell><Link to={`/admin/tickets/${t.id}`} className="font-mono text-xs">{t.ticket_number}</Link></TableCell>
-                      <TableCell><Link to={`/admin/tickets/${t.id}`} className="font-medium hover:underline">{t.title}</Link></TableCell>
-                      <TableCell className="text-muted-foreground">{t.client?.full_name || "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">{creatorNames[t.created_by] || "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">{t.equipment_type?.name || "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">{t.assigned?.full_name || "Não atribuído"}</TableCell>
-                      <TableCell><PriorityBadge priority={t.priority} /></TableCell>
-                      <TableCell><TicketStatusBadge status={t.status} /></TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(t.created_at)}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(lastMessages[t.id] || t.created_at)}</TableCell>
-                      <TableCell className="text-muted-foreground">{new Date(t.created_at).toLocaleDateString("pt-BR")}</TableCell>
-                    </TableRow>
+                     <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">Nenhum chamado encontrado</TableCell></TableRow>
+                   ) : filtered.map((t) => (
+                     <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50">
+                       <TableCell><Link to={`/admin/tickets/${t.id}`} className="font-mono text-xs">{t.ticket_number}</Link></TableCell>
+                       <TableCell><Link to={`/admin/tickets/${t.id}`} className="font-medium hover:underline">{t.title}</Link></TableCell>
+                       <TableCell className="text-muted-foreground">{t.client?.full_name || "-"}</TableCell>
+                       <TableCell className="text-muted-foreground">{t.sector?.name || "-"}</TableCell>
+                       <TableCell className="text-muted-foreground">{creatorNames[t.created_by] || "-"}</TableCell>
+                       <TableCell className="text-muted-foreground">{t.equipment_type?.name || "-"}</TableCell>
+                       <TableCell className="text-muted-foreground">{t.assigned?.full_name || "Não atribuído"}</TableCell>
+                       <TableCell><PriorityBadge priority={t.priority} /></TableCell>
+                       <TableCell><TicketStatusBadge status={t.status} /></TableCell>
+                       <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(t.created_at)}</TableCell>
+                       <TableCell className="text-muted-foreground text-xs">{formatTimeAgo(lastMessages[t.id] || t.created_at)}</TableCell>
+                       <TableCell className="text-muted-foreground">{new Date(t.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
