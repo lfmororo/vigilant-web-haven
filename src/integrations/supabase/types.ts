@@ -565,6 +565,39 @@ export type Database = {
           },
         ]
       }
+      quote_sender_profiles: {
+        Row: {
+          address: string | null
+          cnpj: string | null
+          created_at: string
+          email: string | null
+          id: string
+          logo_url: string | null
+          trade_name: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          trade_name: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          trade_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       service_orders: {
         Row: {
           arrival_date: string | null
