@@ -77,6 +77,31 @@ const QuoteDetail = () => {
   const st = statusMap[quote.status] || { label: quote.status, variant: "outline" as const };
   const total = items.reduce((sum: number, i: any) => sum + Number(i.quantity) * Number(i.unit_price), 0);
 
+  const handleExportPdf = async () => {
+    setExporting(true);
+    try {
+      const pdf = await generateQuotePdf({
+        quoteNumber: quote.quote_number,
+        title: quote.title,
+        notes: quote.notes,
+        validityDays: quote.validity_days || 30,
+        createdAt: quote.created_at,
+        sender,
+        client,
+        items: items.map((i: any) => ({
+          description: i.description,
+          quantity: Number(i.quantity),
+          unit_price: Number(i.unit_price),
+        })),
+      });
+      pdf.save(`Proposta_${String(quote.quote_number).padStart(4, "0")}.pdf`);
+      toast({ title: "PDF exportado com sucesso!" });
+    } catch (err: any) {
+      toast({ title: "Erro ao gerar PDF", description: err.message, variant: "destructive" });
+    }
+    setExporting(false);
+  };
+
   return (
     <AdminLayout>
       <div className="space-y-6 max-w-4xl">
