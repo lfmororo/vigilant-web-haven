@@ -29,10 +29,13 @@ interface QuotePdfData {
 
 const PAGE_W = 210;
 const PAGE_H = 297;
-const MARGIN_LEFT = 25;
-const MARGIN_RIGHT = 25;
+const MARGIN_LEFT = 30;
+const MARGIN_RIGHT = 30;
 const CONTENT_W = PAGE_W - MARGIN_LEFT - MARGIN_RIGHT;
 const DARK_BLUE = [0, 51, 102] as const;
+const TEXT_COLOR = [40, 40, 40] as const;
+const MUTED_COLOR = [110, 110, 110] as const;
+const LINE_H = 5.5; // consistent line height for body text
 
 async function loadImageAsBase64(url: string): Promise<string | null> {
   try {
@@ -65,41 +68,49 @@ function formatProposalNumber(num: number, dateStr: string): string {
 }
 
 function addFooter(doc: jsPDF, sender: QuotePdfData["sender"], proposalLabel: string) {
-  const y = PAGE_H - 30;
-  doc.setFontSize(9);
+  const baseY = PAGE_H - 32;
+
+  // Subtle top line
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(MARGIN_LEFT + 20, baseY - 4, PAGE_W - MARGIN_LEFT - 20, baseY - 4);
+
+  doc.setFontSize(8.5);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...DARK_BLUE);
-  doc.text(sender?.trade_name || "", PAGE_W / 2, y, { align: "center" });
+  doc.text(sender?.trade_name || "", PAGE_W / 2, baseY, { align: "center" });
 
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(100, 100, 100);
-  doc.setFontSize(8);
-  if (sender?.address) doc.text(sender.address, PAGE_W / 2, y + 4, { align: "center" });
-  if (sender?.email) doc.text(sender.email, PAGE_W / 2, y + 8, { align: "center" });
-  doc.text("Fortaleza CE – Brasil", PAGE_W / 2, y + 12, { align: "center" });
+  doc.setTextColor(...MUTED_COLOR);
+  doc.setFontSize(7.5);
+  let fY = baseY + 4;
+  if (sender?.address) { doc.text(sender.address, PAGE_W / 2, fY, { align: "center" }); fY += 3.5; }
+  if (sender?.email) { doc.text(sender.email, PAGE_W / 2, fY, { align: "center" }); fY += 3.5; }
+  doc.text("Fortaleza CE – Brasil", PAGE_W / 2, fY, { align: "center" });
 
   // Proposal number bottom-right
-  doc.setFontSize(8);
-  doc.setTextColor(80, 80, 80);
-  doc.text(proposalLabel, PAGE_W - MARGIN_RIGHT, PAGE_H - 12, { align: "right" });
+  doc.setFontSize(7.5);
+  doc.setTextColor(140, 140, 140);
+  doc.text(proposalLabel, PAGE_W - MARGIN_RIGHT, PAGE_H - 14, { align: "right" });
 }
 
 function addLogo(doc: jsPDF, logoBase64: string | null) {
   if (logoBase64) {
     try {
-      doc.addImage(logoBase64, "PNG", MARGIN_LEFT, 15, 70, 25);
+      doc.addImage(logoBase64, "PNG", MARGIN_LEFT, 18, 65, 22);
     } catch {
-      doc.setFontSize(24);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...DARK_BLUE);
-      doc.text("FC.TECH", MARGIN_LEFT, 32);
+      addTextLogo(doc);
     }
   } else {
-    doc.setFontSize(24);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...DARK_BLUE);
-    doc.text("FC.TECH", MARGIN_LEFT, 32);
+    addTextLogo(doc);
   }
+}
+
+function addTextLogo(doc: jsPDF) {
+  doc.setFontSize(26);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...DARK_BLUE);
+  doc.text("FC.TECH", MARGIN_LEFT, 34);
 }
 
 function addSectionTitle(doc: jsPDF, title: string, y: number): number {
@@ -107,11 +118,25 @@ function addSectionTitle(doc: jsPDF, title: string, y: number): number {
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...DARK_BLUE);
   doc.text(title, MARGIN_LEFT, y);
-  // Horizontal line
+
+  // Horizontal rule
   doc.setDrawColor(...DARK_BLUE);
-  doc.setLineWidth(0.8);
-  doc.line(MARGIN_LEFT, y + 3, PAGE_W - MARGIN_RIGHT, y + 3);
-  return y + 10;
+  doc.setLineWidth(0.7);
+  doc.line(MARGIN_LEFT, y + 4, PAGE_W - MARGIN_RIGHT, y + 4);
+  return y + 14;
+}
+
+function setBodyText(doc: jsPDF) {
+  doc.setFontSize(10.5);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...TEXT_COLOR);
+}
+
+function printParagraph(doc: jsPDF, text: string, x: number, y: number, maxW: number, indent = 0): number {
+  setBodyText(doc);
+  const lines = doc.splitTextToSize(text, maxW);
+  doc.text(lines, x + indent, y, { lineHeightFactor: 1.5 });
+  return y + lines.length * LINE_H;
 }
 
 export async function generateQuotePdf(data: QuotePdfData): Promise<jsPDF> {
@@ -124,75 +149,76 @@ export async function generateQuotePdf(data: QuotePdfData): Promise<jsPDF> {
     logoBase64 = await loadImageAsBase64(data.sender.logo_url);
   }
 
-  // ============ PAGE 1: Cover Letter ============
+  // =============================================
+  // PAGE 1: Cover Letter
+  // =============================================
   addLogo(doc, logoBase64);
 
   // Date + proposal number (right aligned)
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(60, 60, 60);
-  doc.text(dateLabel, PAGE_W - MARGIN_RIGHT, 55, { align: "right" });
-  doc.text(proposalLabel, PAGE_W - MARGIN_RIGHT, 60, { align: "right" });
+  doc.setTextColor(...MUTED_COLOR);
+  doc.text(dateLabel, PAGE_W - MARGIN_RIGHT, 58, { align: "right" });
+  doc.text(proposalLabel, PAGE_W - MARGIN_RIGHT, 64, { align: "right" });
 
   // Recipient
-  let y = 80;
+  let y = 82;
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(30, 30, 30);
+  doc.setTextColor(...TEXT_COLOR);
   doc.text(`A ${data.client?.full_name || "Cliente"}`, MARGIN_LEFT + 10, y);
 
-  y += 12;
+  y += 16;
   doc.text("Nesta,", MARGIN_LEFT, y);
 
-  y += 12;
-  doc.setFontSize(10);
-  const introText = "Conforme contato comercial, estamos enviando nosso descritivo de serviço.";
-  doc.text(introText, MARGIN_LEFT + 10, y, { maxWidth: CONTENT_W - 10 });
+  y += 14;
+  y = printParagraph(doc,
+    "Conforme contato comercial, estamos enviando nosso descritivo de serviço.",
+    MARGIN_LEFT, y, CONTENT_W, 10);
 
-  y += 12;
-  const bodyText = "Acreditamos, com isto, estarmos contribuindo para melhor funcionamento na área de Tecnologia de vossa empresa.";
-  const bodyLines = doc.splitTextToSize(bodyText, CONTENT_W);
-  doc.text(bodyLines, MARGIN_LEFT, y);
-  y += bodyLines.length * 5;
+  y += 8;
+  y = printParagraph(doc,
+    "Acreditamos, com isto, estarmos contribuindo para melhor funcionamento na área de Tecnologia de vossa empresa.",
+    MARGIN_LEFT, y, CONTENT_W);
 
-  y += 6;
-  const closingText = "Assim, ficamos a disposição para maiores esclarecimentos, visando o melhor entendimento de nossos serviços e proposta comercial. E ainda aguardamos seu retorno para darmos continuidade a este projeto.";
-  const closingLines = doc.splitTextToSize(closingText, CONTENT_W);
-  doc.text(closingLines, MARGIN_LEFT, y);
-  y += closingLines.length * 5;
+  y += 8;
+  y = printParagraph(doc,
+    "Assim, ficamos a disposição para maiores esclarecimentos, visando o melhor entendimento de nossos serviços e proposta comercial. E ainda aguardamos seu retorno para darmos continuidade a este projeto.",
+    MARGIN_LEFT, y, CONTENT_W);
 
-  y += 20;
+  y += 24;
+  doc.setFontSize(10.5);
   doc.text("Atenciosamente,", PAGE_W / 2, y, { align: "center" });
 
-  y += 25;
-  doc.setDrawColor(30, 30, 30);
+  y += 30;
+  doc.setDrawColor(60, 60, 60);
   doc.setLineWidth(0.3);
   doc.line(PAGE_W / 2 - 35, y, PAGE_W / 2 + 35, y);
   y += 5;
   doc.setFontSize(9);
+  doc.setTextColor(...MUTED_COLOR);
   doc.text("Gerencia de Projetos", PAGE_W / 2, y, { align: "center" });
   y += 4;
   doc.text(data.sender?.email || "", PAGE_W / 2, y, { align: "center" });
 
   addFooter(doc, data.sender, proposalLabel);
 
-  // ============ PAGE 2: Company ============
+  // =============================================
+  // PAGE 2: Company Description
+  // =============================================
   doc.addPage();
   addLogo(doc, logoBase64);
 
-  y = addSectionTitle(doc, "A EMPRESA", 55);
+  y = addSectionTitle(doc, "A EMPRESA", 58);
 
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(30, 30, 30);
+  y = printParagraph(doc,
+    `Com uma equipe composta por engenheiros e técnicos certificados e qualificados com cursos de fabricantes, a ${data.sender?.trade_name || "empresa"} desenvolve e executa hoje projetos de instalações elétricas, cabeamento estruturado, conectividade e segurança de dados, além de oferecer treinamentos especializados para parceiros e clientes.`,
+    MARGIN_LEFT, y, CONTENT_W);
 
-  const companyDesc = `Com uma equipe composta por engenheiros e técnicos certificados e qualificados com cursos de fabricantes, a ${data.sender?.trade_name || "empresa"} desenvolve e executa hoje projetos de instalações elétricas, cabeamento estruturado, conectividade e segurança de dados, além de oferecer treinamentos especializados para parceiros e clientes.`;
-  const companyLines = doc.splitTextToSize(companyDesc, CONTENT_W);
-  doc.text(companyLines, MARGIN_LEFT, y);
-  y += companyLines.length * 4.5 + 6;
-
+  y += 10;
+  setBodyText(doc);
   doc.text("Dentre o portfólio de produtos e serviços, destacam-se:", MARGIN_LEFT, y);
-  y += 8;
+  y += 10;
 
   const services = [
     "Soluções em conectividade LAN/WAN",
@@ -202,139 +228,149 @@ export async function generateQuotePdf(data: QuotePdfData): Promise<jsPDF> {
     "Projetos e execução de cabeamento estruturado metálico e óptico",
   ];
   services.forEach((s) => {
-    doc.text(`-   ${s}`, MARGIN_LEFT + 5, y);
-    y += 5;
+    doc.setFontSize(10.5);
+    doc.setTextColor(...TEXT_COLOR);
+    doc.text(`–   ${s}`, MARGIN_LEFT + 8, y);
+    y += 7;
   });
 
-  y += 6;
+  y += 10;
   y = addSectionTitle(doc, "OBJETIVO", y);
 
-  const objText = `Fornecimento de serviço conforme necessidade descrita: ${data.title || "Proposta Comercial"}.`;
-  const objLines = doc.splitTextToSize(objText, CONTENT_W);
-  doc.text(objLines, MARGIN_LEFT, y);
-  y += objLines.length * 4.5 + 6;
+  y = printParagraph(doc,
+    `Fornecimento de serviço conforme necessidade descrita: ${data.title || "Proposta Comercial"}.`,
+    MARGIN_LEFT, y, CONTENT_W);
 
-  const secText = `A implementação de uma arquitetura de segurança possibilita às empresas melhorarem os seus níveis de proteção que, associados aos processos bem estruturados e a profissionais treinados, são peças fundamentais para a preservação do ambiente de redes, garantindo a continuidade dos negócios.`;
-  const secLines = doc.splitTextToSize(secText, CONTENT_W);
-  doc.text(secLines, MARGIN_LEFT, y);
-  y += secLines.length * 4.5 + 6;
+  y += 8;
+  y = printParagraph(doc,
+    "A implementação de uma arquitetura de segurança possibilita às empresas melhorarem os seus níveis de proteção que, associados aos processos bem estruturados e a profissionais treinados, são peças fundamentais para a preservação do ambiente de redes, garantindo a continuidade dos negócios.",
+    MARGIN_LEFT, y, CONTENT_W);
 
-  const focusText = `A ${data.sender?.trade_name || "empresa"}, em todos seus projetos e implementações tem como foco principal a segurança da informação, agregando assim, valores ao negócio de seus parceiros e clientes.`;
-  const focusLines = doc.splitTextToSize(focusText, CONTENT_W);
-  doc.setFont("helvetica", "normal");
-  doc.text(focusLines, MARGIN_LEFT, y);
+  y += 8;
+  y = printParagraph(doc,
+    `A ${data.sender?.trade_name || "empresa"}, em todos seus projetos e implementações tem como foco principal a segurança da informação, agregando assim, valores ao negócio de seus parceiros e clientes.`,
+    MARGIN_LEFT, y, CONTENT_W);
 
   addFooter(doc, data.sender, proposalLabel);
 
-  // ============ PAGE 3: Proposal Items ============
+  // =============================================
+  // PAGE 3: Proposal Items
+  // =============================================
   doc.addPage();
   addLogo(doc, logoBase64);
 
-  y = addSectionTitle(doc, "Proposta", 55);
-  y += 5;
+  y = addSectionTitle(doc, "Proposta", 58);
+  y += 4;
 
   const total = data.items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
 
   data.items.forEach((item) => {
     const itemTotal = item.quantity * item.unit_price;
-    const itemText = `${item.description} – R$ ${itemTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-    const itemLines = doc.splitTextToSize(itemText, CONTENT_W - 15);
+    const priceStr = `R$ ${itemTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+    const itemText = item.quantity > 1
+      ? `${item.description} (${item.quantity}x) – ${priceStr}`
+      : `${item.description} – ${priceStr}`;
 
-    // Check if we need a new page
-    if (y + itemLines.length * 5 > PAGE_H - 45) {
+    doc.setFontSize(10.5);
+    const itemLines = doc.splitTextToSize(itemText, CONTENT_W - 18);
+
+    // Page overflow check
+    if (y + itemLines.length * LINE_H + 4 > PAGE_H - 50) {
       addFooter(doc, data.sender, proposalLabel);
       doc.addPage();
       addLogo(doc, logoBase64);
-      y = addSectionTitle(doc, "Proposta (continuação)", 55);
-      y += 5;
+      y = addSectionTitle(doc, "Proposta (continuação)", 58);
+      y += 4;
     }
 
-    // Bullet
-    doc.setFillColor(30, 30, 30);
-    doc.circle(MARGIN_LEFT + 3, y - 1.2, 1.5, "F");
+    // Bullet point
+    doc.setFillColor(...DARK_BLUE);
+    doc.circle(MARGIN_LEFT + 4, y - 1.3, 1.5, "F");
 
-    doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(30, 30, 30);
-    doc.text(itemLines, MARGIN_LEFT + 10, y);
-    y += itemLines.length * 5 + 4;
+    doc.setTextColor(...TEXT_COLOR);
+    doc.text(itemLines, MARGIN_LEFT + 12, y, { lineHeightFactor: 1.5 });
+    y += itemLines.length * LINE_H + 6;
   });
 
-  // Total
-  y += 6;
-  doc.setFontSize(12);
+  // Total line
+  y += 8;
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(MARGIN_LEFT + 12, y - 4, PAGE_W - MARGIN_RIGHT, y - 4);
+
+  doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...DARK_BLUE);
-  doc.text(`Total: R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, MARGIN_LEFT + 10, y);
+  doc.text(`Total: R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, PAGE_W - MARGIN_RIGHT, y, { align: "right" });
 
   addFooter(doc, data.sender, proposalLabel);
 
-  // ============ PAGE 4: Payment & Validity ============
+  // =============================================
+  // PAGE 4: Payment Terms & Validity
+  // =============================================
   doc.addPage();
   addLogo(doc, logoBase64);
 
-  y = addSectionTitle(doc, "FORMAS DE PAGAMENTO E ENTREGA", 55);
-  y += 3;
-
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(30, 30, 30);
+  y = addSectionTitle(doc, "FORMAS DE PAGAMENTO E ENTREGA", 58);
 
   if (data.notes) {
-    const notesLines = doc.splitTextToSize(data.notes, CONTENT_W);
-    doc.text(notesLines, MARGIN_LEFT, y);
-    y += notesLines.length * 4.5 + 8;
+    y = printParagraph(doc, data.notes, MARGIN_LEFT, y, CONTENT_W);
+    y += 10;
   } else {
-    doc.text("Pagamento: A combinar.", MARGIN_LEFT, y);
-    y += 12;
+    y = printParagraph(doc, "Pagamento: A combinar.", MARGIN_LEFT, y, CONTENT_W);
+    y += 10;
   }
 
-  y += 8;
+  y += 12;
   y = addSectionTitle(doc, "VALIDADE DA PROPOSTA", y);
-  y += 3;
 
+  setBodyText(doc);
   doc.text(`•   Esta proposta tem validade por ${data.validityDays} dias corridos a partir da data de envio.`, MARGIN_LEFT, y, { maxWidth: CONTENT_W });
 
   addFooter(doc, data.sender, proposalLabel);
 
-  // ============ PAGE 5: Acceptance Term ============
+  // =============================================
+  // PAGE 5: Acceptance Term
+  // =============================================
   doc.addPage();
   addLogo(doc, logoBase64);
 
-  y = 60;
-  doc.setFontSize(15);
+  y = 68;
+  doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...DARK_BLUE);
-  doc.text("TERMO DE ACEITE DE PROPOSTA", PAGE_W / 2, y, { align: "center" });
+  const termTitle = "TERMO DE ACEITE DE PROPOSTA";
+  doc.text(termTitle, PAGE_W / 2, y, { align: "center" });
 
   // Underline
-  const titleW = doc.getTextWidth("TERMO DE ACEITE DE PROPOSTA");
+  const titleW = doc.getTextWidth(termTitle);
   doc.setDrawColor(...DARK_BLUE);
-  doc.setLineWidth(0.5);
-  doc.line(PAGE_W / 2 - titleW / 2, y + 2, PAGE_W / 2 + titleW / 2, y + 2);
+  doc.setLineWidth(0.6);
+  doc.line(PAGE_W / 2 - titleW / 2, y + 3, PAGE_W / 2 + titleW / 2, y + 3);
 
-  y += 30;
+  y += 40;
 
   // Signature lines
-  const leftX = MARGIN_LEFT + 10;
-  const rightX = PAGE_W / 2 + 15;
-  const lineW = 55;
+  const leftX = MARGIN_LEFT + 5;
+  const rightX = PAGE_W / 2 + 12;
+  const lineW = 60;
 
-  doc.setDrawColor(30, 30, 30);
+  doc.setDrawColor(80, 80, 80);
   doc.setLineWidth(0.3);
   doc.line(leftX, y, leftX + lineW, y);
   doc.line(rightX, y, rightX + lineW, y);
 
-  y += 5;
+  y += 6;
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(60, 60, 60);
-  doc.text("Cliente (assinatura + carimbo)", leftX, y);
-  doc.text(data.sender?.trade_name || "", rightX, y);
+  doc.setTextColor(...MUTED_COLOR);
+  doc.text("Cliente (assinatura + carimbo)", leftX + lineW / 2, y, { align: "center" });
+  doc.text(data.sender?.trade_name || "", rightX + lineW / 2, y, { align: "center" });
 
-  y += 20;
+  y += 28;
   doc.setFontSize(10);
-  doc.setTextColor(30, 30, 30);
+  doc.setTextColor(...TEXT_COLOR);
   doc.text(dateLabel, PAGE_W - MARGIN_RIGHT, y, { align: "right" });
 
   addFooter(doc, data.sender, proposalLabel);
