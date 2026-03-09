@@ -308,6 +308,7 @@ const QuoteSenderProfiles = () => {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         <Card>
