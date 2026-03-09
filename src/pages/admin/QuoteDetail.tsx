@@ -28,6 +28,7 @@ const QuoteDetail = () => {
   const [sender, setSender] = useState<any>(null);
   const [client, setClient] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const fetch = async () => {
