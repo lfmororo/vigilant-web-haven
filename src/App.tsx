@@ -70,6 +70,7 @@ const App = () => (
               <Route path="/admin/quotes" element={<AuthGuard requireAdmin><QuoteSenderProfiles /></AuthGuard>} />
               <Route path="/admin/quotes/new" element={<AuthGuard requireAdmin><CreateQuote /></AuthGuard>} />
               <Route path="/admin/quotes/:id" element={<AuthGuard requireAdmin><QuoteDetail /></AuthGuard>} />
+              <Route path="/admin/quotes/:id/edit" element={<AuthGuard requireAdmin><CreateQuote /></AuthGuard>} />
               <Route path="/admin/settings" element={<AuthGuard requireAdmin><SystemSettings /></AuthGuard>} />
               <Route path="*" element={<NotFound />} />
             </Routes>

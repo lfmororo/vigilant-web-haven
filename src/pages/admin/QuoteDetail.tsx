@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Building2, Download } from "lucide-react";
+import { ArrowLeft, Building2, Download, Pencil } from "lucide-react";
 import { generateQuotePdf } from "@/lib/generateQuotePdf";
 
 const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
