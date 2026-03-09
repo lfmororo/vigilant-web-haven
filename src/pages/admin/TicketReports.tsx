@@ -24,6 +24,7 @@ import TicketReportPrint from "@/components/admin/TicketReportPrint";
 import EquipmentRankingReport from "@/components/admin/reports/EquipmentRankingReport";
 import UserRankingReport from "@/components/admin/reports/UserRankingReport";
 import SatisfactionRankingReport from "@/components/admin/reports/SatisfactionRankingReport";
+import MonthlyAiReport from "@/components/admin/reports/MonthlyAiReport";
 
 const SectorMultiSelect = ({ clientId, sectorIds, setSectorIds }: { clientId: string; sectorIds: string[]; setSectorIds: (v: string[]) => void }) => {
   const { data: sectors } = useQuery({
@@ -222,6 +223,7 @@ const TicketReports = () => {
             <TabsTrigger value="equipment">Ranking Equipamentos</TabsTrigger>
             <TabsTrigger value="users">Ranking Usuários</TabsTrigger>
             <TabsTrigger value="satisfaction">Satisfação</TabsTrigger>
+            <TabsTrigger value="monthly">Relatório Mensal IA</TabsTrigger>
           </TabsList>
 
           <TabsContent value="tickets" className="space-y-6">
@@ -399,6 +401,10 @@ const TicketReports = () => {
 
           <TabsContent value="satisfaction">
             <SatisfactionRankingReport />
+          </TabsContent>
+
+          <TabsContent value="monthly">
+            <MonthlyAiReport />
           </TabsContent>
         </Tabs>
       </div>
