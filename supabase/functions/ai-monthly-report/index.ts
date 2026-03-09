@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { client_id, month, year } = await req.json();
+    const { client_id, month, year, sector_ids } = await req.json();
 
     if (!client_id || !month || !year) {
       return new Response(JSON.stringify({ error: "client_id, month and year are required" }), {
@@ -29,11 +29,9 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Date range for the month
     const startDate = new Date(year, month - 1, 1).toISOString();
     const endDate = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
 
-    // Get client name
     const { data: client } = await supabaseAdmin
       .from("clients")
       .select("full_name")
@@ -47,8 +45,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch tickets for this client in the month
-    const { data: tickets } = await supabaseAdmin
+    // Build query
+    let query = supabaseAdmin
       .from("tickets")
       .select(`
         id, ticket_number, title, description, status, priority,
@@ -62,13 +60,30 @@ Deno.serve(async (req) => {
       .lte("created_at", endDate)
       .order("created_at", { ascending: true });
 
+    // Filter by sector_ids if provided
+    if (sector_ids && Array.isArray(sector_ids) && sector_ids.length > 0) {
+      query = query.in("sector_id", sector_ids);
+    }
+
+    const { data: tickets } = await query;
+
+    // Get sector names for the filter description
+    let sectorFilterNames: string[] = [];
+    if (sector_ids && Array.isArray(sector_ids) && sector_ids.length > 0) {
+      const { data: sectorData } = await supabaseAdmin
+        .from("client_sectors")
+        .select("name")
+        .in("id", sector_ids);
+      sectorFilterNames = (sectorData || []).map((s: any) => s.name);
+    }
+
     if (!tickets?.length) {
-      return new Response(JSON.stringify({ summary: `Nenhum chamado registrado para ${client.full_name} no período selecionado.`, ticketCount: 0 }), {
+      const sectorNote = sectorFilterNames.length > 0 ? ` nos setores: ${sectorFilterNames.join(", ")}` : "";
+      return new Response(JSON.stringify({ summary: `Nenhum chamado registrado para ${client.full_name}${sectorNote} no período selecionado.`, ticketCount: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Build stats
     const statusCount: Record<string, number> = {};
     const priorityCount: Record<string, number> = {};
     const technicianCount: Record<string, number> = {};
@@ -86,7 +101,6 @@ Deno.serve(async (req) => {
       sectorCount[secName] = (sectorCount[secName] || 0) + 1;
     }
 
-    // Compute avg resolution time for resolved/closed
     const resolved = tickets.filter(t => t.status === "resolved" || t.status === "closed");
     let avgHours = 0;
     if (resolved.length) {
@@ -98,11 +112,15 @@ Deno.serve(async (req) => {
 
     const monthNames = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
+    const sectorFilterText = sectorFilterNames.length > 0
+      ? `\nFiltro de setores aplicado: ${sectorFilterNames.join(", ")}`
+      : "";
+
     const ticketList = tickets.map(t =>
       `- #${t.ticket_number} "${t.title}" | Status: ${t.status} | Prioridade: ${t.priority} | Técnico: ${(t as any).assigned?.full_name || "N/A"} | Equipamento: ${(t as any).equipment_type?.name || "N/A"} | Setor: ${(t as any).sector?.name || "N/A"}`
     ).join("\n");
 
-    const prompt = `Gere um relatório mensal profissional e detalhado de atendimentos de suporte técnico de TI para o cliente "${client.full_name}", referente ao mês de ${monthNames[month - 1]} de ${year}.
+    const prompt = `Gere um relatório mensal profissional e detalhado de atendimentos de suporte técnico de TI para o cliente "${client.full_name}", referente ao mês de ${monthNames[month - 1]} de ${year}.${sectorFilterText}
 
 Dados do período:
 - Total de chamados: ${tickets.length}
@@ -118,7 +136,7 @@ Lista de chamados:
 ${ticketList}
 
 Gere o relatório com as seguintes seções:
-1. **Visão Geral**: Resumo executivo do mês
+1. **Visão Geral**: Resumo executivo do mês${sectorFilterNames.length > 0 ? " (mencione que o relatório é filtrado pelos setores selecionados)" : ""}
 2. **Métricas Principais**: Total, resolvidos, tempo médio, distribuição por prioridade
 3. **Análise por Setor**: Performance por setor do cliente
 4. **Análise por Equipamento**: Tipos de equipamento mais demandados
