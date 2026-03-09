@@ -116,17 +116,18 @@ const AdminTicketsManagement = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>Título</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Criador</TableHead>
-                    <TableHead>Equipamento</TableHead>
-                    <TableHead>Técnico</TableHead>
-                    <TableHead>Prioridade</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Tempo Aberto</TableHead>
-                    <TableHead>Sem Interação</TableHead>
-                    <TableHead>Data</TableHead>
+                     <TableHead>#</TableHead>
+                     <TableHead>Título</TableHead>
+                     <TableHead>Cliente</TableHead>
+                     <TableHead>Setor</TableHead>
+                     <TableHead>Criador</TableHead>
+                     <TableHead>Equipamento</TableHead>
+                     <TableHead>Técnico</TableHead>
+                     <TableHead>Prioridade</TableHead>
+                     <TableHead>Status</TableHead>
+                     <TableHead>Tempo Aberto</TableHead>
+                     <TableHead>Sem Interação</TableHead>
+                     <TableHead>Data</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
