@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, FileText, Printer } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, FileText, Printer, Building2 } from "lucide-react";
 import { toast } from "sonner";
 
 const monthNames = [
@@ -17,8 +19,9 @@ const monthNames = [
 const MonthlyAiReport = () => {
   const now = new Date();
   const [clientId, setClientId] = useState<string>("");
-  const [month, setMonth] = useState<string>(String(now.getMonth())); // previous month default
+  const [month, setMonth] = useState<string>(String(now.getMonth()));
   const [year, setYear] = useState<string>(String(now.getFullYear()));
+  const [sectorIds, setSectorIds] = useState<string[]>([]);
   const [report, setReport] = useState<string | null>(null);
   const [ticketCount, setTicketCount] = useState<number>(0);
   const [loading, setLoading] = useState(false);
@@ -31,10 +34,45 @@ const MonthlyAiReport = () => {
     },
   });
 
+  const { data: sectors } = useQuery({
+    queryKey: ["monthly-report-sectors", clientId],
+    queryFn: async () => {
+      if (!clientId) return [];
+      const { data } = await supabase
+        .from("client_sectors")
+        .select("id, name")
+        .eq("client_id", clientId)
+        .order("name");
+      return data || [];
+    },
+    enabled: !!clientId,
+  });
+
   const years = [];
   for (let y = now.getFullYear(); y >= now.getFullYear() - 3; y--) {
     years.push(y);
   }
+
+  const toggleSector = (id: string) => {
+    setSectorIds((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+    );
+  };
+
+  const sectorLabel = useMemo(() => {
+    if (!sectorIds.length) return "Todos os setores";
+    if (sectorIds.length === 1) {
+      const s = sectors?.find((s) => s.id === sectorIds[0]);
+      return s?.name || "1 setor";
+    }
+    return `${sectorIds.length} setores`;
+  }, [sectorIds, sectors]);
+
+  const handleClientChange = (value: string) => {
+    setClientId(value);
+    setSectorIds([]);
+    setReport(null);
+  };
 
   const generateReport = async () => {
     if (!clientId) {
@@ -45,7 +83,12 @@ const MonthlyAiReport = () => {
     setReport(null);
     try {
       const { data, error } = await supabase.functions.invoke("ai-monthly-report", {
-        body: { client_id: clientId, month: parseInt(month) + 1, year: parseInt(year) },
+        body: {
+          client_id: clientId,
+          month: parseInt(month) + 1,
+          year: parseInt(year),
+          sector_ids: sectorIds.length > 0 ? sectorIds : undefined,
+        },
       });
       if (error) throw error;
       if (data?.error) {
@@ -93,10 +136,10 @@ li { margin-bottom: 4px; }
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Cliente</label>
-              <Select value={clientId} onValueChange={setClientId}>
+              <Select value={clientId} onValueChange={handleClientChange}>
                 <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                 <SelectContent>
                   {clients?.map((c) => (
@@ -105,6 +148,47 @@ li { margin-bottom: 4px; }
                 </SelectContent>
               </Select>
             </div>
+
+            {clientId && sectors && sectors.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Setores</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start gap-2 font-normal">
+                      <Building2 className="h-4 w-4" />
+                      {sectorLabel}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-2" align="start">
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {sectors.map((s) => (
+                        <label
+                          key={s.id}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-sm"
+                        >
+                          <Checkbox
+                            checked={sectorIds.includes(s.id)}
+                            onCheckedChange={() => toggleSector(s.id)}
+                          />
+                          {s.name}
+                        </label>
+                      ))}
+                    </div>
+                    {sectorIds.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full mt-2"
+                        onClick={() => setSectorIds([])}
+                      >
+                        Limpar seleção
+                      </Button>
+                    )}
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Mês</label>
               <Select value={month} onValueChange={setMonth}>
@@ -158,27 +242,22 @@ li { margin-bottom: 4px; }
   );
 };
 
-// Simple markdown to HTML converter
 function markdownToHtml(md: string): string {
   let html = md
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  // Headers
   html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
   html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
   html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
 
-  // Bold and italic
   html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
 
-  // Unordered lists
   html = html.replace(/^- (.+)$/gm, "<li>$1</li>");
   html = html.replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`);
 
-  // Line breaks for remaining lines
   html = html.replace(/\n\n/g, "</p><p>");
   html = `<p>${html}</p>`;
   html = html.replace(/<p><h/g, "<h").replace(/<\/h(\d)><\/p>/g, "</h$1>");
