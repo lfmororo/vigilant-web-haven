@@ -30,7 +30,7 @@ const ClientTicketsList = () => {
         setParentClientId(clientId);
         if (!clientId) { setLoading(false); return; }
 
-        supabase.from("tickets").select("*, equipment_type:equipment_types(name)")
+        supabase.from("tickets").select("*, equipment_type:equipment_types(name), sector:client_sectors!tickets_sector_id_fkey(name)")
           .eq("client_id", clientId).order("created_at", { ascending: false })
           .then(async ({ data: ticketData }) => {
             const tks = ticketData || [];
