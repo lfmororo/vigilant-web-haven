@@ -116,6 +116,10 @@ const QuoteDetail = () => {
             </div>
             <p className="text-muted-foreground">{quote.title || "Proposta Comercial"}</p>
           </div>
+          <Button onClick={handleExportPdf} disabled={exporting}>
+            <Download className="w-4 h-4 mr-2" />
+            {exporting ? "Gerando..." : "Exportar PDF"}
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
