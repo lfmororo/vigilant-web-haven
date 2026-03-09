@@ -202,6 +202,10 @@ const QuoteSenderProfiles = () => {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate("/admin/quotes/new")}>
+              <FileText className="w-4 h-4 mr-2" />
+              Criar Orçamento
+            </Button>
 
           <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) resetForm(); setDialogOpen(open); }}>
             <DialogTrigger asChild>
