@@ -32,7 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Upload, Building2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, Building2, FileText } from "lucide-react";
 
 interface SenderProfile {
   id: string;
