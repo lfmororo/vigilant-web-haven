@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Building2 } from "lucide-react";
+import { ArrowLeft, Building2, Download } from "lucide-react";
+import { generateQuotePdf } from "@/lib/generateQuotePdf";
 
 const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   draft: { label: "Rascunho", variant: "secondary" },
@@ -27,6 +28,7 @@ const QuoteDetail = () => {
   const [sender, setSender] = useState<any>(null);
   const [client, setClient] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const fetch = async () => {
@@ -75,6 +77,31 @@ const QuoteDetail = () => {
   const st = statusMap[quote.status] || { label: quote.status, variant: "outline" as const };
   const total = items.reduce((sum: number, i: any) => sum + Number(i.quantity) * Number(i.unit_price), 0);
 
+  const handleExportPdf = async () => {
+    setExporting(true);
+    try {
+      const pdf = await generateQuotePdf({
+        quoteNumber: quote.quote_number,
+        title: quote.title,
+        notes: quote.notes,
+        validityDays: quote.validity_days || 30,
+        createdAt: quote.created_at,
+        sender,
+        client,
+        items: items.map((i: any) => ({
+          description: i.description,
+          quantity: Number(i.quantity),
+          unit_price: Number(i.unit_price),
+        })),
+      });
+      pdf.save(`Proposta_${String(quote.quote_number).padStart(4, "0")}.pdf`);
+      toast({ title: "PDF exportado com sucesso!" });
+    } catch (err: any) {
+      toast({ title: "Erro ao gerar PDF", description: err.message, variant: "destructive" });
+    }
+    setExporting(false);
+  };
+
   return (
     <AdminLayout>
       <div className="space-y-6 max-w-4xl">
@@ -89,6 +116,10 @@ const QuoteDetail = () => {
             </div>
             <p className="text-muted-foreground">{quote.title || "Proposta Comercial"}</p>
           </div>
+          <Button onClick={handleExportPdf} disabled={exporting}>
+            <Download className="w-4 h-4 mr-2" />
+            {exporting ? "Gerando..." : "Exportar PDF"}
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
