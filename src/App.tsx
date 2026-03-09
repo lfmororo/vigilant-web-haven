@@ -24,6 +24,7 @@ import TicketReports from "./pages/admin/TicketReports";
 import ChecklistManagement from "./pages/admin/ChecklistManagement";
 import KnowledgeBase from "./pages/admin/KnowledgeBase";
 import WhatsAppNotificationsLog from "./pages/admin/WhatsAppNotificationsLog";
+import QuoteSenderProfiles from "./pages/admin/QuoteSenderProfiles";
 import HelpdeskDashboard from "./pages/helpdesk/HelpdeskDashboard";
 import ClientTicketsList from "./pages/helpdesk/ClientTicketsList";
 import NewTicket from "./pages/helpdesk/NewTicket";
