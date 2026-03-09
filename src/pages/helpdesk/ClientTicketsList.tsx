@@ -98,14 +98,15 @@ const ClientTicketsList = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>Título</TableHead>
-                    <TableHead>Equipamento</TableHead>
-                    <TableHead>Prioridade</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Tempo Aberto</TableHead>
-                    <TableHead>Sem Interação</TableHead>
-                    <TableHead>Data</TableHead>
+                     <TableHead>#</TableHead>
+                     <TableHead>Título</TableHead>
+                     <TableHead>Setor</TableHead>
+                     <TableHead>Equipamento</TableHead>
+                     <TableHead>Prioridade</TableHead>
+                     <TableHead>Status</TableHead>
+                     <TableHead>Tempo Aberto</TableHead>
+                     <TableHead>Sem Interação</TableHead>
+                     <TableHead>Data</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
