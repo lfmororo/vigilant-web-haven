@@ -223,6 +223,7 @@ const TicketReports = () => {
             <TabsTrigger value="equipment">Ranking Equipamentos</TabsTrigger>
             <TabsTrigger value="users">Ranking Usuários</TabsTrigger>
             <TabsTrigger value="satisfaction">Satisfação</TabsTrigger>
+            <TabsTrigger value="monthly">Relatório Mensal IA</TabsTrigger>
           </TabsList>
 
           <TabsContent value="tickets" className="space-y-6">
