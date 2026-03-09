@@ -65,6 +65,7 @@ const App = () => (
               <Route path="/admin/checklists" element={<AuthGuard requireAdmin><ChecklistManagement /></AuthGuard>} />
               <Route path="/admin/knowledge-base" element={<AuthGuard requireAdmin><KnowledgeBase /></AuthGuard>} />
               <Route path="/admin/whatsapp-logs" element={<AuthGuard requireAdmin><WhatsAppNotificationsLog /></AuthGuard>} />
+              <Route path="/admin/quotes" element={<AuthGuard requireAdmin><QuoteSenderProfiles /></AuthGuard>} />
               <Route path="/admin/settings" element={<AuthGuard requireAdmin><SystemSettings /></AuthGuard>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
