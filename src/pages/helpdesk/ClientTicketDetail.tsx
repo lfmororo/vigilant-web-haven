@@ -17,10 +17,12 @@ const ClientTicketDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [ticket, setTicket] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showPrint, setShowPrint] = useState(false);
   const [requestingAccess, setRequestingAccess] = useState(false);
+  const [adjacentTickets, setAdjacentTickets] = useState<{ prev: string | null; next: string | null }>({ prev: null, next: null });
 
   useEffect(() => {
     if (!id) return;
