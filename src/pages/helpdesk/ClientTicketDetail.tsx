@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -11,7 +11,7 @@ import SignaturePad from "@/components/helpdesk/SignaturePad";
 import TicketPrint from "@/components/admin/TicketPrint";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Printer, Monitor } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, Printer, Monitor } from "lucide-react";
 
 const ClientTicketDetail = () => {
   const { id } = useParams<{ id: string }>();
