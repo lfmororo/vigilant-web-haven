@@ -151,6 +151,20 @@ const AdminTicketDetail = () => {
     });
   }, [id, isAdmin, authLoading, user]);
 
+  // Fetch adjacent tickets for navigation
+  useEffect(() => {
+    if (!id) return;
+    supabase.from("tickets").select("id, ticket_number").order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        const idx = data.findIndex((t: any) => t.id === id);
+        setAdjacentTickets({
+          prev: idx > 0 ? data[idx - 1].id : null,
+          next: idx < data.length - 1 ? data[idx + 1].id : null,
+        });
+      });
+  }, [id]);
+
   // Fetch equipment inventory for the selected client
   useEffect(() => {
     const clientId = pendingClientId || ticket?.client_id;
