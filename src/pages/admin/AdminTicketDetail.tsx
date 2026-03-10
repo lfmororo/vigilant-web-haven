@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, FileText, Trash2, Save, Printer, Monitor, AlertTriangle, Link2 } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, FileText, Trash2, Save, Printer, Monitor, AlertTriangle, Link2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
