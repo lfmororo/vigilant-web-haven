@@ -48,6 +48,7 @@ const AdminTicketDetail = () => {
   const [pendingEquipmentId, setPendingEquipmentId] = useState<string>("");
   const [clientEquipments, setClientEquipments] = useState<any[]>([]);
   const [pendingSectorId, setPendingSectorId] = useState<string>("");
+  const [adjacentTickets, setAdjacentTickets] = useState<{ prev: string | null; next: string | null }>({ prev: null, next: null });
   const [showPrint, setShowPrint] = useState(false);
   const [requestingAccess, setRequestingAccess] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ sender_name: string; message: string }>>([]);
