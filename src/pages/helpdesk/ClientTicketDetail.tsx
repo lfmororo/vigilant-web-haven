@@ -31,6 +31,25 @@ const ClientTicketDetail = () => {
       .then(({ data }) => { setTicket(data); setLoading(false); });
   }, [id]);
 
+  // Fetch adjacent tickets for navigation
+  useEffect(() => {
+    if (!id || !user) return;
+    supabase.from("profiles").select("parent_client_id").eq("id", user.id).maybeSingle()
+      .then(({ data: profile }) => {
+        if (!profile?.parent_client_id) return;
+        supabase.from("tickets").select("id").eq("client_id", profile.parent_client_id)
+          .order("created_at", { ascending: false })
+          .then(({ data }) => {
+            if (!data) return;
+            const idx = data.findIndex((t: any) => t.id === id);
+            setAdjacentTickets({
+              prev: idx > 0 ? data[idx - 1].id : null,
+              next: idx < data.length - 1 ? data[idx + 1].id : null,
+            });
+          });
+      });
+  }, [id, user]);
+
   if (loading) return <HelpdeskLayout><div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></HelpdeskLayout>;
   if (!ticket) return <HelpdeskLayout><p className="text-center text-muted-foreground py-12">Chamado não encontrado</p></HelpdeskLayout>;
 
