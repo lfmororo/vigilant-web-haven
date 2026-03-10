@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -11,16 +11,18 @@ import SignaturePad from "@/components/helpdesk/SignaturePad";
 import TicketPrint from "@/components/admin/TicketPrint";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Printer, Monitor } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, Printer, Monitor } from "lucide-react";
 
 const ClientTicketDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [ticket, setTicket] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showPrint, setShowPrint] = useState(false);
   const [requestingAccess, setRequestingAccess] = useState(false);
+  const [adjacentTickets, setAdjacentTickets] = useState<{ prev: string | null; next: string | null }>({ prev: null, next: null });
 
   useEffect(() => {
     if (!id) return;
@@ -28,6 +30,25 @@ const ClientTicketDetail = () => {
       .eq("id", id).single()
       .then(({ data }) => { setTicket(data); setLoading(false); });
   }, [id]);
+
+  // Fetch adjacent tickets for navigation
+  useEffect(() => {
+    if (!id || !user) return;
+    supabase.from("profiles").select("parent_client_id").eq("id", user.id).maybeSingle()
+      .then(({ data: profile }) => {
+        if (!profile?.parent_client_id) return;
+        supabase.from("tickets").select("id").eq("client_id", profile.parent_client_id)
+          .order("created_at", { ascending: false })
+          .then(({ data }) => {
+            if (!data) return;
+            const idx = data.findIndex((t: any) => t.id === id);
+            setAdjacentTickets({
+              prev: idx > 0 ? data[idx - 1].id : null,
+              next: idx < data.length - 1 ? data[idx + 1].id : null,
+            });
+          });
+      });
+  }, [id, user]);
 
   if (loading) return <HelpdeskLayout><div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></HelpdeskLayout>;
   if (!ticket) return <HelpdeskLayout><p className="text-center text-muted-foreground py-12">Chamado não encontrado</p></HelpdeskLayout>;
@@ -41,6 +62,8 @@ const ClientTicketDetail = () => {
       <div className="space-y-6">
         <div className="flex items-center gap-4">
           <Link to="/helpdesk/tickets"><Button variant="ghost" size="icon"><ArrowLeft className="w-5 h-5" /></Button></Link>
+          <Button variant="outline" size="icon" disabled={!adjacentTickets.prev} onClick={() => adjacentTickets.prev && navigate(`/helpdesk/tickets/${adjacentTickets.prev}`)} title="Chamado anterior"><ChevronLeft className="w-5 h-5" /></Button>
+          <Button variant="outline" size="icon" disabled={!adjacentTickets.next} onClick={() => adjacentTickets.next && navigate(`/helpdesk/tickets/${adjacentTickets.next}`)} title="Próximo chamado"><ChevronRight className="w-5 h-5" /></Button>
           <div className="flex-1">
             <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground font-mono">#{ticket.ticket_number}</span>

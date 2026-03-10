@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, FileText, Trash2, Save, Printer, Monitor, AlertTriangle, Link2 } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, FileText, Trash2, Save, Printer, Monitor, AlertTriangle, Link2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,6 +48,7 @@ const AdminTicketDetail = () => {
   const [pendingEquipmentId, setPendingEquipmentId] = useState<string>("");
   const [clientEquipments, setClientEquipments] = useState<any[]>([]);
   const [pendingSectorId, setPendingSectorId] = useState<string>("");
+  const [adjacentTickets, setAdjacentTickets] = useState<{ prev: string | null; next: string | null }>({ prev: null, next: null });
   const [showPrint, setShowPrint] = useState(false);
   const [requestingAccess, setRequestingAccess] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ sender_name: string; message: string }>>([]);
@@ -149,6 +150,20 @@ const AdminTicketDetail = () => {
         .then(({ count }) => setLinkedTicketsCount(count || 0));
     });
   }, [id, isAdmin, authLoading, user]);
+
+  // Fetch adjacent tickets for navigation
+  useEffect(() => {
+    if (!id) return;
+    supabase.from("tickets").select("id, ticket_number").order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        const idx = data.findIndex((t: any) => t.id === id);
+        setAdjacentTickets({
+          prev: idx > 0 ? data[idx - 1].id : null,
+          next: idx < data.length - 1 ? data[idx + 1].id : null,
+        });
+      });
+  }, [id]);
 
   // Fetch equipment inventory for the selected client
   useEffect(() => {
@@ -335,6 +350,8 @@ const AdminTicketDetail = () => {
       <div className="space-y-6">
         <div className="flex items-center gap-4">
           <Link to="/admin/tickets"><Button variant="ghost" size="icon"><ArrowLeft className="w-5 h-5" /></Button></Link>
+          <Button variant="outline" size="icon" disabled={!adjacentTickets.prev} onClick={() => adjacentTickets.prev && navigate(`/admin/tickets/${adjacentTickets.prev}`)} title="Chamado anterior"><ChevronLeft className="w-5 h-5" /></Button>
+          <Button variant="outline" size="icon" disabled={!adjacentTickets.next} onClick={() => adjacentTickets.next && navigate(`/admin/tickets/${adjacentTickets.next}`)} title="Próximo chamado"><ChevronRight className="w-5 h-5" /></Button>
           <div className="flex-1">
             <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground font-mono">#{ticket.ticket_number}</span>
