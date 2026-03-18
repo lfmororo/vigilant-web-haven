@@ -1,0 +1,1 @@
+UPDATE system_settings SET value = 'false', updated_at = now() WHERE key = 'notif_satisfaction_survey';
