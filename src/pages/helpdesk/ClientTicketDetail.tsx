@@ -8,6 +8,7 @@ import TicketStatusBadge from "@/components/helpdesk/TicketStatusBadge";
 import PriorityBadge from "@/components/helpdesk/PriorityBadge";
 import TicketChat from "@/components/helpdesk/TicketChat";
 import SignaturePad from "@/components/helpdesk/SignaturePad";
+import TicketAttachments from "@/components/helpdesk/TicketAttachments";
 import TicketPrint from "@/components/admin/TicketPrint";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -118,6 +119,8 @@ const ClientTicketDetail = () => {
                 <div><span className="text-muted-foreground">Criado em:</span><p className="mt-1">{new Date(ticket.created_at).toLocaleString("pt-BR")}</p></div>
               </CardContent>
             </Card>
+
+            <TicketAttachments ticketId={ticket.id} />
 
             <Card>
               <CardHeader><CardTitle className="text-sm">Assinaturas</CardTitle></CardHeader>
