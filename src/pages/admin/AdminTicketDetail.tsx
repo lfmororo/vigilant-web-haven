@@ -598,6 +598,8 @@ const AdminTicketDetail = () => {
               </CardContent>
             </Card>
 
+            <TicketAttachments ticketId={ticket.id} />
+
             <Card>
               <CardHeader><CardTitle className="text-sm">Assinaturas</CardTitle></CardHeader>
               <CardContent className="space-y-4">
