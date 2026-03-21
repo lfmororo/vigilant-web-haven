@@ -236,7 +236,7 @@ async function fetchDeviceData(supabase: any, device: any) {
     if (pingTargets?.length) {
       for (const target of pingTargets) {
         try {
-          const pingRes = await fetch(`${baseUrl}/ping`, {
+          const pingRes = await safeFetch(`${baseUrl}/ping`, {
             method: "POST",
             headers,
             body: JSON.stringify({
