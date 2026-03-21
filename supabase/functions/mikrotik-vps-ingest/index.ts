@@ -267,6 +267,16 @@ Deno.serve(async (req) => {
       tempAlerts.push(`🌡️ Temperatura CPU: *${cpuTemp}°C* (acima de 70°C)`);
     }
 
+    // Log interface status change events to history table
+    if (status_changes?.length > 0) {
+      const eventRecords = status_changes.map((change: any) => ({
+        device_id,
+        interface_name: change.interface_name,
+        event_type: change.current_status, // "up" or "down"
+      }));
+      await supabase.from("mikrotik_interface_events").insert(eventRecords);
+    }
+
     // Enviar notificação WhatsApp somente se há mudanças reais
     let whatsappSent = false;
     if ((status_changes?.length > 0) || (newLogAlerts.length > 0) || (dhcpAlertsToSend.length > 0) || rebootDetected || tempAlerts.length > 0) {
