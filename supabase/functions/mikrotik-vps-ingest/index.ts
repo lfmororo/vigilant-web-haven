@@ -120,13 +120,29 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Atualizar status do device
+    // Atualizar status do device com dados extras
+    const deviceUpdate: any = {
+      last_error: null,
+      last_polled_at: new Date().toISOString(),
+    };
+    if (dhcp_summary) deviceUpdate.last_dhcp_summary = dhcp_summary;
+    if (log_alerts?.length > 0) deviceUpdate.last_log_alerts = log_alerts.slice(0, 50);
+    if (collected_data?.resource || collected_data?.identity) {
+      deviceUpdate.last_system_info = {
+        identity: collected_data.identity || '',
+        version: collected_data.resource?.version || '',
+        uptime: collected_data.resource?.uptime || '',
+        cpu: collected_data.resource?.cpu || '',
+        'cpu-load': collected_data.resource?.['cpu-load'] || collected_data.resource?.cpuLoad || '',
+        'free-memory': collected_data.resource?.['free-memory'] || collected_data.resource?.freeMemory || '',
+        'total-memory': collected_data.resource?.['total-memory'] || collected_data.resource?.totalMemory || '',
+        'board-name': collected_data.resource?.['board-name'] || collected_data.resource?.boardName || '',
+        architecture: collected_data.resource?.['architecture-name'] || collected_data.resource?.architectureName || '',
+      };
+    }
     await supabase
       .from("mikrotik_devices")
-      .update({
-        last_error: null,
-        last_polled_at: new Date().toISOString(),
-      })
+      .update(deviceUpdate)
       .eq("id", device_id);
 
     // Enviar notificação WhatsApp se houve mudanças
