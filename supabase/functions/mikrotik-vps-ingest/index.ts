@@ -412,7 +412,7 @@ async function sendWhatsAppAlert(
   }
 
   if (dhcpAlerts && dhcpAlerts.length > 0) {
-    lines.push("🚨 *DHCP - Utilização Alta (>90%):*");
+    lines.push("🚨 *DHCP - Pool com Utilização Alta (>90%):*");
     for (const alert of dhcpAlerts) {
       lines.push(`  ${alert}`);
     }
