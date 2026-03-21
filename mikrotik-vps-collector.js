@@ -310,6 +310,131 @@ async function collectDeviceData(device) {
   }
 }
 
+// ==================== SNMP COLLECTION ====================
+
+/**
+ * Coleta dados de um dispositivo via SNMP (ex: TP-Link ER605)
+ * OIDs padrão do IF-MIB e HOST-RESOURCES-MIB
+ */
+async function collectSnmpData(device) {
+  const version = device.snmp_version === '1' ? snmp.Version1 : snmp.Version2c;
+  const session = snmp.createSession(device.host, device.snmp_community || 'public', { version, timeout: 10000 });
+
+  return new Promise((resolve) => {
+    const result = {
+      success: true,
+      identity: device.name,
+      resource: {},
+      health: {},
+      interfaces: [],
+      ipAddresses: [],
+      pppoeClients: [],
+      logs: [],
+      dhcpLeases: [],
+      dhcpPools: [],
+      dhcpNetworks: [],
+      dhcpServers: [],
+    };
+
+    // Coletar uptime do sistema
+    const sysOids = [
+      '1.3.6.1.2.1.1.1.0',  // sysDescr
+      '1.3.6.1.2.1.1.3.0',  // sysUpTime (em centésimos de segundo)
+      '1.3.6.1.2.1.1.5.0',  // sysName
+    ];
+
+    session.get(sysOids, (error, varbinds) => {
+      if (error) {
+        session.close();
+        resolve({ success: false, error: `SNMP error: ${error.message}` });
+        return;
+      }
+
+      for (const vb of varbinds) {
+        if (snmp.isVarbindError(vb)) continue;
+        const oidStr = vb.oid;
+        if (oidStr === '1.3.6.1.2.1.1.1.0') {
+          result.resource.version = vb.value.toString();
+        } else if (oidStr === '1.3.6.1.2.1.1.3.0') {
+          // sysUpTime em centésimos de segundo → converter para formato legível
+          const centiseconds = Number(vb.value);
+          const totalSecs = Math.floor(centiseconds / 100);
+          const days = Math.floor(totalSecs / 86400);
+          const hours = Math.floor((totalSecs % 86400) / 3600);
+          const mins = Math.floor((totalSecs % 3600) / 60);
+          result.resource.uptime = `${days}d${hours}h${mins}m`;
+        } else if (oidStr === '1.3.6.1.2.1.1.5.0') {
+          result.identity = vb.value.toString() || device.name;
+        }
+      }
+
+      // Coletar tabela de interfaces via subtree
+      const ifTableOid = '1.3.6.1.2.1.2.2.1';
+      session.subtree(ifTableOid, 20, (varbinds2) => {
+        for (const vb of varbinds2) {
+          if (snmp.isVarbindError(vb)) continue;
+          const parts = vb.oid.split('.');
+          const column = parseInt(parts[9]); // coluna na tabela
+          const ifIndex = parts[10]; // índice da interface
+
+          // Encontrar ou criar entrada da interface
+          let iface = result.interfaces.find(i => i._ifIndex === ifIndex);
+          if (!iface) {
+            iface = { _ifIndex: ifIndex, name: `if${ifIndex}`, running: false, disabled: false, type: 'unknown' };
+            result.interfaces.push(iface);
+          }
+
+          switch (column) {
+            case 2: // ifDescr
+              iface.name = vb.value.toString();
+              break;
+            case 3: // ifType
+              iface.type = `snmp-type-${vb.value}`;
+              break;
+            case 5: // ifSpeed (bps)
+              iface.speed = String(Number(vb.value));
+              break;
+            case 6: // ifPhysAddress (MAC)
+              if (vb.value && vb.value.length >= 6) {
+                iface['mac-address'] = Buffer.from(vb.value).toString('hex').match(/.{2}/g)?.join(':') || '';
+              }
+              break;
+            case 8: // ifOperStatus: 1=up, 2=down
+              iface.running = (Number(vb.value) === 1);
+              break;
+            case 10: // ifInOctets
+              iface['rx-byte'] = String(Number(vb.value));
+              break;
+            case 14: // ifInErrors
+              iface['rx-error'] = String(Number(vb.value));
+              break;
+            case 16: // ifOutOctets
+              iface['tx-byte'] = String(Number(vb.value));
+              break;
+            case 20: // ifOutErrors
+              iface['tx-error'] = String(Number(vb.value));
+              break;
+          }
+        }
+      }, (error2) => {
+        session.close();
+
+        // Limpar campos internos
+        for (const iface of result.interfaces) {
+          delete iface._ifIndex;
+          iface.running = iface.running ? 'true' : 'false';
+        }
+
+        if (error2) {
+          console.log(`  ⚠️ SNMP subtree warning: ${error2.message}`);
+        }
+
+        resolve(result);
+      });
+    });
+  });
+}
+
 // ==================== STATUS CHANGE DETECTION ====================
 
 function detectChanges(deviceId, deviceName, currentInterfaces, watchInterfaces) {
