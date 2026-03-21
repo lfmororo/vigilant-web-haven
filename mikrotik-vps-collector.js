@@ -317,8 +317,47 @@ async function collectDeviceData(device) {
  * OIDs padrão do IF-MIB e HOST-RESOURCES-MIB
  */
 async function collectSnmpData(device) {
-  const version = device.snmp_version === '1' ? snmp.Version1 : snmp.Version2c;
-  const session = snmp.createSession(device.host, device.snmp_community || 'public', { version, timeout: 10000 });
+  let session;
+
+  if (device.snmp_version === '3') {
+    // SNMPv3 com autenticação e privacidade
+    const secLevelMap = {
+      'noAuthNoPriv': snmp.SecurityLevel.noAuthNoPriv,
+      'authNoPriv': snmp.SecurityLevel.authNoPriv,
+      'authPriv': snmp.SecurityLevel.authPriv,
+    };
+    const authProtocolMap = {
+      'MD5': snmp.AuthProtocols.md5,
+      'SHA': snmp.AuthProtocols.sha,
+      'SHA256': snmp.AuthProtocols.sha256,
+      'SHA512': snmp.AuthProtocols.sha512,
+    };
+    const privProtocolMap = {
+      'DES': snmp.PrivProtocols.des,
+      'AES': snmp.PrivProtocols.aes,
+      'AES256': snmp.PrivProtocols.aes256,
+    };
+
+    const user = {
+      name: device.snmp_user || 'snmpuser',
+      level: secLevelMap[device.snmp_security_level] || snmp.SecurityLevel.noAuthNoPriv,
+    };
+
+    if (user.level >= snmp.SecurityLevel.authNoPriv) {
+      user.authProtocol = authProtocolMap[device.snmp_auth_protocol] || snmp.AuthProtocols.md5;
+      user.authKey = device.snmp_auth_passphrase || '';
+    }
+
+    if (user.level >= snmp.SecurityLevel.authPriv) {
+      user.privProtocol = privProtocolMap[device.snmp_priv_protocol] || snmp.PrivProtocols.des;
+      user.privKey = device.snmp_priv_passphrase || '';
+    }
+
+    session = snmp.createV3Session(device.host, user, { timeout: 10000 });
+  } else {
+    const version = device.snmp_version === '1' ? snmp.Version1 : snmp.Version2c;
+    session = snmp.createSession(device.host, device.snmp_community || 'public', { version, timeout: 10000 });
+  }
 
   return new Promise((resolve) => {
     const result = {

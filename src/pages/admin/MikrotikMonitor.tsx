@@ -803,10 +803,73 @@ const MikrotikMonitor = () => {
                 <SelectContent>
                   <SelectItem value="1">v1</SelectItem>
                   <SelectItem value="2c">v2c</SelectItem>
+                  <SelectItem value="3">v3</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
+
+          {form.snmp_version === '3' && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Usuário SNMPv3 *</Label>
+                  <Input value={form.snmp_user || ''} onChange={(e) => setForm({ ...form, snmp_user: e.target.value })} placeholder="snmpuser" />
+                </div>
+                <div>
+                  <Label>Nível de Segurança</Label>
+                  <Select value={form.snmp_security_level || 'noAuthNoPriv'} onValueChange={(v) => setForm({ ...form, snmp_security_level: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="noAuthNoPriv">noAuthNoPriv</SelectItem>
+                      <SelectItem value="authNoPriv">authNoPriv</SelectItem>
+                      <SelectItem value="authPriv">authPriv</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {(form.snmp_security_level === 'authNoPriv' || form.snmp_security_level === 'authPriv') && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Protocolo Auth</Label>
+                    <Select value={form.snmp_auth_protocol || 'MD5'} onValueChange={(v) => setForm({ ...form, snmp_auth_protocol: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="MD5">MD5</SelectItem>
+                        <SelectItem value="SHA">SHA</SelectItem>
+                        <SelectItem value="SHA256">SHA-256</SelectItem>
+                        <SelectItem value="SHA512">SHA-512</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Senha Auth *</Label>
+                    <Input type="password" value={form.snmp_auth_passphrase || ''} onChange={(e) => setForm({ ...form, snmp_auth_passphrase: e.target.value })} placeholder="••••••••" />
+                  </div>
+                </div>
+              )}
+              {form.snmp_security_level === 'authPriv' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Protocolo Priv</Label>
+                    <Select value={form.snmp_priv_protocol || 'DES'} onValueChange={(v) => setForm({ ...form, snmp_priv_protocol: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="DES">DES</SelectItem>
+                        <SelectItem value="AES">AES</SelectItem>
+                        <SelectItem value="AES256">AES-256</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Senha Priv *</Label>
+                    <Input type="password" value={form.snmp_priv_passphrase || ''} onChange={(e) => setForm({ ...form, snmp_priv_passphrase: e.target.value })} placeholder="••••••••" />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
           <p className="text-xs text-muted-foreground">Coleta via SNMP (IF-MIB). Certifique-se de que o SNMP está habilitado no dispositivo.</p>
         </>
       ) : (
