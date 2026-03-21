@@ -90,18 +90,24 @@ async function pollAllDevices(supabase: any) {
 }
 
 async function safeFetch(url: string, options: RequestInit): Promise<Response> {
-  // Try with default fetch first, then fallback with no TLS verification
   try {
     return await fetch(url, options);
   } catch (err: any) {
-    const msg = err?.message || "";
-    // If SSL/TLS error, retry without certificate verification
-    if (msg.includes("certificate") || msg.includes("Connection reset") || msg.includes("ssl") || msg.includes("tls") || msg.includes("CERTIFICATE")) {
+    const msg = (err?.message || "").toLowerCase();
+    // If SSL/TLS related error, retry without certificate verification
+    if (msg.includes("certificate") || msg.includes("connection reset") || msg.includes("ssl") || msg.includes("tls") || msg.includes("invalidcontenttype") || msg.includes("corrupt message")) {
       try {
         const client = Deno.createHttpClient({ caCerts: [] });
         return await fetch(url, { ...options, client } as any);
-      } catch (_) {
-        // createHttpClient may not be available, try HTTP fallback
+      } catch (innerErr: any) {
+        const innerMsg = (innerErr?.message || "").toLowerCase();
+        // If still failing with TLS error, try switching protocol
+        if (url.startsWith("https://") && (innerMsg.includes("corrupt") || innerMsg.includes("invalidcontent") || innerMsg.includes("connection reset"))) {
+          const httpUrl = url.replace("https://", "http://");
+          console.log(`HTTPS failed, trying HTTP: ${httpUrl}`);
+          return await fetch(httpUrl, options);
+        }
+        throw innerErr;
       }
     }
     throw err;
