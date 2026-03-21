@@ -157,7 +157,8 @@ const MikrotikMonitor = () => {
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
-    const { error } = await supabase.from("mikrotik_devices").insert(deviceForm);
+    const insertData = { ...deviceForm, proxy_url: deviceForm.proxy_url || null, api_port: deviceForm.api_port || 8728 };
+    const { error } = await supabase.from("mikrotik_devices").insert(insertData);
     if (error) { toast.error(error.message); return; }
     toast.success("Dispositivo adicionado");
     setShowCreateDialog(false);
