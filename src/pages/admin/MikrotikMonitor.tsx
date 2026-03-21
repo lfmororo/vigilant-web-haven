@@ -33,6 +33,9 @@ interface MikrotikDevice {
   created_at: string;
   proxy_url: string | null;
   api_port: number | null;
+  device_type: string;
+  snmp_community: string | null;
+  snmp_version: string | null;
   client?: { full_name: string };
   last_dhcp_summary?: any;
   last_log_alerts?: any[];
@@ -83,7 +86,7 @@ interface Client {
 }
 
 const emptyDevice = {
-  name: "", host: "", port: 443, username: "admin", password: "", use_ssl: true, client_id: "", proxy_url: "", api_port: 8728,
+  name: "", host: "", port: 443, username: "admin", password: "", use_ssl: true, client_id: "", proxy_url: "", api_port: 8728, device_type: "mikrotik", snmp_community: "public", snmp_version: "2c",
 };
 
 const formatBytes = (bytes: number) => {
@@ -608,7 +611,14 @@ const MikrotikMonitor = () => {
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
-    const insertData = { ...deviceForm, proxy_url: deviceForm.proxy_url || null, api_port: deviceForm.api_port || 8728 };
+    const insertData = { 
+      ...deviceForm, 
+      proxy_url: deviceForm.proxy_url || null, 
+      api_port: deviceForm.api_port || 8728,
+      device_type: deviceForm.device_type || 'mikrotik',
+      snmp_community: deviceForm.snmp_community || 'public',
+      snmp_version: deviceForm.snmp_version || '2c',
+    };
     const { error } = await supabase.from("mikrotik_devices").insert(insertData);
     if (error) { toast.error(error.message); return; }
     toast.success("Dispositivo adicionado");
@@ -631,6 +641,9 @@ const MikrotikMonitor = () => {
       is_active: editDevice.is_active,
       proxy_url: editDevice.proxy_url || null,
       api_port: editDevice.api_port || 8728,
+      device_type: editDevice.device_type || 'mikrotik',
+      snmp_community: editDevice.snmp_community || 'public',
+      snmp_version: editDevice.snmp_version || '2c',
     }).eq("id", editDevice.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Dispositivo atualizado");
@@ -739,8 +752,18 @@ const MikrotikMonitor = () => {
         </Select>
       </div>
       <div>
+        <Label>Tipo de Dispositivo *</Label>
+        <Select value={form.device_type || 'mikrotik'} onValueChange={(v) => setForm({ ...form, device_type: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="mikrotik">Mikrotik (RouterOS)</SelectItem>
+            <SelectItem value="snmp">SNMP (TP-Link, Ubiquiti, etc.)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
         <Label>Nome do dispositivo *</Label>
-        <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="RB 750 - Matriz" />
+        <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={form.device_type === 'snmp' ? 'TP-Link ER605 - Matriz' : 'RB 750 - Matriz'} />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -752,40 +775,65 @@ const MikrotikMonitor = () => {
           <Input type="number" value={form.port} onChange={(e) => setForm({ ...form, port: parseInt(e.target.value) || 443 })} />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Usuário</Label>
-          <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
-        </div>
-        <div>
-          <Label>Senha</Label>
-          <Input type={showPassword ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-        </div>
-      </div>
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Switch checked={form.use_ssl} onCheckedChange={(v) => setForm({ ...form, use_ssl: v })} />
-          <Label>Usar SSL (HTTPS)</Label>
-        </div>
-        <div className="flex items-center gap-2">
-          <Switch checked={showPassword} onCheckedChange={setShowPassword} />
-          <Label>Mostrar senha</Label>
-        </div>
-      </div>
-      <div className="border-t pt-4 mt-2">
-        <p className="text-sm font-medium mb-2 text-muted-foreground">Proxy (para RouterOS 6.x sem API REST)</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label>URL do Proxy</Label>
-            <Input value={form.proxy_url || ""} onChange={(e) => setForm({ ...form, proxy_url: e.target.value })} placeholder="http://seu-vps:3700" />
+
+      {form.device_type === 'snmp' ? (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Comunidade SNMP</Label>
+              <Input value={form.snmp_community || 'public'} onChange={(e) => setForm({ ...form, snmp_community: e.target.value })} placeholder="public" />
+            </div>
+            <div>
+              <Label>Versão SNMP</Label>
+              <Select value={form.snmp_version || '2c'} onValueChange={(v) => setForm({ ...form, snmp_version: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">v1</SelectItem>
+                  <SelectItem value="2c">v2c</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div>
-            <Label>Porta API (8728)</Label>
-            <Input type="number" value={form.api_port || 8728} onChange={(e) => setForm({ ...form, api_port: parseInt(e.target.value) || 8728 })} />
+          <p className="text-xs text-muted-foreground">Coleta via SNMP (IF-MIB). Certifique-se de que o SNMP está habilitado no dispositivo.</p>
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Usuário</Label>
+              <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+            </div>
+            <div>
+              <Label>Senha</Label>
+              <Input type={showPassword ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            </div>
           </div>
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">Preencha apenas se o equipamento não suporta API REST (RouterOS &lt; 7.1)</p>
-      </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Switch checked={form.use_ssl} onCheckedChange={(v) => setForm({ ...form, use_ssl: v })} />
+              <Label>Usar SSL (HTTPS)</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={showPassword} onCheckedChange={setShowPassword} />
+              <Label>Mostrar senha</Label>
+            </div>
+          </div>
+          <div className="border-t pt-4 mt-2">
+            <p className="text-sm font-medium mb-2 text-muted-foreground">Proxy (para RouterOS 6.x sem API REST)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>URL do Proxy</Label>
+                <Input value={form.proxy_url || ""} onChange={(e) => setForm({ ...form, proxy_url: e.target.value })} placeholder="http://seu-vps:3700" />
+              </div>
+              <div>
+                <Label>Porta API (8728)</Label>
+                <Input type="number" value={form.api_port || 8728} onChange={(e) => setForm({ ...form, api_port: parseInt(e.target.value) || 8728 })} />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Preencha apenas se o equipamento não suporta API REST (RouterOS &lt; 7.1)</p>
+          </div>
+        </>
+      )}
       {isEdit && (
         <div className="flex items-center gap-2">
           <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
@@ -821,7 +869,7 @@ const MikrotikMonitor = () => {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Server className="w-6 h-6 text-primary" />
-              Monitoramento Mikrotik
+              Monitoramento de Rede
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {devices.length} dispositivo{devices.length !== 1 ? "s" : ""} cadastrado{devices.length !== 1 ? "s" : ""}
@@ -877,7 +925,12 @@ const MikrotikMonitor = () => {
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isOnline ? "bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.5)]" : device.last_error ? "bg-destructive" : "bg-muted-foreground/40"}`} />
                           <div className="min-w-0">
-                            <p className="font-semibold text-sm truncate">{device.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-semibold text-sm truncate">{device.name}</p>
+                              {(device as any).device_type === 'snmp' && (
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 shrink-0">SNMP</Badge>
+                              )}
+                            </div>
                             <p className="text-xs text-muted-foreground truncate">{device.client?.full_name}</p>
                           </div>
                         </div>
@@ -1836,7 +1889,7 @@ const MikrotikMonitor = () => {
       {/* Create Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Novo Dispositivo Mikrotik</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Novo Dispositivo de Rede</DialogTitle></DialogHeader>
           <form onSubmit={handleCreateDevice}>
             {renderDeviceForm(deviceForm, setDeviceForm)}
             <DialogFooter className="mt-4"><Button type="submit">Adicionar</Button></DialogFooter>

@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * Mikrotik VPS Collector
+ * Mikrotik & SNMP VPS Collector
  * 
  * Script para rodar em uma VPS que coleta dados de dispositivos Mikrotik
- * (RouterOS 6.x ou 7.x) via API binária e envia para o sistema via Edge Function.
- * O sistema então notifica via WhatsApp quando detecta mudanças de status.
+ * (RouterOS 6.x ou 7.x) via API binária e dispositivos SNMP (ex: TP-Link ER605)
+ * e envia para o sistema via Edge Function.
  * 
  * Instalação:
  *   npm init -y
- *   npm install routeros-client node-cron
+ *   npm install routeros-client net-snmp node-cron
  * 
  * Configuração:
  *   Edite o arquivo config.json (será criado automaticamente na primeira execução)
@@ -20,7 +20,7 @@
  *   sudo nano /etc/systemd/system/mikrotik-collector.service
  *   ---
  *   [Unit]
- *   Description=Mikrotik VPS Collector
+ *   Description=Mikrotik & SNMP VPS Collector
  *   After=network.target
  *   [Service]
  *   Type=simple
@@ -37,6 +37,7 @@
  */
 
 const { RouterOSClient } = require('routeros-client');
+const snmp = require('net-snmp');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -58,12 +59,22 @@ const DEFAULT_CONFIG = {
   devices: [
     {
       device_id: 'UUID_DO_DISPOSITIVO_NO_SISTEMA',
+      device_type: 'mikrotik', // 'mikrotik' ou 'snmp'
       name: 'Mikrotik Principal',
       host: '192.168.0.1',
       port: 8728,
       username: 'admin',
       password: 'senha',
       // Interfaces para monitorar mudanças de status (vazio = todas)
+      watch_interfaces: [],
+    },
+    {
+      device_id: 'UUID_DO_ER605_NO_SISTEMA',
+      device_type: 'snmp',
+      name: 'TP-Link ER605',
+      host: '192.168.0.2',
+      snmp_community: 'public',
+      snmp_version: '2c', // '1' ou '2c'
       watch_interfaces: [],
     }
   ]
@@ -297,6 +308,131 @@ async function collectDeviceData(device) {
     }
     return { success: false, error: err.message };
   }
+}
+
+// ==================== SNMP COLLECTION ====================
+
+/**
+ * Coleta dados de um dispositivo via SNMP (ex: TP-Link ER605)
+ * OIDs padrão do IF-MIB e HOST-RESOURCES-MIB
+ */
+async function collectSnmpData(device) {
+  const version = device.snmp_version === '1' ? snmp.Version1 : snmp.Version2c;
+  const session = snmp.createSession(device.host, device.snmp_community || 'public', { version, timeout: 10000 });
+
+  return new Promise((resolve) => {
+    const result = {
+      success: true,
+      identity: device.name,
+      resource: {},
+      health: {},
+      interfaces: [],
+      ipAddresses: [],
+      pppoeClients: [],
+      logs: [],
+      dhcpLeases: [],
+      dhcpPools: [],
+      dhcpNetworks: [],
+      dhcpServers: [],
+    };
+
+    // Coletar uptime do sistema
+    const sysOids = [
+      '1.3.6.1.2.1.1.1.0',  // sysDescr
+      '1.3.6.1.2.1.1.3.0',  // sysUpTime (em centésimos de segundo)
+      '1.3.6.1.2.1.1.5.0',  // sysName
+    ];
+
+    session.get(sysOids, (error, varbinds) => {
+      if (error) {
+        session.close();
+        resolve({ success: false, error: `SNMP error: ${error.message}` });
+        return;
+      }
+
+      for (const vb of varbinds) {
+        if (snmp.isVarbindError(vb)) continue;
+        const oidStr = vb.oid;
+        if (oidStr === '1.3.6.1.2.1.1.1.0') {
+          result.resource.version = vb.value.toString();
+        } else if (oidStr === '1.3.6.1.2.1.1.3.0') {
+          // sysUpTime em centésimos de segundo → converter para formato legível
+          const centiseconds = Number(vb.value);
+          const totalSecs = Math.floor(centiseconds / 100);
+          const days = Math.floor(totalSecs / 86400);
+          const hours = Math.floor((totalSecs % 86400) / 3600);
+          const mins = Math.floor((totalSecs % 3600) / 60);
+          result.resource.uptime = `${days}d${hours}h${mins}m`;
+        } else if (oidStr === '1.3.6.1.2.1.1.5.0') {
+          result.identity = vb.value.toString() || device.name;
+        }
+      }
+
+      // Coletar tabela de interfaces via subtree
+      const ifTableOid = '1.3.6.1.2.1.2.2.1';
+      session.subtree(ifTableOid, 20, (varbinds2) => {
+        for (const vb of varbinds2) {
+          if (snmp.isVarbindError(vb)) continue;
+          const parts = vb.oid.split('.');
+          const column = parseInt(parts[9]); // coluna na tabela
+          const ifIndex = parts[10]; // índice da interface
+
+          // Encontrar ou criar entrada da interface
+          let iface = result.interfaces.find(i => i._ifIndex === ifIndex);
+          if (!iface) {
+            iface = { _ifIndex: ifIndex, name: `if${ifIndex}`, running: false, disabled: false, type: 'unknown' };
+            result.interfaces.push(iface);
+          }
+
+          switch (column) {
+            case 2: // ifDescr
+              iface.name = vb.value.toString();
+              break;
+            case 3: // ifType
+              iface.type = `snmp-type-${vb.value}`;
+              break;
+            case 5: // ifSpeed (bps)
+              iface.speed = String(Number(vb.value));
+              break;
+            case 6: // ifPhysAddress (MAC)
+              if (vb.value && vb.value.length >= 6) {
+                iface['mac-address'] = Buffer.from(vb.value).toString('hex').match(/.{2}/g)?.join(':') || '';
+              }
+              break;
+            case 8: // ifOperStatus: 1=up, 2=down
+              iface.running = (Number(vb.value) === 1);
+              break;
+            case 10: // ifInOctets
+              iface['rx-byte'] = String(Number(vb.value));
+              break;
+            case 14: // ifInErrors
+              iface['rx-error'] = String(Number(vb.value));
+              break;
+            case 16: // ifOutOctets
+              iface['tx-byte'] = String(Number(vb.value));
+              break;
+            case 20: // ifOutErrors
+              iface['tx-error'] = String(Number(vb.value));
+              break;
+          }
+        }
+      }, (error2) => {
+        session.close();
+
+        // Limpar campos internos
+        for (const iface of result.interfaces) {
+          delete iface._ifIndex;
+          iface.running = iface.running ? 'true' : 'false';
+        }
+
+        if (error2) {
+          console.log(`  ⚠️ SNMP subtree warning: ${error2.message}`);
+        }
+
+        resolve(result);
+      });
+    });
+  });
 }
 
 // ==================== STATUS CHANGE DETECTION ====================
@@ -533,9 +669,11 @@ async function sendToSystem(config, deviceId, collectedData, changes, logAlerts,
 // ==================== MAIN LOOP ====================
 
 async function pollDevice(config, device) {
-  console.log(`\n🔄 Coletando dados de ${device.name} (${device.host})...`);
+  const devType = device.device_type || 'mikrotik';
+  const typeLabel = devType === 'snmp' ? 'SNMP' : 'Mikrotik';
+  console.log(`\n🔄 [${typeLabel}] Coletando dados de ${device.name} (${device.host})...`);
 
-  const data = await collectDeviceData(device);
+  const data = devType === 'snmp' ? await collectSnmpData(device) : await collectDeviceData(device);
 
   if (!data.success) {
     console.error(`  ❌ ${data.error}`);
@@ -549,9 +687,9 @@ async function pollDevice(config, device) {
     return;
   }
 
-  console.log(`  📊 ${data.interfaces.length} interfaces, ${data.ipAddresses.length} IPs, ${data.pppoeClients.length} PPPoE, ${data.dhcpLeases.length} DHCP leases`);
+  console.log(`  📊 ${data.interfaces.length} interfaces`);
   if (data.resource.version) {
-    console.log(`  ℹ️  RouterOS ${data.resource.version}, Uptime: ${data.resource.uptime || 'N/A'}`);
+    console.log(`  ℹ️  ${devType === 'snmp' ? data.resource.version : 'RouterOS ' + data.resource.version}, Uptime: ${data.resource.uptime || 'N/A'}`);
   }
 
   // Mostrar consumo de banda das interfaces UP
@@ -607,7 +745,7 @@ async function mainLoop() {
   const config = loadConfig();
 
   console.log('='.repeat(60));
-  console.log('  MIKROTIK VPS COLLECTOR');
+  console.log('  MIKROTIK & SNMP VPS COLLECTOR');
   console.log(`  Dispositivos: ${config.devices.length}`);
   console.log(`  Intervalo: ${config.poll_interval_seconds}s`);
   console.log('='.repeat(60));
@@ -615,12 +753,13 @@ async function mainLoop() {
   // Primeiro poll (preencher estados iniciais sem alertar)
   console.log('\n🚀 Coletando estado inicial...');
   for (const device of config.devices) {
-    const data = await collectDeviceData(device);
+    const devType = device.device_type || 'mikrotik';
+    const data = devType === 'snmp' ? await collectSnmpData(device) : await collectDeviceData(device);
     if (data.success) {
       detectChanges(device.device_id, device.name, data.interfaces, device.watch_interfaces);
-      const dhcp = analyzeDhcpLeases(data.dhcpLeases, data.dhcpPools, data.dhcpServers);
+      const dhcp = analyzeDhcpLeases(data.dhcpLeases || [], data.dhcpPools || [], data.dhcpServers || []);
       const capInfo = dhcp.total_capacity > 0 ? `, ${dhcp.total_capacity} IPs no pool (${dhcp.usage_pct}% uso)` : '';
-      console.log(`  ✅ ${device.name}: ${data.interfaces.length} interfaces, ${dhcp.total_leases} DHCP leases${capInfo}`);
+      console.log(`  ✅ [${devType.toUpperCase()}] ${device.name}: ${data.interfaces.length} interfaces${dhcp.total_leases > 0 ? `, ${dhcp.total_leases} DHCP leases` : ''}${capInfo}`);
       await sendToSystem(config, device.device_id, data, [], [], dhcp);
     } else {
       console.error(`  ❌ ${device.name}: ${data.error}`);
