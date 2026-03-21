@@ -192,10 +192,25 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Enviar notificação WhatsApp se houve mudanças, alertas de log ou DHCP alto
+    // Filtrar apenas alertas de log NOVOS (não presentes no último envio)
+    const previousLogMessages = new Set(
+      (device.last_log_alerts || []).map((a: any) => a.message || "")
+    );
+    const newLogAlerts = (log_alerts || []).filter(
+      (a: any) => !previousLogMessages.has(a.message || "")
+    );
+
+    // Filtrar DHCP alerts: só notificar se o estado de alerta mudou
+    const previousDhcp = device.last_dhcp_summary;
+    const previousDhcpWasHigh = previousDhcp?.total_leases > 0 &&
+      Math.round((previousDhcp.active_leases / previousDhcp.total_leases) * 100) >= 90;
+    const currentDhcpIsHigh = dhcpAlerts.length > 0;
+    const dhcpAlertsToSend = (currentDhcpIsHigh && !previousDhcpWasHigh) ? dhcpAlerts : [];
+
+    // Enviar notificação WhatsApp somente se há mudanças reais
     let whatsappSent = false;
-    if ((status_changes?.length > 0) || (log_alerts?.length > 0) || (dhcpAlerts.length > 0)) {
-      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], log_alerts || [], dhcp_summary, dhcpAlerts);
+    if ((status_changes?.length > 0) || (newLogAlerts.length > 0) || (dhcpAlertsToSend.length > 0)) {
+      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], newLogAlerts, dhcp_summary, dhcpAlertsToSend);
     }
 
     return new Response(
