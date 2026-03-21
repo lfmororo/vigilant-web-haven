@@ -236,10 +236,22 @@ Deno.serve(async (req) => {
     // Detect reboot for WhatsApp notification
     const rebootDetected = deviceUpdate.last_system_info?.reboot_detected === true;
 
+    // Detect high temperature (>70°C) with deduplication
+    const tempAlerts: string[] = [];
+    const currentHealth = deviceUpdate.last_system_info?.health || {};
+    const cpuTemp = parseFloat(currentHealth['cpu-temperature'] || currentHealth.temperature || currentHealth['board-temperature1'] || '0');
+    const previousHealth = device.last_system_info?.health || {};
+    const prevTemp = parseFloat(previousHealth['cpu-temperature'] || previousHealth.temperature || previousHealth['board-temperature1'] || '0');
+    const tempIsHigh = cpuTemp > 70;
+    const prevTempWasHigh = prevTemp > 70;
+    if (tempIsHigh && !prevTempWasHigh) {
+      tempAlerts.push(`🌡️ Temperatura CPU: *${cpuTemp}°C* (acima de 70°C)`);
+    }
+
     // Enviar notificação WhatsApp somente se há mudanças reais
     let whatsappSent = false;
-    if ((status_changes?.length > 0) || (newLogAlerts.length > 0) || (dhcpAlertsToSend.length > 0) || rebootDetected) {
-      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], newLogAlerts, dhcp_summary, dhcpAlertsToSend, rebootDetected ? deviceUpdate.last_system_info : null);
+    if ((status_changes?.length > 0) || (newLogAlerts.length > 0) || (dhcpAlertsToSend.length > 0) || rebootDetected || tempAlerts.length > 0) {
+      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], newLogAlerts, dhcp_summary, dhcpAlertsToSend, rebootDetected ? deviceUpdate.last_system_info : null, tempAlerts);
     }
 
     return new Response(
@@ -274,7 +286,8 @@ async function sendWhatsAppAlert(
   logAlerts: any[],
   dhcpSummary?: any,
   dhcpAlerts?: string[],
-  rebootInfo?: any
+  rebootInfo?: any,
+  tempAlerts?: string[]
 ): Promise<boolean> {
   // Carregar configurações WhatsApp
   const { data: settings } = await supabase
@@ -336,6 +349,15 @@ async function sendWhatsAppAlert(
     lines.push("");
   }
 
+  if (tempAlerts && tempAlerts.length > 0) {
+    lines.push("🌡️ *TEMPERATURA ALTA:*");
+    for (const alert of tempAlerts) {
+      lines.push(`  ${alert}`);
+    }
+    lines.push("");
+  }
+
+  if (statusChanges.length > 0) {
     lines.push("📊 *Mudanças de Status:*");
     for (const change of statusChanges) {
       const emoji = change.current_status === "up" ? "🟢" : "🔴";
