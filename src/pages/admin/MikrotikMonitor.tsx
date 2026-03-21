@@ -455,6 +455,47 @@ const MikrotikMonitor = () => {
     setPolling(null);
   };
 
+  const handleTestAlert = async (deviceId: string) => {
+    setPolling(deviceId);
+    try {
+      const device = devices.find(d => d.id === deviceId);
+      if (!device) throw new Error("Dispositivo não encontrado");
+
+      const { data, error } = await supabase.functions.invoke("mikrotik-vps-ingest", {
+        body: {
+          device_id: deviceId,
+          collected_data: { success: true, interfaces: [], ipAddresses: [], pppoeClients: [] },
+          status_changes: [
+            {
+              interface_name: "ether1-test",
+              previous_status: "up",
+              current_status: "down",
+            },
+            {
+              interface_name: "ether2-test",
+              previous_status: "down",
+              current_status: "up",
+            },
+          ],
+          log_alerts: [
+            { time: new Date().toLocaleTimeString("pt-BR"), message: "[TESTE] Simulação de alerta de log para validação do sistema" },
+          ],
+          dhcp_summary: device.last_dhcp_summary || { total_leases: 10, active_leases: 8, dynamic_leases: 6, static_leases: 2, by_server: {} },
+        },
+      });
+      if (error) throw error;
+      if (data?.whatsapp_sent) {
+        toast.success("Alerta de teste enviado via WhatsApp!");
+      } else {
+        toast.info("Teste processado, mas WhatsApp não foi enviado (verifique configurações)");
+      }
+      fetchDevices();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao enviar teste");
+    }
+    setPolling(null);
+  };
+
   const handleAddPingTarget = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDevice || !pingForm.target_ip) return;
