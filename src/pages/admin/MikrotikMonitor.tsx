@@ -449,6 +449,7 @@ const MikrotikMonitor = () => {
       fetchPingTargets(selectedDevice.id);
       fetchDhcpHistory(selectedDevice.id);
       fetchTrafficHistory(selectedDevice.id);
+      fetchSystemHistory(selectedDevice.id);
       setSelectedTrafficIface("");
     }
   }, [selectedDevice]);
