@@ -125,7 +125,18 @@ Deno.serve(async (req) => {
       last_error: null,
       last_polled_at: new Date().toISOString(),
     };
-    if (dhcp_summary) deviceUpdate.last_dhcp_summary = dhcp_summary;
+    if (dhcp_summary) {
+      deviceUpdate.last_dhcp_summary = dhcp_summary;
+      // Salvar histórico DHCP
+      await supabase.from("mikrotik_dhcp_history").insert({
+        device_id,
+        total_leases: dhcp_summary.total_leases || 0,
+        active_leases: dhcp_summary.active_leases || 0,
+        dynamic_leases: dhcp_summary.dynamic_leases || 0,
+        static_leases: dhcp_summary.static_leases || 0,
+        by_server: dhcp_summary.by_server || null,
+      });
+    }
     if (log_alerts?.length > 0) deviceUpdate.last_log_alerts = log_alerts.slice(0, 50);
     if (collected_data?.resource || collected_data?.identity) {
       deviceUpdate.last_system_info = {
