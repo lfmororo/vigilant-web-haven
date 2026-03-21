@@ -358,6 +358,20 @@ const MikrotikMonitor = () => {
     fetchClients();
   }, [fetchDevices]);
 
+  // Auto-refresh a cada 30 segundos
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      fetchDevices();
+      if (selectedDevice) {
+        fetchInterfaces(selectedDevice.id);
+        fetchDhcpHistory(selectedDevice.id);
+        fetchTrafficHistory(selectedDevice.id);
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, selectedDevice]);
+
   // Keep selectedDevice in sync with devices array
   useEffect(() => {
     if (selectedDevice) {
