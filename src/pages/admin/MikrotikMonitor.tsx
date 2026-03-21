@@ -641,6 +641,9 @@ const MikrotikMonitor = () => {
       is_active: editDevice.is_active,
       proxy_url: editDevice.proxy_url || null,
       api_port: editDevice.api_port || 8728,
+      device_type: editDevice.device_type || 'mikrotik',
+      snmp_community: editDevice.snmp_community || 'public',
+      snmp_version: editDevice.snmp_version || '2c',
     }).eq("id", editDevice.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Dispositivo atualizado");
