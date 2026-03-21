@@ -508,7 +508,13 @@ export type Database = {
           password: string
           port: number
           proxy_url: string | null
+          snmp_auth_passphrase: string | null
+          snmp_auth_protocol: string | null
           snmp_community: string | null
+          snmp_priv_passphrase: string | null
+          snmp_priv_protocol: string | null
+          snmp_security_level: string | null
+          snmp_user: string | null
           snmp_version: string | null
           updated_at: string
           use_ssl: boolean
@@ -531,7 +537,13 @@ export type Database = {
           password?: string
           port?: number
           proxy_url?: string | null
+          snmp_auth_passphrase?: string | null
+          snmp_auth_protocol?: string | null
           snmp_community?: string | null
+          snmp_priv_passphrase?: string | null
+          snmp_priv_protocol?: string | null
+          snmp_security_level?: string | null
+          snmp_user?: string | null
           snmp_version?: string | null
           updated_at?: string
           use_ssl?: boolean
@@ -554,7 +566,13 @@ export type Database = {
           password?: string
           port?: number
           proxy_url?: string | null
+          snmp_auth_passphrase?: string | null
+          snmp_auth_protocol?: string | null
           snmp_community?: string | null
+          snmp_priv_passphrase?: string | null
+          snmp_priv_protocol?: string | null
+          snmp_security_level?: string | null
+          snmp_user?: string | null
           snmp_version?: string | null
           updated_at?: string
           use_ssl?: boolean

@@ -36,6 +36,12 @@ interface MikrotikDevice {
   device_type: string;
   snmp_community: string | null;
   snmp_version: string | null;
+  snmp_security_level: string | null;
+  snmp_user: string | null;
+  snmp_auth_protocol: string | null;
+  snmp_auth_passphrase: string | null;
+  snmp_priv_protocol: string | null;
+  snmp_priv_passphrase: string | null;
   client?: { full_name: string };
   last_dhcp_summary?: any;
   last_log_alerts?: any[];
@@ -87,6 +93,7 @@ interface Client {
 
 const emptyDevice = {
   name: "", host: "", port: 443, username: "admin", password: "", use_ssl: true, client_id: "", proxy_url: "", api_port: 8728, device_type: "mikrotik", snmp_community: "public", snmp_version: "2c",
+  snmp_security_level: "noAuthNoPriv", snmp_user: "", snmp_auth_protocol: "MD5", snmp_auth_passphrase: "", snmp_priv_protocol: "DES", snmp_priv_passphrase: "",
 };
 
 const formatBytes = (bytes: number) => {
@@ -618,6 +625,12 @@ const MikrotikMonitor = () => {
       device_type: deviceForm.device_type || 'mikrotik',
       snmp_community: deviceForm.snmp_community || 'public',
       snmp_version: deviceForm.snmp_version || '2c',
+      snmp_security_level: deviceForm.snmp_security_level || 'noAuthNoPriv',
+      snmp_user: deviceForm.snmp_user || null,
+      snmp_auth_protocol: deviceForm.snmp_auth_protocol || 'MD5',
+      snmp_auth_passphrase: deviceForm.snmp_auth_passphrase || null,
+      snmp_priv_protocol: deviceForm.snmp_priv_protocol || 'DES',
+      snmp_priv_passphrase: deviceForm.snmp_priv_passphrase || null,
     };
     const { error } = await supabase.from("mikrotik_devices").insert(insertData);
     if (error) { toast.error(error.message); return; }
@@ -644,6 +657,12 @@ const MikrotikMonitor = () => {
       device_type: editDevice.device_type || 'mikrotik',
       snmp_community: editDevice.snmp_community || 'public',
       snmp_version: editDevice.snmp_version || '2c',
+      snmp_security_level: editDevice.snmp_security_level || 'noAuthNoPriv',
+      snmp_user: editDevice.snmp_user || null,
+      snmp_auth_protocol: editDevice.snmp_auth_protocol || 'MD5',
+      snmp_auth_passphrase: editDevice.snmp_auth_passphrase || null,
+      snmp_priv_protocol: editDevice.snmp_priv_protocol || 'DES',
+      snmp_priv_passphrase: editDevice.snmp_priv_passphrase || null,
     }).eq("id", editDevice.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Dispositivo atualizado");
@@ -790,10 +809,73 @@ const MikrotikMonitor = () => {
                 <SelectContent>
                   <SelectItem value="1">v1</SelectItem>
                   <SelectItem value="2c">v2c</SelectItem>
+                  <SelectItem value="3">v3</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
+
+          {form.snmp_version === '3' && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Usuário SNMPv3 *</Label>
+                  <Input value={form.snmp_user || ''} onChange={(e) => setForm({ ...form, snmp_user: e.target.value })} placeholder="snmpuser" />
+                </div>
+                <div>
+                  <Label>Nível de Segurança</Label>
+                  <Select value={form.snmp_security_level || 'noAuthNoPriv'} onValueChange={(v) => setForm({ ...form, snmp_security_level: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="noAuthNoPriv">noAuthNoPriv</SelectItem>
+                      <SelectItem value="authNoPriv">authNoPriv</SelectItem>
+                      <SelectItem value="authPriv">authPriv</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {(form.snmp_security_level === 'authNoPriv' || form.snmp_security_level === 'authPriv') && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Protocolo Auth</Label>
+                    <Select value={form.snmp_auth_protocol || 'MD5'} onValueChange={(v) => setForm({ ...form, snmp_auth_protocol: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="MD5">MD5</SelectItem>
+                        <SelectItem value="SHA">SHA</SelectItem>
+                        <SelectItem value="SHA256">SHA-256</SelectItem>
+                        <SelectItem value="SHA512">SHA-512</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Senha Auth *</Label>
+                    <Input type="password" value={form.snmp_auth_passphrase || ''} onChange={(e) => setForm({ ...form, snmp_auth_passphrase: e.target.value })} placeholder="••••••••" />
+                  </div>
+                </div>
+              )}
+              {form.snmp_security_level === 'authPriv' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Protocolo Priv</Label>
+                    <Select value={form.snmp_priv_protocol || 'DES'} onValueChange={(v) => setForm({ ...form, snmp_priv_protocol: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="DES">DES</SelectItem>
+                        <SelectItem value="AES">AES</SelectItem>
+                        <SelectItem value="AES256">AES-256</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Senha Priv *</Label>
+                    <Input type="password" value={form.snmp_priv_passphrase || ''} onChange={(e) => setForm({ ...form, snmp_priv_passphrase: e.target.value })} placeholder="••••••••" />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
           <p className="text-xs text-muted-foreground">Coleta via SNMP (IF-MIB). Certifique-se de que o SNMP está habilitado no dispositivo.</p>
         </>
       ) : (
