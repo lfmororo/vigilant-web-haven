@@ -542,10 +542,23 @@ async function collectSnmpData(device) {
 
           session.close();
 
-          // Processar e limpar interfaces
+          // Processar e limpar interfaces - filtrar tipos irrelevantes
+          // Tipos a ignorar: 24=loopback, 131=tunnel, 1=other, 53=propVirtual (some devices)
+          const ignoredIfTypes = new Set([24, 131, 1]);
+          // Nomes a ignorar (padrões comuns de interfaces virtuais/phantom)
+          const ignoredNamePatterns = [/^lo$/i, /^null/i, /^dummy/i, /^sit\d/i, /^virbr/i, /^docker/i, /^veth/i, /^br-/i];
+
           for (const [ifIndex, iface] of ifMap) {
-            // Filtrar loopback e interfaces sem nome útil
-            if (iface._ifType === 24) continue; // loopback
+            // Filtrar por tipo
+            if (ignoredIfTypes.has(iface._ifType)) continue;
+            // Filtrar por nome
+            if (ignoredNamePatterns.some(p => p.test(iface.name))) continue;
+            // Filtrar interfaces sem nome real (still "ifN") que estão down e sem tráfego
+            if (iface.name === `if${ifIndex}` && !iface.running &&
+                (parseInt(iface['tx-byte'] || '0') === 0) && (parseInt(iface['rx-byte'] || '0') === 0)) {
+              continue;
+            }
+            // Usar alias como nome se nome é genérico
             if (iface.name === `if${ifIndex}` && iface._alias) {
               iface.name = iface._alias;
             }
