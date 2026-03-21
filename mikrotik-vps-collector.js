@@ -114,6 +114,31 @@ async function collectDeviceData(device) {
     // Coletar interfaces
     const interfaces = await client.menu('/interface').getAll();
 
+    // Coletar taxa de banda em tempo real (tx-rate/rx-rate) das interfaces UP
+    const runningIfaces = (interfaces || []).filter(i => 
+      (i.running === 'true' || i.running === true) && 
+      (i.disabled !== 'true' && i.disabled !== true)
+    );
+    const trafficRates = new Map();
+    for (const iface of runningIfaces) {
+      const ifName = iface.name;
+      if (!ifName) continue;
+      try {
+        const monitor = await client.menu('/interface').exec('monitor-traffic', {
+          interface: ifName,
+          once: '',
+        });
+        if (monitor && monitor.length > 0) {
+          trafficRates.set(ifName, {
+            'tx-bits-per-second': parseInt(monitor[0]['tx-bits-per-second'] || '0') || 0,
+            'rx-bits-per-second': parseInt(monitor[0]['rx-bits-per-second'] || '0') || 0,
+          });
+        }
+      } catch (_) {
+        // Alguns tipos de interface podem não suportar monitor-traffic
+      }
+    }
+
     // Coletar endereços IP
     let ipAddresses = [];
     try { ipAddresses = await client.menu('/ip/address').getAll(); } catch (_) {}
