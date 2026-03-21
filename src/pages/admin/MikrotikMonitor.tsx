@@ -319,6 +319,7 @@ const MikrotikMonitor = () => {
   const [dhcpHistory, setDhcpHistory] = useState<any[]>([]);
   const [trafficHistory, setTrafficHistory] = useState<any[]>([]);
   const [selectedTrafficIface, setSelectedTrafficIface] = useState<string>("");
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   const fetchDevices = useCallback(async () => {
     const { data } = await supabase
@@ -356,6 +357,20 @@ const MikrotikMonitor = () => {
     fetchDevices();
     fetchClients();
   }, [fetchDevices]);
+
+  // Auto-refresh a cada 30 segundos
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      fetchDevices();
+      if (selectedDevice) {
+        fetchInterfaces(selectedDevice.id);
+        fetchDhcpHistory(selectedDevice.id);
+        fetchTrafficHistory(selectedDevice.id);
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, selectedDevice]);
 
   // Keep selectedDevice in sync with devices array
   useEffect(() => {
@@ -619,9 +634,17 @@ const MikrotikMonitor = () => {
             <h1 className="text-2xl font-bold">Monitoramento Mikrotik</h1>
             <p className="text-muted-foreground">Monitore links e interfaces de RouterBoards</p>
           </div>
-          <Button onClick={() => { setDeviceForm(emptyDevice); setShowCreateDialog(true); }}>
-            <Plus className="w-4 h-4 mr-2" /> Novo Dispositivo
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mr-2">
+              <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} id="auto-refresh" />
+              <Label htmlFor="auto-refresh" className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+                Auto-refresh 30s
+              </Label>
+            </div>
+            <Button onClick={() => { setDeviceForm(emptyDevice); setShowCreateDialog(true); }}>
+              <Plus className="w-4 h-4 mr-2" /> Novo Dispositivo
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
