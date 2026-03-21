@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download, Server, ScrollText, Globe, TrendingUp } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
 
 interface MikrotikDevice {
   id: string;
@@ -886,58 +886,103 @@ const MikrotikMonitor = () => {
                       <CardTitle className="text-base">DHCP Leases - {selectedDevice.name}</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      {selectedDevice.last_dhcp_summary ? (
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            <div className="p-3 rounded-lg border bg-card">
-                              <p className="text-xs text-muted-foreground">Total Leases</p>
-                              <p className="text-2xl font-bold">{selectedDevice.last_dhcp_summary.total_leases}</p>
+                      {selectedDevice.last_dhcp_summary ? (() => {
+                        const ds = selectedDevice.last_dhcp_summary;
+                        const usagePct = ds.total_leases > 0 ? Math.round((ds.active_leases / ds.total_leases) * 100) : 0;
+                        const pieData = [
+                          { name: "Dinâmicos", value: ds.dynamic_leases || 0 },
+                          { name: "Estáticos", value: ds.static_leases || 0 },
+                          { name: "Inativos", value: Math.max(0, (ds.total_leases || 0) - (ds.active_leases || 0)) },
+                        ].filter(d => d.value > 0);
+                        const PIE_COLORS = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--muted))"];
+                        return (
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                              <div className="p-3 rounded-lg border bg-card">
+                                <p className="text-xs text-muted-foreground">Total Leases</p>
+                                <p className="text-2xl font-bold">{ds.total_leases}</p>
+                              </div>
+                              <div className="p-3 rounded-lg border bg-card">
+                                <p className="text-xs text-muted-foreground">Ativos</p>
+                                <p className="text-2xl font-bold text-primary">{ds.active_leases}</p>
+                              </div>
+                              <div className="p-3 rounded-lg border bg-card">
+                                <p className="text-xs text-muted-foreground">Dinâmicos</p>
+                                <p className="text-2xl font-bold">{ds.dynamic_leases}</p>
+                              </div>
+                              <div className="p-3 rounded-lg border bg-card">
+                                <p className="text-xs text-muted-foreground">Estáticos</p>
+                                <p className="text-2xl font-bold">{ds.static_leases}</p>
+                              </div>
                             </div>
-                            <div className="p-3 rounded-lg border bg-card">
-                              <p className="text-xs text-muted-foreground">Ativos</p>
-                              <p className="text-2xl font-bold text-primary">{selectedDevice.last_dhcp_summary.active_leases}</p>
+
+                            {/* Utilização geral + Pie chart */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div className="p-4 rounded-lg border bg-card space-y-3">
+                                <h4 className="text-sm font-semibold">Utilização Geral</h4>
+                                <div className="flex items-center gap-3">
+                                  <Progress value={usagePct} className="h-3 flex-1" />
+                                  <span className={`text-lg font-bold ${usagePct > 80 ? "text-destructive" : usagePct > 60 ? "text-orange-500" : "text-primary"}`}>
+                                    {usagePct}%
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {ds.active_leases} de {ds.total_leases} leases em uso
+                                </p>
+                              </div>
+                              {pieData.length > 0 && (
+                                <div className="p-4 rounded-lg border bg-card">
+                                  <h4 className="text-sm font-semibold mb-2">Distribuição</h4>
+                                  <ResponsiveContainer width="100%" height={150}>
+                                    <PieChart>
+                                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                                        {pieData.map((_, idx) => (
+                                          <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+                                        ))}
+                                      </Pie>
+                                      <RechartsTooltip />
+                                    </PieChart>
+                                  </ResponsiveContainer>
+                                </div>
+                              )}
                             </div>
-                            <div className="p-3 rounded-lg border bg-card">
-                              <p className="text-xs text-muted-foreground">Dinâmicos</p>
-                              <p className="text-2xl font-bold">{selectedDevice.last_dhcp_summary.dynamic_leases}</p>
-                            </div>
-                            <div className="p-3 rounded-lg border bg-card">
-                              <p className="text-xs text-muted-foreground">Estáticos</p>
-                              <p className="text-2xl font-bold">{selectedDevice.last_dhcp_summary.static_leases}</p>
-                            </div>
-                          </div>
-                          {selectedDevice.last_dhcp_summary.by_server && Object.keys(selectedDevice.last_dhcp_summary.by_server).length > 0 && (
-                            <div>
-                              <h4 className="text-sm font-semibold mb-2">Por Servidor DHCP</h4>
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Servidor</TableHead>
-                                    <TableHead>Total</TableHead>
-                                    <TableHead>Ativos</TableHead>
-                                    <TableHead>Utilização</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {Object.entries(selectedDevice.last_dhcp_summary.by_server).map(([server, info]: [string, any]) => (
-                                    <TableRow key={server}>
-                                      <TableCell className="font-medium text-sm">{server}</TableCell>
-                                      <TableCell>{info.total}</TableCell>
-                                      <TableCell>{info.active}</TableCell>
-                                      <TableCell>
-                                        <div className="flex items-center gap-2">
-                                          <Progress value={info.total > 0 ? (info.active / info.total) * 100 : 0} className="h-2 w-20" />
-                                          <span className="text-xs">{info.total > 0 ? Math.round((info.active / info.total) * 100) : 0}%</span>
-                                        </div>
-                                      </TableCell>
+
+                            {ds.by_server && Object.keys(ds.by_server).length > 0 && (
+                              <div>
+                                <h4 className="text-sm font-semibold mb-2">Por Servidor DHCP</h4>
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Servidor</TableHead>
+                                      <TableHead>Total</TableHead>
+                                      <TableHead>Ativos</TableHead>
+                                      <TableHead>Utilização</TableHead>
                                     </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
+                                  </TableHeader>
+                                  <TableBody>
+                                    {Object.entries(ds.by_server).map(([server, info]: [string, any]) => {
+                                      const serverPct = info.total > 0 ? Math.round((info.active / info.total) * 100) : 0;
+                                      return (
+                                        <TableRow key={server}>
+                                          <TableCell className="font-medium text-sm">{server}</TableCell>
+                                          <TableCell>{info.total}</TableCell>
+                                          <TableCell>{info.active}</TableCell>
+                                          <TableCell>
+                                            <div className="flex items-center gap-2">
+                                              <Progress value={serverPct} className="h-2 w-20" />
+                                              <span className={`text-xs font-medium ${serverPct > 80 ? "text-destructive" : ""}`}>{serverPct}%</span>
+                                            </div>
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })() : (
                         <p className="text-center text-muted-foreground py-4">Dados DHCP não disponíveis. Execute o collector na VPS para coletar.</p>
                       )}
 
