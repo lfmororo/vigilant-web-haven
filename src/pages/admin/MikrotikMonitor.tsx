@@ -286,6 +286,20 @@ const MikrotikMonitor = () => {
           <Label>Mostrar senha</Label>
         </div>
       </div>
+      <div className="border-t pt-4 mt-2">
+        <p className="text-sm font-medium mb-2 text-muted-foreground">Proxy (para RouterOS 6.x sem API REST)</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>URL do Proxy</Label>
+            <Input value={form.proxy_url || ""} onChange={(e) => setForm({ ...form, proxy_url: e.target.value })} placeholder="http://seu-vps:3700" />
+          </div>
+          <div>
+            <Label>Porta API (8728)</Label>
+            <Input type="number" value={form.api_port || 8728} onChange={(e) => setForm({ ...form, api_port: parseInt(e.target.value) || 8728 })} />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">Preencha apenas se o equipamento não suporta API REST (RouterOS &lt; 7.1)</p>
+      </div>
       {isEdit && (
         <div className="flex items-center gap-2">
           <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
