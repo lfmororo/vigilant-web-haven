@@ -155,8 +155,8 @@ Deno.serve(async (req) => {
       });
     }
     if (log_alerts?.length > 0) deviceUpdate.last_log_alerts = log_alerts.slice(0, 50);
-    if (collected_data?.resource || collected_data?.identity) {
-      deviceUpdate.last_system_info = {
+    if (collected_data?.resource || collected_data?.identity || collected_data?.health) {
+      const sysInfo: any = {
         identity: collected_data.identity || '',
         version: collected_data.resource?.version || '',
         uptime: collected_data.resource?.uptime || '',
@@ -166,7 +166,33 @@ Deno.serve(async (req) => {
         'total-memory': collected_data.resource?.['total-memory'] || collected_data.resource?.totalMemory || '',
         'board-name': collected_data.resource?.['board-name'] || collected_data.resource?.boardName || '',
         architecture: collected_data.resource?.['architecture-name'] || collected_data.resource?.architectureName || '',
+        'cpu-count': collected_data.resource?.['cpu-count'] || collected_data.resource?.cpuCount || '',
+        'cpu-frequency': collected_data.resource?.['cpu-frequency'] || collected_data.resource?.cpuFrequency || '',
       };
+      // Health data (temperature, voltage, fan)
+      if (collected_data.health && typeof collected_data.health === 'object') {
+        sysInfo.health = collected_data.health;
+      }
+      // Detect reboot by comparing uptime
+      const previousInfo = device.last_system_info;
+      if (previousInfo?.uptime && sysInfo.uptime) {
+        const parseUptimeSeconds = (u: string): number => {
+          let total = 0;
+          const weeks = u.match(/(\d+)w/); if (weeks) total += parseInt(weeks[1]) * 604800;
+          const days = u.match(/(\d+)d/); if (days) total += parseInt(days[1]) * 86400;
+          const hours = u.match(/(\d+)h/); if (hours) total += parseInt(hours[1]) * 3600;
+          const mins = u.match(/(\d+)m/); if (mins) total += parseInt(mins[1]) * 60;
+          const secs = u.match(/(\d+)s/); if (secs) total += parseInt(secs[1]);
+          return total;
+        };
+        const prevSec = parseUptimeSeconds(previousInfo.uptime);
+        const curSec = parseUptimeSeconds(sysInfo.uptime);
+        if (prevSec > 0 && curSec < prevSec && (prevSec - curSec) > 120) {
+          sysInfo.reboot_detected = true;
+          sysInfo.previous_uptime = previousInfo.uptime;
+        }
+      }
+      deviceUpdate.last_system_info = sysInfo;
     }
     await supabase
       .from("mikrotik_devices")
@@ -207,10 +233,13 @@ Deno.serve(async (req) => {
     const currentDhcpIsHigh = dhcpAlerts.length > 0;
     const dhcpAlertsToSend = (currentDhcpIsHigh && !previousDhcpWasHigh) ? dhcpAlerts : [];
 
+    // Detect reboot for WhatsApp notification
+    const rebootDetected = deviceUpdate.last_system_info?.reboot_detected === true;
+
     // Enviar notificação WhatsApp somente se há mudanças reais
     let whatsappSent = false;
-    if ((status_changes?.length > 0) || (newLogAlerts.length > 0) || (dhcpAlertsToSend.length > 0)) {
-      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], newLogAlerts, dhcp_summary, dhcpAlertsToSend);
+    if ((status_changes?.length > 0) || (newLogAlerts.length > 0) || (dhcpAlertsToSend.length > 0) || rebootDetected) {
+      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], newLogAlerts, dhcp_summary, dhcpAlertsToSend, rebootDetected ? deviceUpdate.last_system_info : null);
     }
 
     return new Response(
@@ -244,7 +273,8 @@ async function sendWhatsAppAlert(
   statusChanges: any[],
   logAlerts: any[],
   dhcpSummary?: any,
-  dhcpAlerts?: string[]
+  dhcpAlerts?: string[],
+  rebootInfo?: any
 ): Promise<boolean> {
   // Carregar configurações WhatsApp
   const { data: settings } = await supabase
@@ -299,7 +329,13 @@ async function sendWhatsAppAlert(
   lines.push(`🌐 IP: ${device.host}`);
   lines.push("");
 
-  if (statusChanges.length > 0) {
+  if (rebootInfo?.reboot_detected) {
+    lines.push("🔄 *REINICIALIZAÇÃO DETECTADA!*");
+    lines.push(`  Uptime anterior: ${rebootInfo.previous_uptime}`);
+    lines.push(`  Uptime atual: ${rebootInfo.uptime}`);
+    lines.push("");
+  }
+
     lines.push("📊 *Mudanças de Status:*");
     for (const change of statusChanges) {
       const emoji = change.current_status === "up" ? "🟢" : "🔴";

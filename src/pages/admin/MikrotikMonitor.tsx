@@ -157,11 +157,19 @@ async function collectDeviceData(device) {
     let pppoeClients = []; try { pppoeClients = await client.menu('/interface/pppoe-client').getAll(); } catch (_) {}
     let identity = ''; try { const r = await client.menu('/system/identity').getAll(); identity = r?.[0]?.name || ''; } catch (_) {}
     let resource = {}; try { const r = await client.menu('/system/resource').getAll(); resource = r?.[0] || {}; } catch (_) {}
+    let health = {}; try {
+      const h = await client.menu('/system/health').getAll();
+      if (h && h.length > 0) {
+        if (h[0]?.name && h[0]?.value !== undefined) {
+          for (const item of h) health[item.name] = item.value;
+        } else { health = h[0] || {}; }
+      }
+    } catch (_) {}
     let logs = []; try { const r = await client.menu('/log').getAll(); logs = (r || []).slice(-200); } catch (_) {}
     let dhcpLeases = []; try { dhcpLeases = await client.menu('/ip/dhcp-server/lease').getAll(); } catch (_) {}
 
     await api.disconnect();
-    return { success: true, identity, resource, interfaces: interfaces || [], ipAddresses: ipAddresses || [], pppoeClients: pppoeClients || [], logs, dhcpLeases: dhcpLeases || [] };
+    return { success: true, identity, resource, health, interfaces: interfaces || [], ipAddresses: ipAddresses || [], pppoeClients: pppoeClients || [], logs, dhcpLeases: dhcpLeases || [] };
   } catch (err) {
     if (api) { try { await api.disconnect(); } catch (_) {} }
     return { success: false, error: err.message };
@@ -189,13 +197,17 @@ function detectChanges(deviceId, deviceName, currentInterfaces, watchInterfaces)
 
 function detectLogAlerts(logs) {
   const alerts = [];
-  const keywords = ['down', 'error', 'fail', 'critical', 'link down', 'disconnected', 'timeout', 'login failure', 'denied', 'unreachable'];
+  const loginKw = ['login failure', 'denied', 'invalid user', 'wrong password', 'authentication failed'];
+  const ifaceKw = ['link down', 'disconnected', 'down', 'lost connection'];
+  const systemKw = ['error', 'fail', 'critical', 'kernel', 'out of memory', 'watchdog', 'reboot', 'unreachable'];
   for (const log of logs) {
     const msg = (log.message || '').toLowerCase();
     const topic = (log.topics || '').toLowerCase();
-    if (keywords.some(kw => msg.includes(kw)) || topic.includes('error') || topic.includes('critical') || topic.includes('warning')) {
-      alerts.push({ time: log.time || '', topics: log.topics || '', message: log.message || '' });
-    }
+    let category = null;
+    if (loginKw.some(kw => msg.includes(kw))) category = 'login';
+    else if (ifaceKw.some(kw => msg.includes(kw)) || (topic.includes('interface') && msg.includes('down'))) category = 'interface';
+    else if (systemKw.some(kw => msg.includes(kw)) || topic.includes('error') || topic.includes('critical') || topic.includes('warning')) category = 'system';
+    if (category) alerts.push({ time: log.time || '', topics: log.topics || '', message: log.message || '', category });
   }
   return alerts;
 }
@@ -1059,22 +1071,47 @@ const MikrotikMonitor = () => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      {selectedDevice.last_log_alerts && selectedDevice.last_log_alerts.length > 0 ? (
-                        <div className="space-y-2 max-h-96 overflow-y-auto">
-                          {selectedDevice.last_log_alerts.map((log: any, i: number) => (
-                            <div key={i} className="flex items-start gap-2 p-2 rounded border text-sm">
-                              <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  {log.time && <span className="text-xs text-muted-foreground font-mono">{log.time}</span>}
-                                  {log.topics && <Badge variant="outline" className="text-xs">{log.topics}</Badge>}
-                                </div>
-                                <p className="text-sm mt-0.5 break-words">{log.message}</p>
+                      {selectedDevice.last_log_alerts && selectedDevice.last_log_alerts.length > 0 ? (() => {
+                        const allLogs = selectedDevice.last_log_alerts || [];
+                        const loginLogs = allLogs.filter((l: any) => l.category === 'login');
+                        const ifaceLogs = allLogs.filter((l: any) => l.category === 'interface');
+                        const systemLogs = allLogs.filter((l: any) => l.category === 'system');
+                        const otherLogs = allLogs.filter((l: any) => !l.category);
+
+                        const renderLogGroup = (title: string, icon: string, items: any[], color: string) => {
+                          if (items.length === 0) return null;
+                          return (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span>{icon}</span>
+                                <h4 className="text-sm font-semibold">{title}</h4>
+                                <Badge variant="outline" className="text-xs">{items.length}</Badge>
                               </div>
+                              {items.map((log: any, i: number) => (
+                                <div key={i} className="flex items-start gap-2 p-2 rounded border text-sm ml-4">
+                                  <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${color}`} />
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      {log.time && <span className="text-xs text-muted-foreground font-mono">{log.time}</span>}
+                                      {log.topics && <Badge variant="outline" className="text-xs">{log.topics}</Badge>}
+                                    </div>
+                                    <p className="text-sm mt-0.5 break-words">{log.message}</p>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      ) : (
+                          );
+                        };
+
+                        return (
+                          <div className="space-y-4 max-h-[500px] overflow-y-auto">
+                            {renderLogGroup("Login Inválido / Tentativas de Invasão", "🔐", loginLogs, "text-destructive")}
+                            {renderLogGroup("Interfaces Caindo", "🔌", ifaceLogs, "text-destructive")}
+                            {renderLogGroup("Erros de Sistema", "⚙️", systemLogs, "text-muted-foreground")}
+                            {renderLogGroup("Outros Alertas", "📋", otherLogs, "text-muted-foreground")}
+                          </div>
+                        );
+                      })() : (
                         <p className="text-center text-muted-foreground py-4">Nenhum alerta nos logs. Execute o collector na VPS para monitorar.</p>
                       )}
                     </CardContent>
@@ -1087,26 +1124,102 @@ const MikrotikMonitor = () => {
                       <CardTitle className="text-base">Informações do Sistema - {selectedDevice.name}</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      {selectedDevice.last_system_info ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {[
-                            { label: "Identidade", value: selectedDevice.last_system_info.identity },
-                            { label: "RouterOS", value: selectedDevice.last_system_info.version },
-                            { label: "Uptime", value: selectedDevice.last_system_info.uptime },
-                            { label: "Board", value: selectedDevice.last_system_info['board-name'] },
-                            { label: "Arquitetura", value: selectedDevice.last_system_info.architecture },
-                            { label: "CPU", value: selectedDevice.last_system_info.cpu },
-                            { label: "Carga CPU", value: selectedDevice.last_system_info['cpu-load'] ? `${selectedDevice.last_system_info['cpu-load']}%` : '' },
-                            { label: "Memória Total", value: selectedDevice.last_system_info['total-memory'] ? formatBytes(parseInt(selectedDevice.last_system_info['total-memory']) || 0) : '' },
-                            { label: "Memória Livre", value: selectedDevice.last_system_info['free-memory'] ? formatBytes(parseInt(selectedDevice.last_system_info['free-memory']) || 0) : '' },
-                          ].filter(item => item.value).map((item) => (
-                            <div key={item.label} className="p-3 rounded-lg border bg-card">
-                              <p className="text-xs text-muted-foreground">{item.label}</p>
-                              <p className="text-sm font-medium mt-0.5">{item.value}</p>
+                      {selectedDevice.last_system_info ? (() => {
+                        const info = selectedDevice.last_system_info;
+                        const health = info.health || {};
+                        const cpuTemp = health['cpu-temperature'] || health.temperature || health['board-temperature1'] || null;
+                        const voltage = health.voltage || health['input-voltage'] || null;
+                        const fanSpeed = health['fan1-speed'] || health['fan-speed'] || health.fan || null;
+                        const powerConsumption = health['power-consumption'] || null;
+                        const memUsedPct = info['total-memory'] && info['free-memory']
+                          ? Math.round(((parseInt(info['total-memory']) - parseInt(info['free-memory'])) / parseInt(info['total-memory'])) * 100)
+                          : null;
+
+                        return (
+                          <div className="space-y-6">
+                            {info.reboot_detected && (
+                              <div className="p-3 rounded-lg border border-destructive bg-destructive/10 flex items-center gap-3">
+                                <AlertTriangle className="w-5 h-5 text-destructive" />
+                                <div>
+                                  <p className="text-sm font-semibold text-destructive">⚠️ Reinicialização Detectada!</p>
+                                  <p className="text-xs text-muted-foreground">Uptime anterior: {info.previous_uptime} → Atual: {info.uptime}</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {(cpuTemp || voltage || fanSpeed || powerConsumption) && (
+                              <div>
+                                <h4 className="text-sm font-semibold mb-3">🌡️ Temperatura & Hardware</h4>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                  {cpuTemp && (
+                                    <div className="p-3 rounded-lg border bg-card">
+                                      <p className="text-xs text-muted-foreground">Temp. CPU</p>
+                                      <p className={`text-2xl font-bold ${Number(cpuTemp) > 70 ? "text-destructive" : Number(cpuTemp) > 55 ? "text-orange-500" : "text-primary"}`}>
+                                        {cpuTemp}°C
+                                      </p>
+                                    </div>
+                                  )}
+                                  {voltage && (
+                                    <div className="p-3 rounded-lg border bg-card">
+                                      <p className="text-xs text-muted-foreground">Voltagem</p>
+                                      <p className="text-2xl font-bold">{voltage}V</p>
+                                    </div>
+                                  )}
+                                  {fanSpeed && (
+                                    <div className="p-3 rounded-lg border bg-card">
+                                      <p className="text-xs text-muted-foreground">Fan</p>
+                                      <p className="text-2xl font-bold">{fanSpeed} RPM</p>
+                                    </div>
+                                  )}
+                                  {powerConsumption && (
+                                    <div className="p-3 rounded-lg border bg-card">
+                                      <p className="text-xs text-muted-foreground">Consumo</p>
+                                      <p className="text-2xl font-bold">{powerConsumption}W</p>
+                                    </div>
+                                  )}
+                                </div>
+                                {Object.keys(health).length > 0 && (
+                                  <details className="mt-3">
+                                    <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">Ver todos os sensores ({Object.keys(health).length})</summary>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                                      {Object.entries(health).map(([key, val]) => (
+                                        <div key={key} className="p-2 rounded border text-xs">
+                                          <span className="text-muted-foreground">{key}:</span> <span className="font-medium">{String(val)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </details>
+                                )}
+                              </div>
+                            )}
+
+                            <div>
+                              <h4 className="text-sm font-semibold mb-3">⏱️ Uptime & Sistema</h4>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {[
+                                  { label: "Identidade", value: info.identity },
+                                  { label: "RouterOS", value: info.version },
+                                  { label: "Uptime", value: info.uptime, highlight: true },
+                                  { label: "Board", value: info['board-name'] },
+                                  { label: "Arquitetura", value: info.architecture },
+                                  { label: "CPU", value: info.cpu },
+                                  { label: "CPU Cores", value: info['cpu-count'] },
+                                  { label: "CPU Freq", value: info['cpu-frequency'] ? `${info['cpu-frequency']} MHz` : '' },
+                                  { label: "Carga CPU", value: info['cpu-load'] ? `${info['cpu-load']}%` : '' },
+                                  { label: "Memória Total", value: info['total-memory'] ? formatBytes(parseInt(info['total-memory']) || 0) : '' },
+                                  { label: "Memória Livre", value: info['free-memory'] ? formatBytes(parseInt(info['free-memory']) || 0) : '' },
+                                  { label: "Uso de Memória", value: memUsedPct !== null ? `${memUsedPct}%` : '' },
+                                ].filter(item => item.value).map((item: any) => (
+                                  <div key={item.label} className={`p-3 rounded-lg border bg-card ${item.highlight ? 'border-primary/30' : ''}`}>
+                                    <p className="text-xs text-muted-foreground">{item.label}</p>
+                                    <p className="text-sm font-medium mt-0.5">{item.value}</p>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                          ))}
-                        </div>
-                      ) : (
+                          </div>
+                        );
+                      })() : (
                         <p className="text-center text-muted-foreground py-4">Dados do sistema não disponíveis. Execute o collector na VPS para coletar.</p>
                       )}
                     </CardContent>

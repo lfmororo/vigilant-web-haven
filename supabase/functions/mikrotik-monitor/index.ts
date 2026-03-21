@@ -405,6 +405,98 @@ async function fetchDeviceDataDirect(supabase: any, device: any) {
       else await pppoeRes.text();
     } catch (_) {}
 
+    // Collect system resource data
+    let systemResource: any = null;
+    try {
+      const resRes = await safeFetch(`${baseUrl}/system/resource`, { headers });
+      if (resRes.ok) {
+        const resData = await resRes.json();
+        systemResource = Array.isArray(resData) ? resData[0] : resData;
+      } else { await resRes.text(); }
+    } catch (_) {}
+
+    // Collect system health data (temperature, voltage, fan)
+    let systemHealth: any[] = [];
+    try {
+      const healthRes = await safeFetch(`${baseUrl}/system/health`, { headers });
+      if (healthRes.ok) {
+        const healthData = await healthRes.json();
+        systemHealth = Array.isArray(healthData) ? healthData : [healthData];
+      } else { await healthRes.text(); }
+    } catch (_) {}
+
+    // Collect system identity
+    let systemIdentity = "";
+    try {
+      const idRes = await safeFetch(`${baseUrl}/system/identity`, { headers });
+      if (idRes.ok) {
+        const idData = await idRes.json();
+        systemIdentity = Array.isArray(idData) ? idData[0]?.name || "" : idData?.name || "";
+      } else { await idRes.text(); }
+    } catch (_) {}
+
+    // Build system info object with health data
+    const systemInfo: any = {
+      identity: systemIdentity,
+    };
+    if (systemResource) {
+      systemInfo.version = systemResource.version || "";
+      systemInfo.uptime = systemResource.uptime || "";
+      systemInfo.cpu = systemResource.cpu || "";
+      systemInfo["cpu-load"] = systemResource["cpu-load"] || "";
+      systemInfo["free-memory"] = systemResource["free-memory"] || "";
+      systemInfo["total-memory"] = systemResource["total-memory"] || "";
+      systemInfo["board-name"] = systemResource["board-name"] || "";
+      systemInfo.architecture = systemResource["architecture-name"] || "";
+      systemInfo["cpu-count"] = systemResource["cpu-count"] || "";
+      systemInfo["cpu-frequency"] = systemResource["cpu-frequency"] || "";
+    }
+    // Parse health data (RouterOS 7 returns array of {name, value, type})
+    if (systemHealth.length > 0) {
+      const healthMap: any = {};
+      for (const item of systemHealth) {
+        if (item.name && item.value !== undefined) {
+          healthMap[item.name] = item.value;
+        } else {
+          // RouterOS may return flat object with keys like "temperature", "voltage", etc.
+          for (const [k, v] of Object.entries(item)) {
+            if (k !== ".id" && k !== ".type" && v !== undefined) {
+              healthMap[k] = v;
+            }
+          }
+        }
+      }
+      systemInfo.health = healthMap;
+    }
+
+    // Detect reboot: compare previous uptime with current
+    const previousSystemInfo = device.last_system_info;
+    if (previousSystemInfo?.uptime && systemInfo.uptime) {
+      const prevUptime = previousSystemInfo.uptime;
+      const curUptime = systemInfo.uptime;
+      // Simple heuristic: if current uptime is shorter than previous, device rebooted
+      const parseUptimeSeconds = (u: string): number => {
+        let total = 0;
+        const weeks = u.match(/(\d+)w/); if (weeks) total += parseInt(weeks[1]) * 604800;
+        const days = u.match(/(\d+)d/); if (days) total += parseInt(days[1]) * 86400;
+        const hours = u.match(/(\d+)h/); if (hours) total += parseInt(hours[1]) * 3600;
+        const mins = u.match(/(\d+)m/); if (mins) total += parseInt(mins[1]) * 60;
+        const secs = u.match(/(\d+)s/); if (secs) total += parseInt(secs[1]);
+        return total;
+      };
+      const prevSec = parseUptimeSeconds(prevUptime);
+      const curSec = parseUptimeSeconds(curUptime);
+      if (prevSec > 0 && curSec < prevSec && (prevSec - curSec) > 120) {
+        systemInfo.reboot_detected = true;
+        systemInfo.previous_uptime = prevUptime;
+      }
+    }
+
+    // Save system info to device
+    await supabase.from("mikrotik_devices").update({
+      last_system_info: systemInfo,
+    }).eq("id", device.id);
+
     const ipMap = new Map<string, string>();
     for (const ip of ipAddresses) {
       if (ip.interface) ipMap.set(ip.interface, ip.address || "");

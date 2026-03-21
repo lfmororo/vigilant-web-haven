@@ -116,15 +116,11 @@ async function collectDeviceData(device) {
 
     // Coletar endereços IP
     let ipAddresses = [];
-    try {
-      ipAddresses = await client.menu('/ip/address').getAll();
-    } catch (_) {}
+    try { ipAddresses = await client.menu('/ip/address').getAll(); } catch (_) {}
 
     // Coletar clientes PPPoE
     let pppoeClients = [];
-    try {
-      pppoeClients = await client.menu('/interface/pppoe-client').getAll();
-    } catch (_) {}
+    try { pppoeClients = await client.menu('/interface/pppoe-client').getAll(); } catch (_) {}
 
     // Coletar identidade do sistema
     let identity = '';
@@ -133,14 +129,31 @@ async function collectDeviceData(device) {
       identity = identityRes?.[0]?.name || '';
     } catch (_) {}
 
-    // Coletar resource (uptime, version)
+    // Coletar resource (uptime, version, cpu)
     let resource = {};
     try {
       const resData = await client.menu('/system/resource').getAll();
       resource = resData?.[0] || {};
     } catch (_) {}
 
-    // Coletar logs recentes (últimos 200 para análise de 24h)
+    // Coletar health (temperatura, voltagem, fan)
+    let health = {};
+    try {
+      const healthData = await client.menu('/system/health').getAll();
+      if (healthData && healthData.length > 0) {
+        // RouterOS 7: array of {name, value, type}
+        // RouterOS 6: single object with keys like temperature, voltage, etc.
+        if (healthData[0]?.name && healthData[0]?.value !== undefined) {
+          for (const item of healthData) {
+            health[item.name] = item.value;
+          }
+        } else {
+          health = healthData[0] || {};
+        }
+      }
+    } catch (_) {}
+
+    // Coletar logs recentes (últimos 200 para análise)
     let logs = [];
     try {
       const logData = await client.menu('/log').getAll();
@@ -149,9 +162,7 @@ async function collectDeviceData(device) {
 
     // Coletar leases DHCP
     let dhcpLeases = [];
-    try {
-      dhcpLeases = await client.menu('/ip/dhcp-server/lease').getAll();
-    } catch (_) {}
+    try { dhcpLeases = await client.menu('/ip/dhcp-server/lease').getAll(); } catch (_) {}
 
     await api.disconnect();
 
@@ -159,6 +170,7 @@ async function collectDeviceData(device) {
       success: true,
       identity,
       resource,
+      health,
       interfaces: interfaces || [],
       ipAddresses: ipAddresses || [],
       pppoeClients: pppoeClients || [],
@@ -208,17 +220,29 @@ function detectChanges(deviceId, deviceName, currentInterfaces, watchInterfaces)
 
 function detectLogAlerts(logs) {
   const alerts = [];
-  const keywords = ['down', 'error', 'fail', 'critical', 'link down', 'disconnected', 'ppp', 'timeout', 'login failure', 'denied', 'unreachable', 'duplicate'];
+  const loginKeywords = ['login failure', 'denied', 'invalid user', 'wrong password', 'authentication failed'];
+  const interfaceKeywords = ['link down', 'disconnected', 'down', 'lost connection'];
+  const systemKeywords = ['error', 'fail', 'critical', 'kernel', 'out of memory', 'watchdog', 'reboot', 'unreachable', 'duplicate'];
   
   for (const log of logs) {
     const msg = (log.message || '').toLowerCase();
     const topic = (log.topics || '').toLowerCase();
     
-    if (keywords.some(kw => msg.includes(kw)) || topic.includes('error') || topic.includes('critical') || topic.includes('warning')) {
+    let category = null;
+    if (loginKeywords.some(kw => msg.includes(kw))) {
+      category = 'login';
+    } else if (interfaceKeywords.some(kw => msg.includes(kw)) || (topic.includes('interface') && msg.includes('down'))) {
+      category = 'interface';
+    } else if (systemKeywords.some(kw => msg.includes(kw)) || topic.includes('error') || topic.includes('critical') || topic.includes('warning')) {
+      category = 'system';
+    }
+    
+    if (category) {
       alerts.push({
         time: log.time || '',
         topics: log.topics || '',
         message: log.message || '',
+        category,
       });
     }
   }
