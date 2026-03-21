@@ -208,13 +208,13 @@ function detectChanges(deviceId, deviceName, currentInterfaces, watchInterfaces)
 
 function detectLogAlerts(logs) {
   const alerts = [];
-  const keywords = ['down', 'error', 'fail', 'critical', 'link down', 'disconnected', 'ppp'];
+  const keywords = ['down', 'error', 'fail', 'critical', 'link down', 'disconnected', 'ppp', 'timeout', 'login failure', 'denied', 'unreachable', 'duplicate'];
   
   for (const log of logs) {
     const msg = (log.message || '').toLowerCase();
     const topic = (log.topics || '').toLowerCase();
     
-    if (keywords.some(kw => msg.includes(kw)) || topic.includes('error') || topic.includes('critical')) {
+    if (keywords.some(kw => msg.includes(kw)) || topic.includes('error') || topic.includes('critical') || topic.includes('warning')) {
       alerts.push({
         time: log.time || '',
         topics: log.topics || '',
@@ -226,7 +226,37 @@ function detectLogAlerts(logs) {
   return alerts;
 }
 
-// ==================== SEND TO SYSTEM ====================
+// ==================== DHCP ANALYSIS ====================
+
+function analyzeDhcpLeases(dhcpLeases) {
+  const now = Date.now();
+  const oneDayAgo = now - (24 * 60 * 60 * 1000);
+
+  const totalLeases = dhcpLeases.length;
+  const activeLeases = dhcpLeases.filter(l => 
+    l.status === 'bound' || l.dynamic === 'true' || l.dynamic === true
+  ).length;
+  const staticLeases = dhcpLeases.filter(l => 
+    l.dynamic === 'false' || l.dynamic === false
+  ).length;
+
+  // Agrupar por servidor DHCP
+  const byServer = {};
+  for (const lease of dhcpLeases) {
+    const server = lease.server || lease['dhcp-server'] || 'default';
+    if (!byServer[server]) byServer[server] = { total: 0, active: 0 };
+    byServer[server].total++;
+    if (lease.status === 'bound') byServer[server].active++;
+  }
+
+  return {
+    total_leases: totalLeases,
+    active_leases: activeLeases,
+    static_leases: staticLeases,
+    dynamic_leases: totalLeases - staticLeases,
+    by_server: byServer,
+  };
+}
 
 function postJSON(url, data, headers) {
   return new Promise((resolve, reject) => {
