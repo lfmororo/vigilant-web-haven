@@ -669,9 +669,11 @@ async function sendToSystem(config, deviceId, collectedData, changes, logAlerts,
 // ==================== MAIN LOOP ====================
 
 async function pollDevice(config, device) {
-  console.log(`\n🔄 Coletando dados de ${device.name} (${device.host})...`);
+  const devType = device.device_type || 'mikrotik';
+  const typeLabel = devType === 'snmp' ? 'SNMP' : 'Mikrotik';
+  console.log(`\n🔄 [${typeLabel}] Coletando dados de ${device.name} (${device.host})...`);
 
-  const data = await collectDeviceData(device);
+  const data = devType === 'snmp' ? await collectSnmpData(device) : await collectDeviceData(device);
 
   if (!data.success) {
     console.error(`  ❌ ${data.error}`);
@@ -685,9 +687,9 @@ async function pollDevice(config, device) {
     return;
   }
 
-  console.log(`  📊 ${data.interfaces.length} interfaces, ${data.ipAddresses.length} IPs, ${data.pppoeClients.length} PPPoE, ${data.dhcpLeases.length} DHCP leases`);
+  console.log(`  📊 ${data.interfaces.length} interfaces`);
   if (data.resource.version) {
-    console.log(`  ℹ️  RouterOS ${data.resource.version}, Uptime: ${data.resource.uptime || 'N/A'}`);
+    console.log(`  ℹ️  ${devType === 'snmp' ? data.resource.version : 'RouterOS ' + data.resource.version}, Uptime: ${data.resource.uptime || 'N/A'}`);
   }
 
   // Mostrar consumo de banda das interfaces UP
