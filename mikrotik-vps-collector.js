@@ -164,6 +164,18 @@ async function collectDeviceData(device) {
     let dhcpLeases = [];
     try { dhcpLeases = await client.menu('/ip/dhcp-server/lease').getAll(); } catch (_) {}
 
+    // Coletar pools DHCP (ranges de IPs disponíveis)
+    let dhcpPools = [];
+    try { dhcpPools = await client.menu('/ip/pool').getAll(); } catch (_) {}
+
+    // Coletar redes DHCP (para mapear pool <-> server)
+    let dhcpNetworks = [];
+    try { dhcpNetworks = await client.menu('/ip/dhcp-server/network').getAll(); } catch (_) {}
+
+    // Coletar servidores DHCP
+    let dhcpServers = [];
+    try { dhcpServers = await client.menu('/ip/dhcp-server').getAll(); } catch (_) {}
+
     await api.disconnect();
 
     return {
@@ -176,6 +188,9 @@ async function collectDeviceData(device) {
       pppoeClients: pppoeClients || [],
       logs,
       dhcpLeases: dhcpLeases || [],
+      dhcpPools: dhcpPools || [],
+      dhcpNetworks: dhcpNetworks || [],
+      dhcpServers: dhcpServers || [],
     };
   } catch (err) {
     if (api) {
