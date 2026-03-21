@@ -1169,7 +1169,7 @@ const MikrotikMonitor = () => {
                   })()}
                 </TabsContent>
 
-
+                <TabsContent value="traffic" className="mt-4">
                   <Card>
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base">Tráfego e Erros</CardTitle>
