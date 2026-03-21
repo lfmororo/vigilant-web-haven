@@ -177,6 +177,8 @@ const MikrotikMonitor = () => {
       use_ssl: editDevice.use_ssl,
       client_id: editDevice.client_id,
       is_active: editDevice.is_active,
+      proxy_url: editDevice.proxy_url || null,
+      api_port: editDevice.api_port || 8728,
     }).eq("id", editDevice.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Dispositivo atualizado");
