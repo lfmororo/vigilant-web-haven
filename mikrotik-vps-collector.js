@@ -353,10 +353,10 @@ async function collectSnmpData(device) {
       user.privKey = device.snmp_priv_passphrase || '';
     }
 
-    session = snmp.createV3Session(device.host, user, { timeout: 10000 });
+    session = snmp.createV3Session(device.host, user, { timeout: 30000, retries: 2 });
   } else {
     const version = device.snmp_version === '1' ? snmp.Version1 : snmp.Version2c;
-    session = snmp.createSession(device.host, device.snmp_community || 'public', { version, timeout: 10000 });
+    session = snmp.createSession(device.host, device.snmp_community || 'public', { version, timeout: 30000, retries: 2 });
   }
 
   return new Promise((resolve) => {
