@@ -113,7 +113,198 @@ const formatBitsPerSec = (bps: number) => {
 };
 
 const generateCollectorScript = (device: MikrotikDevice) => {
-  const script = `#!/usr/bin/env node
+  const isSNMP = device.device_type === 'snmp';
+
+  const snmpScript = `#!/usr/bin/env node
+/**
+ * SNMP Collector - ${device.name}
+ * Script pré-configurado para coleta via SNMP.
+ *
+ * Instalação na VPS:
+ *   npm init -y
+ *   npm install net-snmp
+ *   node snmp-collector.js
+ */
+
+const snmp = require('net-snmp');
+const http = require('http');
+const https = require('https');
+
+const CONFIG = {
+  supabase_url: '${import.meta.env.VITE_SUPABASE_URL}',
+  supabase_anon_key: '${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}',
+  poll_interval_seconds: 60,
+  devices: [{
+    device_id: '${device.id}',
+    name: '${device.name}',
+    host: '${device.host}',
+    port: ${device.port || 161},
+    snmp_version: '${device.snmp_version || '2c'}',
+    snmp_community: '${device.snmp_community || 'public'}',
+    snmp_user: '${device.snmp_user || ''}',
+    snmp_security_level: '${device.snmp_security_level || 'noAuthNoPriv'}',
+    snmp_auth_protocol: '${device.snmp_auth_protocol || 'MD5'}',
+    snmp_auth_passphrase: '${device.snmp_auth_passphrase || ''}',
+    snmp_priv_protocol: '${device.snmp_priv_protocol || 'DES'}',
+    snmp_priv_passphrase: '${device.snmp_priv_passphrase || ''}',
+  }]
+};
+
+const OID = {
+  sysDescr: '1.3.6.1.2.1.1.1.0', sysUpTime: '1.3.6.1.2.1.1.3.0', sysName: '1.3.6.1.2.1.1.5.0',
+  ifDescr: '1.3.6.1.2.1.2.2.1.2', ifOperStatus: '1.3.6.1.2.1.2.2.1.8',
+  ifInOctets: '1.3.6.1.2.1.2.2.1.10', ifOutOctets: '1.3.6.1.2.1.2.2.1.16',
+  ifSpeed: '1.3.6.1.2.1.2.2.1.5', ifInErrors: '1.3.6.1.2.1.2.2.1.14',
+  ifOutErrors: '1.3.6.1.2.1.2.2.1.20', ifPhysAddress: '1.3.6.1.2.1.2.2.1.6',
+};
+
+const previousStates = new Map();
+
+function createSession(device) {
+  const authMap = { 'MD5': snmp.AuthProtocols.md5, 'SHA': snmp.AuthProtocols.sha };
+  const privMap = { 'DES': snmp.PrivProtocols.des, 'AES': snmp.PrivProtocols.aes };
+  const secMap = { 'noAuthNoPriv': snmp.SecurityLevel.noAuthNoPriv, 'authNoPriv': snmp.SecurityLevel.authNoPriv, 'authPriv': snmp.SecurityLevel.authPriv };
+  if (device.snmp_version === '3') {
+    const user = { name: device.snmp_user, level: secMap[device.snmp_security_level] || snmp.SecurityLevel.noAuthNoPriv,
+      authProtocol: authMap[device.snmp_auth_protocol] || snmp.AuthProtocols.md5, authKey: device.snmp_auth_passphrase,
+      privProtocol: privMap[device.snmp_priv_protocol] || snmp.PrivProtocols.des, privKey: device.snmp_priv_passphrase };
+    return snmp.createV3Session(device.host, user, { port: device.port || 161, timeout: 10000 });
+  }
+  return snmp.createSession(device.host, device.snmp_community || 'public', {
+    port: device.port || 161, version: device.snmp_version === '1' ? snmp.Version1 : snmp.Version2c, timeout: 10000 });
+}
+
+function snmpGet(session, oids) {
+  return new Promise((resolve, reject) => {
+    session.get(oids, (err, vb) => { if (err) return reject(err);
+      const r = {}; vb.forEach(v => { if (!snmp.isVarbindError(v)) r[v.oid] = v.value; }); resolve(r); });
+  });
+}
+function snmpSubtree(session, oid) {
+  return new Promise((resolve, reject) => {
+    const res = [];
+    session.subtree(oid, 20, (vb) => { vb.forEach(v => { if (!snmp.isVarbindError(v)) res.push(v); }); },
+      (err) => { if (err && res.length === 0) reject(err); else resolve(res); });
+  });
+}
+
+async function collectDeviceData(device) {
+  let session;
+  try {
+    session = createSession(device);
+    const sys = await snmpGet(session, [OID.sysDescr, OID.sysUpTime, OID.sysName]);
+    const identity = (sys[OID.sysName] || '').toString();
+    const resource = { 'board-name': identity, platform: (sys[OID.sysDescr] || '').toString(),
+      uptime: sys[OID.sysUpTime] ? Math.floor(Number(sys[OID.sysUpTime]) / 100) + 's' : '' };
+    const [ifDescrs, ifStats, ifIn, ifOut, ifSpeeds, ifInErr, ifOutErr, ifMacs] = await Promise.all([
+      snmpSubtree(session, OID.ifDescr), snmpSubtree(session, OID.ifOperStatus),
+      snmpSubtree(session, OID.ifInOctets), snmpSubtree(session, OID.ifOutOctets),
+      snmpSubtree(session, OID.ifSpeed),
+      snmpSubtree(session, OID.ifInErrors).catch(() => []), snmpSubtree(session, OID.ifOutErrors).catch(() => []),
+      snmpSubtree(session, OID.ifPhysAddress).catch(() => []),
+    ]);
+    const idx = (oid) => oid.split('.').pop();
+    const ifMap = {};
+    ifDescrs.forEach(v => { ifMap[idx(v.oid)] = { name: v.value.toString() }; });
+    ifStats.forEach(v => { if (ifMap[idx(v.oid)]) ifMap[idx(v.oid)].running = Number(v.value) === 1; });
+    ifIn.forEach(v => { if (ifMap[idx(v.oid)]) ifMap[idx(v.oid)]['rx-byte'] = Number(v.value); });
+    ifOut.forEach(v => { if (ifMap[idx(v.oid)]) ifMap[idx(v.oid)]['tx-byte'] = Number(v.value); });
+    ifSpeeds.forEach(v => { if (ifMap[idx(v.oid)]) ifMap[idx(v.oid)].speed = Number(v.value); });
+    ifInErr.forEach(v => { if (ifMap[idx(v.oid)]) ifMap[idx(v.oid)]['rx-error'] = Number(v.value); });
+    ifOutErr.forEach(v => { if (ifMap[idx(v.oid)]) ifMap[idx(v.oid)]['tx-error'] = Number(v.value); });
+    ifMacs.forEach(v => { if (ifMap[idx(v.oid)] && Buffer.isBuffer(v.value))
+      ifMap[idx(v.oid)]['mac-address'] = Array.from(v.value).map(b => b.toString(16).padStart(2,'0')).join(':'); });
+    // Calcular banda via delta
+    const stateKey = device.device_id + '_bytes';
+    const prev = previousStates.get(stateKey) || {};
+    const now = Date.now(), elapsed = Math.max(1, (now - (prev._timestamp || now)) / 1000);
+    const nb = { _timestamp: now };
+    for (const [, iface] of Object.entries(ifMap)) {
+      const tx = iface['tx-byte'] || 0, rx = iface['rx-byte'] || 0;
+      nb[iface.name] = { tx, rx };
+      if (prev[iface.name]) {
+        iface['tx-bits-per-second'] = Math.round((Math.max(0, tx - prev[iface.name].tx) / elapsed) * 8);
+        iface['rx-bits-per-second'] = Math.round((Math.max(0, rx - prev[iface.name].rx) / elapsed) * 8);
+      }
+    }
+    previousStates.set(stateKey, nb);
+    session.close();
+    return { success: true, identity, resource, health: {}, interfaces: Object.values(ifMap),
+      ipAddresses: [], pppoeClients: [], logs: [], dhcpLeases: [], dhcpPools: [], dhcpServers: [] };
+  } catch (err) {
+    if (session) try { session.close(); } catch (_) {}
+    return { success: false, error: err.message };
+  }
+}
+
+function detectChanges(deviceId, deviceName, ifaces) {
+  const changes = [], prev = previousStates.get(deviceId) || {};
+  for (const iface of ifaces) {
+    if (!iface.name) continue;
+    const isUp = iface.running === true, wasUp = prev[iface.name];
+    if (wasUp !== undefined && wasUp !== isUp)
+      changes.push({ interface_name: iface.name, previous_status: wasUp ? 'up' : 'down', current_status: isUp ? 'up' : 'down', device_name: deviceName });
+    prev[iface.name] = isUp;
+  }
+  previousStates.set(deviceId, prev);
+  return changes;
+}
+
+function postJSON(url, data, headers) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url), mod = u.protocol === 'https:' ? https : http, body = JSON.stringify(data);
+    const req = mod.request(u, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), ...headers }, timeout: 30000 }, (res) => {
+      let rb = ''; res.on('data', c => rb += c);
+      res.on('end', () => { try { resolve({ status: res.statusCode, data: JSON.parse(rb) }); } catch { resolve({ status: res.statusCode, data: rb }); } });
+    });
+    req.on('error', reject); req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
+    req.write(body); req.end();
+  });
+}
+
+async function sendToSystem(deviceId, data, changes, logAlerts, dhcp) {
+  try {
+    const result = await postJSON(CONFIG.supabase_url + '/functions/v1/mikrotik-vps-ingest',
+      { device_id: deviceId, collected_data: data, status_changes: changes, log_alerts: logAlerts || [], dhcp_summary: dhcp || null },
+      { 'Authorization': 'Bearer ' + CONFIG.supabase_anon_key, 'apikey': CONFIG.supabase_anon_key });
+    if (result.status >= 200 && result.status < 300) console.log('  📤 Dados enviados (' + (data.interfaces?.length || 0) + ' interfaces)');
+    else console.error('  ❌ Erro: ' + result.status, result.data);
+  } catch (err) { console.error('  ❌ Falha: ' + err.message); }
+}
+
+async function pollDevice(device) {
+  console.log('\\n🔄 Coletando ' + device.name + '...');
+  const data = await collectDeviceData(device);
+  if (!data.success) {
+    console.error('  ❌ ' + data.error);
+    await sendToSystem(device.device_id, data, [{ interface_name: 'connection', previous_status: 'up', current_status: 'down', device_name: device.name }], []);
+    return;
+  }
+  console.log('  📊 ' + (data.interfaces?.length || 0) + ' interfaces');
+  const changes = detectChanges(device.device_id, device.name, data.interfaces);
+  if (changes.length > 0) console.log('  ⚠️  ' + changes.length + ' mudança(s)');
+  await sendToSystem(device.device_id, data, changes, []);
+}
+
+async function main() {
+  console.log('='.repeat(50));
+  console.log('  SNMP COLLECTOR - ${device.name}');
+  console.log('='.repeat(50));
+  console.log('\\n🚀 Coletando estado inicial...');
+  for (const d of CONFIG.devices) {
+    const data = await collectDeviceData(d);
+    if (data.success) { detectChanges(d.device_id, d.name, data.interfaces);
+      console.log('  ✅ ' + d.name + ': ' + data.interfaces.length + ' interfaces');
+      await sendToSystem(d.device_id, data, [], []);
+    } else console.error('  ❌ ' + d.name + ': ' + data.error);
+  }
+  console.log('\\n⏰ Monitoramento iniciado...');
+  setInterval(async () => { for (const d of CONFIG.devices) await pollDevice(d); }, CONFIG.poll_interval_seconds * 1000);
+}
+main().catch(err => { console.error('Erro fatal:', err); process.exit(1); });
+`;
+
+  const mikrotikScript = `#!/usr/bin/env node
 /**
  * Mikrotik VPS Collector - ${device.name}
  * Script pré-configurado para coleta de dados via API binária (porta 8728).
@@ -428,14 +619,15 @@ async function main() {
 main().catch(err => { console.error('Erro fatal:', err); process.exit(1); });
 `;
 
+  const script = isSNMP ? snmpScript : mikrotikScript;
   const blob = new Blob([script], { type: 'text/javascript' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `mikrotik-collector-${device.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.js`;
+  a.download = `${isSNMP ? 'snmp' : 'mikrotik'}-collector-${device.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.js`;
   a.click();
   URL.revokeObjectURL(url);
-  toast.success('Script baixado com sucesso!');
+  toast.success(`Script ${isSNMP ? 'SNMP' : 'MikroTik'} baixado com sucesso!`);
 };
 
 const MikrotikMonitor = () => {
