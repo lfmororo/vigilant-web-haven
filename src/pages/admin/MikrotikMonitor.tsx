@@ -935,6 +935,7 @@ const MikrotikMonitor = () => {
                 <Tabs defaultValue="interfaces">
                   <TabsList className="flex-wrap h-auto gap-1 w-full justify-start">
                     <TabsTrigger value="interfaces"><Activity className="w-4 h-4 mr-1" /> Interfaces</TabsTrigger>
+                    <TabsTrigger value="bandwidth"><Zap className="w-4 h-4 mr-1" /> Banda</TabsTrigger>
                     <TabsTrigger value="traffic"><ArrowUpDown className="w-4 h-4 mr-1" /> Tráfego</TabsTrigger>
                     <TabsTrigger value="dhcp"><Globe className="w-4 h-4 mr-1" /> DHCP</TabsTrigger>
                     <TabsTrigger value="logs"><ScrollText className="w-4 h-4 mr-1" /> Logs</TabsTrigger>
