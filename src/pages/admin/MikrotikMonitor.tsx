@@ -301,8 +301,9 @@ async function pollDevice(device) {
     await sendToSystem(device.device_id, data, [{ interface_name: 'connection', previous_status: 'up', current_status: 'down', device_name: device.name }], []);
     return;
   }
-  const dhcp = analyzeDhcpLeases(data.dhcpLeases);
-  console.log(\`  📊 \${data.interfaces.length} interfaces, \${dhcp.total_leases} DHCP leases\`);
+  const dhcp = analyzeDhcpLeases(data.dhcpLeases, data.dhcpPools, data.dhcpServers);
+  const capInfo = dhcp.total_capacity > 0 ? \` | Capacidade: \${dhcp.total_capacity} IPs (\${dhcp.usage_pct}% uso)\` : '';
+  console.log(\`  📊 \${data.interfaces.length} interfaces, \${dhcp.total_leases} DHCP leases\${capInfo}\`);
   const changes = detectChanges(device.device_id, device.name, data.interfaces, device.watch_interfaces);
   if (changes.length > 0) {
     console.log(\`  ⚠️  \${changes.length} mudança(s)\`);
