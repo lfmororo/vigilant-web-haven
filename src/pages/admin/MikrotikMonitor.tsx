@@ -1,0 +1,587 @@
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import AdminLayout from "@/components/admin/AdminLayout";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
+import { toast } from "sonner";
+import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target } from "lucide-react";
+
+interface MikrotikDevice {
+  id: string;
+  client_id: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  use_ssl: boolean;
+  is_active: boolean;
+  last_polled_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  client?: { full_name: string };
+}
+
+interface MikrotikInterface {
+  id: string;
+  device_id: string;
+  interface_name: string;
+  interface_type: string | null;
+  status: string;
+  running: boolean;
+  disabled: boolean;
+  mac_address: string | null;
+  tx_rate: number;
+  rx_rate: number;
+  tx_bytes: number;
+  rx_bytes: number;
+  tx_packets: number;
+  rx_packets: number;
+  tx_errors: number;
+  rx_errors: number;
+  tx_drops: number;
+  rx_drops: number;
+  speed: string | null;
+  ip_address: string | null;
+  uptime: string | null;
+  pppoe_user: string | null;
+  pppoe_service: string | null;
+  updated_at: string;
+}
+
+interface PingTarget {
+  id: string;
+  device_id: string;
+  target_ip: string;
+  label: string;
+  is_active: boolean;
+  latency_ms: number | null;
+  packet_loss_pct: number | null;
+  last_checked_at: string | null;
+}
+
+interface Client {
+  id: string;
+  full_name: string;
+}
+
+const emptyDevice = {
+  name: "", host: "", port: 443, username: "admin", password: "", use_ssl: true, client_id: "",
+};
+
+const formatBytes = (bytes: number) => {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+};
+
+const MikrotikMonitor = () => {
+  const [devices, setDevices] = useState<MikrotikDevice[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedDevice, setSelectedDevice] = useState<MikrotikDevice | null>(null);
+  const [interfaces, setInterfaces] = useState<MikrotikInterface[]>([]);
+  const [pingTargets, setPingTargets] = useState<PingTarget[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [polling, setPolling] = useState<string | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showPingDialog, setShowPingDialog] = useState(false);
+  const [deviceForm, setDeviceForm] = useState(emptyDevice);
+  const [editDevice, setEditDevice] = useState<MikrotikDevice | null>(null);
+  const [deleteDevice, setDeleteDevice] = useState<MikrotikDevice | null>(null);
+  const [pingForm, setPingForm] = useState({ target_ip: "", label: "" });
+  const [showPassword, setShowPassword] = useState(false);
+
+  const fetchDevices = useCallback(async () => {
+    const { data } = await supabase
+      .from("mikrotik_devices")
+      .select("*, client:clients(full_name)")
+      .order("name");
+    setDevices((data as any) || []);
+    setLoading(false);
+  }, []);
+
+  const fetchClients = async () => {
+    const { data } = await supabase.from("clients").select("id, full_name").order("full_name");
+    setClients(data || []);
+  };
+
+  const fetchInterfaces = async (deviceId: string) => {
+    const { data } = await supabase
+      .from("mikrotik_interfaces")
+      .select("*")
+      .eq("device_id", deviceId)
+      .order("interface_name");
+    setInterfaces((data as any) || []);
+  };
+
+  const fetchPingTargets = async (deviceId: string) => {
+    const { data } = await supabase
+      .from("mikrotik_ping_targets")
+      .select("*")
+      .eq("device_id", deviceId)
+      .order("label");
+    setPingTargets((data as any) || []);
+  };
+
+  useEffect(() => {
+    fetchDevices();
+    fetchClients();
+  }, [fetchDevices]);
+
+  useEffect(() => {
+    if (selectedDevice) {
+      fetchInterfaces(selectedDevice.id);
+      fetchPingTargets(selectedDevice.id);
+    }
+  }, [selectedDevice]);
+
+  const handleCreateDevice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!deviceForm.client_id || !deviceForm.name || !deviceForm.host) {
+      toast.error("Preencha todos os campos obrigatórios");
+      return;
+    }
+    const { error } = await supabase.from("mikrotik_devices").insert(deviceForm);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Dispositivo adicionado");
+    setShowCreateDialog(false);
+    setDeviceForm(emptyDevice);
+    fetchDevices();
+  };
+
+  const handleEditDevice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editDevice) return;
+    const { error } = await supabase.from("mikrotik_devices").update({
+      name: editDevice.name,
+      host: editDevice.host,
+      port: editDevice.port,
+      username: editDevice.username,
+      password: editDevice.password,
+      use_ssl: editDevice.use_ssl,
+      client_id: editDevice.client_id,
+      is_active: editDevice.is_active,
+    }).eq("id", editDevice.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Dispositivo atualizado");
+    setShowEditDialog(false);
+    fetchDevices();
+  };
+
+  const handleDeleteDevice = async () => {
+    if (!deleteDevice) return;
+    const { error } = await supabase.from("mikrotik_devices").delete().eq("id", deleteDevice.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Dispositivo removido");
+    setShowDeleteDialog(false);
+    if (selectedDevice?.id === deleteDevice.id) setSelectedDevice(null);
+    fetchDevices();
+  };
+
+  const handlePollDevice = async (deviceId: string) => {
+    setPolling(deviceId);
+    try {
+      const { data, error } = await supabase.functions.invoke("mikrotik-monitor", {
+        body: { action: "poll", device_id: deviceId },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`Coletado: ${data.interfaces} interfaces`);
+        if (selectedDevice?.id === deviceId) {
+          fetchInterfaces(deviceId);
+          fetchPingTargets(deviceId);
+        }
+        fetchDevices();
+      } else {
+        toast.error(data?.error || "Erro ao coletar dados");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro de conexão");
+    }
+    setPolling(null);
+  };
+
+  const handleAddPingTarget = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDevice || !pingForm.target_ip) return;
+    const { error } = await supabase.from("mikrotik_ping_targets").insert({
+      device_id: selectedDevice.id,
+      target_ip: pingForm.target_ip,
+      label: pingForm.label || pingForm.target_ip,
+    });
+    if (error) { toast.error(error.message); return; }
+    toast.success("Alvo de ping adicionado");
+    setShowPingDialog(false);
+    setPingForm({ target_ip: "", label: "" });
+    fetchPingTargets(selectedDevice.id);
+  };
+
+  const handleDeletePingTarget = async (id: string) => {
+    await supabase.from("mikrotik_ping_targets").delete().eq("id", id);
+    if (selectedDevice) fetchPingTargets(selectedDevice.id);
+  };
+
+  const renderDeviceForm = (form: any, setForm: any, isEdit = false) => (
+    <div className="space-y-4">
+      <div>
+        <Label>Cliente *</Label>
+        <Select value={form.client_id} onValueChange={(v) => setForm({ ...form, client_id: v })}>
+          <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+          <SelectContent>
+            {clients.map((c) => (
+              <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>Nome do dispositivo *</Label>
+        <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="RB 750 - Matriz" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label>Host/IP *</Label>
+          <Input value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} placeholder="192.168.1.1 ou ddns.exemplo.com" />
+        </div>
+        <div>
+          <Label>Porta</Label>
+          <Input type="number" value={form.port} onChange={(e) => setForm({ ...form, port: parseInt(e.target.value) || 443 })} />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label>Usuário</Label>
+          <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+        </div>
+        <div>
+          <Label>Senha</Label>
+          <Input type={showPassword ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+        </div>
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Switch checked={form.use_ssl} onCheckedChange={(v) => setForm({ ...form, use_ssl: v })} />
+          <Label>Usar SSL (HTTPS)</Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch checked={showPassword} onCheckedChange={setShowPassword} />
+          <Label>Mostrar senha</Label>
+        </div>
+      </div>
+      {isEdit && (
+        <div className="flex items-center gap-2">
+          <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
+          <Label>Ativo</Label>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <AdminLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Monitoramento Mikrotik</h1>
+            <p className="text-muted-foreground">Monitore links e interfaces de RouterBoards</p>
+          </div>
+          <Button onClick={() => { setDeviceForm(emptyDevice); setShowCreateDialog(true); }}>
+            <Plus className="w-4 h-4 mr-2" /> Novo Dispositivo
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Device List */}
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold">Dispositivos</h2>
+            {loading ? (
+              <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>
+            ) : devices.length === 0 ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum dispositivo cadastrado</CardContent></Card>
+            ) : (
+              devices.map((device) => (
+                <Card
+                  key={device.id}
+                  className={`cursor-pointer transition-colors hover:border-primary ${selectedDevice?.id === device.id ? "border-primary bg-accent/30" : ""}`}
+                  onClick={() => setSelectedDevice(device)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {device.last_error ? (
+                          <WifiOff className="w-4 h-4 text-destructive" />
+                        ) : device.last_polled_at ? (
+                          <Wifi className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <Network className="w-4 h-4 text-muted-foreground" />
+                        )}
+                        <div>
+                          <p className="font-medium text-sm">{device.name}</p>
+                          <p className="text-xs text-muted-foreground">{device.host}:{device.port}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handlePollDevice(device.id); }} disabled={polling === device.id}>
+                          {polling === device.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditDevice({ ...device }); setShowEditDialog(true); }}>
+                          <Edit className="w-3 h-3" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteDevice(device); setShowDeleteDialog(true); }}>
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Badge variant={device.is_active ? "default" : "secondary"} className="text-xs">
+                        {device.is_active ? "Ativo" : "Inativo"}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{device.client?.full_name}</span>
+                    </div>
+                    {device.last_error && (
+                      <p className="mt-1 text-xs text-destructive truncate">{device.last_error}</p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+
+          {/* Device Detail */}
+          <div className="lg:col-span-2">
+            {selectedDevice ? (
+              <Tabs defaultValue="interfaces">
+                <TabsList>
+                  <TabsTrigger value="interfaces"><Activity className="w-4 h-4 mr-1" /> Interfaces</TabsTrigger>
+                  <TabsTrigger value="traffic"><ArrowUpDown className="w-4 h-4 mr-1" /> Tráfego</TabsTrigger>
+                  <TabsTrigger value="ping"><Target className="w-4 h-4 mr-1" /> Ping</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="interfaces" className="mt-4">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center justify-between">
+                        Interfaces - {selectedDevice.name}
+                        <Button size="sm" variant="outline" onClick={() => handlePollDevice(selectedDevice.id)} disabled={polling === selectedDevice.id}>
+                          {polling === selectedDevice.id ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+                          Atualizar
+                        </Button>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {interfaces.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-4">Nenhuma interface. Clique em Atualizar para coletar.</p>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Interface</TableHead>
+                              <TableHead>Tipo</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>IP</TableHead>
+                              <TableHead>MAC</TableHead>
+                              <TableHead>PPPoE</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {interfaces.map((iface) => (
+                              <TableRow key={iface.id} className={iface.disabled ? "opacity-50" : ""}>
+                                <TableCell className="font-medium text-sm">{iface.interface_name}</TableCell>
+                                <TableCell className="text-xs">{iface.interface_type || "-"}</TableCell>
+                                <TableCell>
+                                  <Badge variant={iface.running ? "default" : "destructive"} className="text-xs">
+                                    {iface.running ? "UP" : "DOWN"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-xs">{iface.ip_address || "-"}</TableCell>
+                                <TableCell className="text-xs font-mono">{iface.mac_address || "-"}</TableCell>
+                                <TableCell className="text-xs">
+                                  {iface.pppoe_user ? (
+                                    <span>{iface.pppoe_user}{iface.uptime ? ` (${iface.uptime})` : ""}</span>
+                                  ) : "-"}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="traffic" className="mt-4">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Tráfego e Erros</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {interfaces.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-4">Nenhuma interface coletada.</p>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Interface</TableHead>
+                              <TableHead>TX Bytes</TableHead>
+                              <TableHead>RX Bytes</TableHead>
+                              <TableHead>TX Pkts</TableHead>
+                              <TableHead>RX Pkts</TableHead>
+                              <TableHead>TX Erros</TableHead>
+                              <TableHead>RX Erros</TableHead>
+                              <TableHead>TX Drops</TableHead>
+                              <TableHead>RX Drops</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {interfaces.filter(i => !i.disabled).map((iface) => (
+                              <TableRow key={iface.id}>
+                                <TableCell className="font-medium text-sm">{iface.interface_name}</TableCell>
+                                <TableCell className="text-xs">{formatBytes(iface.tx_bytes)}</TableCell>
+                                <TableCell className="text-xs">{formatBytes(iface.rx_bytes)}</TableCell>
+                                <TableCell className="text-xs">{iface.tx_packets.toLocaleString()}</TableCell>
+                                <TableCell className="text-xs">{iface.rx_packets.toLocaleString()}</TableCell>
+                                <TableCell className={`text-xs ${iface.tx_errors > 0 ? "text-destructive font-bold" : ""}`}>{iface.tx_errors}</TableCell>
+                                <TableCell className={`text-xs ${iface.rx_errors > 0 ? "text-destructive font-bold" : ""}`}>{iface.rx_errors}</TableCell>
+                                <TableCell className={`text-xs ${iface.tx_drops > 0 ? "text-orange-500 font-bold" : ""}`}>{iface.tx_drops}</TableCell>
+                                <TableCell className={`text-xs ${iface.rx_drops > 0 ? "text-orange-500 font-bold" : ""}`}>{iface.rx_drops}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="ping" className="mt-4">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center justify-between">
+                        Alvos de Ping
+                        <Button size="sm" onClick={() => { setPingForm({ target_ip: "", label: "" }); setShowPingDialog(true); }}>
+                          <Plus className="w-4 h-4 mr-1" /> Adicionar
+                        </Button>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {pingTargets.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-4">Nenhum alvo de ping configurado.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {pingTargets.map((t) => (
+                            <div key={t.id} className="flex items-center justify-between p-3 border rounded-lg">
+                              <div>
+                                <p className="font-medium text-sm">{t.label || t.target_ip}</p>
+                                <p className="text-xs text-muted-foreground">{t.target_ip}</p>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                {t.latency_ms !== null && (
+                                  <div className="text-right">
+                                    <p className="text-sm font-mono">{t.latency_ms}ms</p>
+                                    <p className={`text-xs ${(t.packet_loss_pct || 0) > 0 ? "text-destructive" : "text-green-500"}`}>
+                                      {t.packet_loss_pct}% perda
+                                    </p>
+                                  </div>
+                                )}
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => handleDeletePingTarget(t.id)}>
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+            ) : (
+              <Card>
+                <CardContent className="py-16 text-center text-muted-foreground">
+                  <Network className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                  <p>Selecione um dispositivo para ver as interfaces</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Create Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Novo Dispositivo Mikrotik</DialogTitle></DialogHeader>
+          <form onSubmit={handleCreateDevice}>
+            {renderDeviceForm(deviceForm, setDeviceForm)}
+            <DialogFooter className="mt-4"><Button type="submit">Adicionar</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Editar Dispositivo</DialogTitle></DialogHeader>
+          {editDevice && (
+            <form onSubmit={handleEditDevice}>
+              {renderDeviceForm(editDevice, setEditDevice, true)}
+              <DialogFooter className="mt-4"><Button type="submit">Salvar</Button></DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover dispositivo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso removerá "{deleteDevice?.name}" e todos os dados de interfaces e ping associados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteDevice}>Remover</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Ping Target Dialog */}
+      <Dialog open={showPingDialog} onOpenChange={setShowPingDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Novo Alvo de Ping</DialogTitle></DialogHeader>
+          <form onSubmit={handleAddPingTarget}>
+            <div className="space-y-4">
+              <div>
+                <Label>IP do destino *</Label>
+                <Input value={pingForm.target_ip} onChange={(e) => setPingForm({ ...pingForm, target_ip: e.target.value })} placeholder="8.8.8.8" />
+              </div>
+              <div>
+                <Label>Rótulo</Label>
+                <Input value={pingForm.label} onChange={(e) => setPingForm({ ...pingForm, label: e.target.value })} placeholder="Google DNS" />
+              </div>
+            </div>
+            <DialogFooter className="mt-4"><Button type="submit">Adicionar</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </AdminLayout>
+  );
+};
+
+export default MikrotikMonitor;
