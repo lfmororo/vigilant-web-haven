@@ -461,6 +461,14 @@ const MikrotikMonitor = () => {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [systemHistory, setSystemHistory] = useState<any[]>([]);
   const [interfaceEvents, setInterfaceEvents] = useState<any[]>([]);
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
+  const [copiedBlock, setCopiedBlock] = useState<string | null>(null);
+
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedBlock(id);
+    setTimeout(() => setCopiedBlock(null), 2000);
+  };
 
   const fetchDevices = useCallback(async () => {
     const { data } = await supabase
