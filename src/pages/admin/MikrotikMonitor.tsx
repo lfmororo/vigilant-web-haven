@@ -689,11 +689,11 @@ const MikrotikMonitor = () => {
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleTestAlert(device.id); }} disabled={!!polling}>
-                                <AlertTriangle className="w-3 h-3 text-orange-500" />
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleSendSummary(device.id); }} disabled={!!polling}>
+                                <ScrollText className="w-3 h-3 text-primary" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Enviar alerta de teste</TooltipContent>
+                            <TooltipContent>Enviar resumo WhatsApp</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                         <TooltipProvider>
