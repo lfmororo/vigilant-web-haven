@@ -203,6 +203,15 @@ async function collectDeviceData(device) {
 
     await api.disconnect();
 
+    // Enriquecer interfaces com dados de banda em tempo real
+    for (const iface of (interfaces || [])) {
+      const rates = trafficRates.get(iface.name);
+      if (rates) {
+        iface['tx-bits-per-second'] = rates['tx-bits-per-second'];
+        iface['rx-bits-per-second'] = rates['rx-bits-per-second'];
+      }
+    }
+
     return {
       success: true,
       identity,
