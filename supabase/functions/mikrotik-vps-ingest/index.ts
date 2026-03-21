@@ -250,10 +250,10 @@ Deno.serve(async (req) => {
       (a: any) => !previousLogMessages.has(a.message || "")
     );
 
-    // Filtrar DHCP alerts: só notificar se o estado de alerta mudou
+    // Filtrar DHCP alerts: só notificar se o estado de alerta mudou (deduplicação)
     const previousDhcp = device.last_dhcp_summary;
-    const previousDhcpWasHigh = previousDhcp?.total_leases > 0 &&
-      Math.round((previousDhcp.active_leases / previousDhcp.total_leases) * 100) >= 90;
+    const previousDhcpWasHigh = previousDhcp?.total_capacity > 0 &&
+      Math.round((previousDhcp.active_leases / previousDhcp.total_capacity) * 100) >= 90;
     const currentDhcpIsHigh = dhcpAlerts.length > 0;
     const dhcpAlertsToSend = (currentDhcpIsHigh && !previousDhcpWasHigh) ? dhcpAlerts : [];
 
