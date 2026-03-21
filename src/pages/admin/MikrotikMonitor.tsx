@@ -29,6 +29,8 @@ interface MikrotikDevice {
   last_polled_at: string | null;
   last_error: string | null;
   created_at: string;
+  proxy_url: string | null;
+  api_port: number | null;
   client?: { full_name: string };
 }
 
@@ -76,7 +78,7 @@ interface Client {
 }
 
 const emptyDevice = {
-  name: "", host: "", port: 443, username: "admin", password: "", use_ssl: true, client_id: "",
+  name: "", host: "", port: 443, username: "admin", password: "", use_ssl: true, client_id: "", proxy_url: "", api_port: 8728,
 };
 
 const formatBytes = (bytes: number) => {
@@ -155,7 +157,8 @@ const MikrotikMonitor = () => {
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
-    const { error } = await supabase.from("mikrotik_devices").insert(deviceForm);
+    const insertData = { ...deviceForm, proxy_url: deviceForm.proxy_url || null, api_port: deviceForm.api_port || 8728 };
+    const { error } = await supabase.from("mikrotik_devices").insert(insertData);
     if (error) { toast.error(error.message); return; }
     toast.success("Dispositivo adicionado");
     setShowCreateDialog(false);
@@ -175,6 +178,8 @@ const MikrotikMonitor = () => {
       use_ssl: editDevice.use_ssl,
       client_id: editDevice.client_id,
       is_active: editDevice.is_active,
+      proxy_url: editDevice.proxy_url || null,
+      api_port: editDevice.api_port || 8728,
     }).eq("id", editDevice.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Dispositivo atualizado");
@@ -281,6 +286,20 @@ const MikrotikMonitor = () => {
           <Switch checked={showPassword} onCheckedChange={setShowPassword} />
           <Label>Mostrar senha</Label>
         </div>
+      </div>
+      <div className="border-t pt-4 mt-2">
+        <p className="text-sm font-medium mb-2 text-muted-foreground">Proxy (para RouterOS 6.x sem API REST)</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>URL do Proxy</Label>
+            <Input value={form.proxy_url || ""} onChange={(e) => setForm({ ...form, proxy_url: e.target.value })} placeholder="http://seu-vps:3700" />
+          </div>
+          <div>
+            <Label>Porta API (8728)</Label>
+            <Input type="number" value={form.api_port || 8728} onChange={(e) => setForm({ ...form, api_port: parseInt(e.target.value) || 8728 })} />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">Preencha apenas se o equipamento não suporta API REST (RouterOS &lt; 7.1)</p>
       </div>
       {isEdit && (
         <div className="flex items-center gap-2">

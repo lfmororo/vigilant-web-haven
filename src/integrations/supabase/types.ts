@@ -492,6 +492,7 @@ export type Database = {
       }
       mikrotik_devices: {
         Row: {
+          api_port: number | null
           client_id: string
           created_at: string
           host: string
@@ -502,11 +503,13 @@ export type Database = {
           name: string
           password: string
           port: number
+          proxy_url: string | null
           updated_at: string
           use_ssl: boolean
           username: string
         }
         Insert: {
+          api_port?: number | null
           client_id: string
           created_at?: string
           host: string
@@ -517,11 +520,13 @@ export type Database = {
           name: string
           password?: string
           port?: number
+          proxy_url?: string | null
           updated_at?: string
           use_ssl?: boolean
           username?: string
         }
         Update: {
+          api_port?: number | null
           client_id?: string
           created_at?: string
           host?: string
@@ -532,6 +537,7 @@ export type Database = {
           name?: string
           password?: string
           port?: number
+          proxy_url?: string | null
           updated_at?: string
           use_ssl?: boolean
           username?: string

@@ -141,7 +141,153 @@ async function updateDevicePollStatus(supabase: any, deviceId: string, lastError
     .eq("id", deviceId);
 }
 
-async function fetchDeviceData(supabase: any, device: any) {
+async function fetchDeviceDataViaProxy(supabase: any, device: any) {
+  const proxyUrl = device.proxy_url.replace(/\/+$/, "");
+  const proxyHeaders: Record<string, string> = { "Content-Type": "application/json" };
+  if (device.proxy_token) {
+    proxyHeaders["x-proxy-token"] = device.proxy_token;
+  }
+
+  try {
+    // Poll via proxy
+    const pollRes = await safeFetch(`${proxyUrl}/poll`, {
+      method: "POST",
+      headers: proxyHeaders,
+      body: JSON.stringify({
+        host: device.host,
+        port: device.api_port || 8728,
+        username: device.username,
+        password: device.password,
+      }),
+    });
+
+    if (!pollRes.ok) {
+      const errBody = await pollRes.text();
+      throw new Error(`Proxy retornou ${pollRes.status}: ${errBody}`);
+    }
+
+    const data = await pollRes.json();
+    if (!data.success) {
+      throw new Error(data.error || "Proxy retornou erro desconhecido");
+    }
+
+    // Build IP map
+    const ipMap = new Map<string, string>();
+    for (const ip of (data.ipAddresses || [])) {
+      if (ip.interface) ipMap.set(ip.interface, ip.address || "");
+    }
+
+    // Build PPPoE map
+    const pppoeMap = new Map<string, any>();
+    for (const p of (data.pppoeClients || [])) {
+      if (p.name) pppoeMap.set(p.name, p);
+    }
+
+    // Upsert interfaces
+    const interfacesData = data.interfaces || [];
+    for (const iface of interfacesData) {
+      const pppoe = pppoeMap.get(iface.name);
+      const record: any = {
+        device_id: device.id,
+        interface_name: iface.name || "unknown",
+        interface_type: iface.type || null,
+        status: iface.running === true || iface.running === "true" ? "up" : "down",
+        running: iface.running === true || iface.running === "true",
+        disabled: iface.disabled === true || iface.disabled === "true",
+        mac_address: iface["mac-address"] || null,
+        tx_bytes: parseInt(iface["tx-byte"] || "0") || 0,
+        rx_bytes: parseInt(iface["rx-byte"] || "0") || 0,
+        tx_packets: parseInt(iface["tx-packet"] || "0") || 0,
+        rx_packets: parseInt(iface["rx-packet"] || "0") || 0,
+        tx_errors: parseInt(iface["tx-error"] || "0") || 0,
+        rx_errors: parseInt(iface["rx-error"] || "0") || 0,
+        tx_drops: parseInt(iface["tx-drop"] || "0") || 0,
+        rx_drops: parseInt(iface["rx-drop"] || "0") || 0,
+        speed: iface.speed || null,
+        ip_address: ipMap.get(iface.name) || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (pppoe) {
+        record.pppoe_user = pppoe.user || null;
+        record.pppoe_service = pppoe["service-name"] || null;
+        record.uptime = pppoe.uptime || null;
+      }
+
+      const { data: existing } = await supabase
+        .from("mikrotik_interfaces")
+        .select("id")
+        .eq("device_id", device.id)
+        .eq("interface_name", record.interface_name)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase.from("mikrotik_interfaces").update(record).eq("id", existing.id);
+      } else {
+        await supabase.from("mikrotik_interfaces").insert(record);
+      }
+    }
+
+    // Ping targets via proxy
+    const { data: pingTargets } = await supabase
+      .from("mikrotik_ping_targets")
+      .select("*")
+      .eq("device_id", device.id)
+      .eq("is_active", true);
+
+    if (pingTargets?.length) {
+      for (const target of pingTargets) {
+        try {
+          const pingRes = await safeFetch(`${proxyUrl}/ping`, {
+            method: "POST",
+            headers: proxyHeaders,
+            body: JSON.stringify({
+              host: device.host,
+              port: device.api_port || 8728,
+              username: device.username,
+              password: device.password,
+              target_ip: target.target_ip,
+              count: 4,
+            }),
+          });
+
+          if (pingRes.ok) {
+            const pingData = await pingRes.json();
+            if (pingData.success && pingData.results) {
+              const sent = pingData.results.sent || 4;
+              const received = pingData.results.received || 0;
+              const avgRtt = pingData.results["avg-rtt"] || 0;
+              const loss = sent > 0 ? Math.round(((sent - received) / sent) * 100) : 100;
+
+              await supabase
+                .from("mikrotik_ping_targets")
+                .update({
+                  latency_ms: avgRtt,
+                  packet_loss_pct: loss,
+                  last_checked_at: new Date().toISOString(),
+                })
+                .eq("id", target.id);
+            }
+          } else {
+            await pingRes.text();
+          }
+        } catch (pingErr) {
+          console.error(`Proxy ping to ${target.target_ip} failed:`, pingErr);
+        }
+      }
+    }
+
+    await updateDevicePollStatus(supabase, device.id, null);
+    return { success: true, interfaces: interfacesData.length, via: "proxy" };
+  } catch (err: any) {
+    const lastError = `Erro via proxy: ${err?.message || "desconhecido"}`;
+    console.error(`Proxy error for device ${device.name}:`, err);
+    await updateDevicePollStatus(supabase, device.id, lastError);
+    return { success: false, error: lastError };
+  }
+}
+
+async function fetchDeviceDataDirect(supabase: any, device: any) {
   const auth = btoa(`${device.username}:${device.password}`);
   const headers: Record<string, string> = {
     Authorization: `Basic ${auth}`,
@@ -219,41 +365,28 @@ async function fetchDeviceData(supabase: any, device: any) {
     const interfacesPayload = await ifRes.json();
     interfacesData = Array.isArray(interfacesPayload) ? interfacesPayload : [];
 
-    // Fetch IP addresses
     try {
       const ipRes = await safeFetch(`${baseUrl}/ip/address`, { headers });
       if (ipRes.ok) ipAddresses = await ipRes.json();
       else await ipRes.text();
-    } catch (_) {
-      /* optional */
-    }
+    } catch (_) {}
 
-    // Fetch PPPoE client interfaces
     try {
       const pppoeRes = await safeFetch(`${baseUrl}/interface/pppoe-client`, { headers });
       if (pppoeRes.ok) pppoeInterfaces = await pppoeRes.json();
       else await pppoeRes.text();
-    } catch (_) {
-      /* optional */
-    }
+    } catch (_) {}
 
-    // Build IP map: interface -> ip
     const ipMap = new Map<string, string>();
     for (const ip of ipAddresses) {
-      if (ip.interface) {
-        ipMap.set(ip.interface, ip.address || "");
-      }
+      if (ip.interface) ipMap.set(ip.interface, ip.address || "");
     }
 
-    // Build PPPoE map
     const pppoeMap = new Map<string, any>();
     for (const p of pppoeInterfaces) {
-      if (p.name) {
-        pppoeMap.set(p.name, p);
-      }
+      if (p.name) pppoeMap.set(p.name, p);
     }
 
-    // Upsert interfaces
     for (const iface of interfacesData) {
       const pppoe = pppoeMap.get(iface.name);
       const record: any = {
@@ -283,7 +416,6 @@ async function fetchDeviceData(supabase: any, device: any) {
         record.uptime = pppoe.uptime || null;
       }
 
-      // Upsert by device_id + interface_name
       const { data: existing } = await supabase
         .from("mikrotik_interfaces")
         .select("id")
@@ -298,7 +430,6 @@ async function fetchDeviceData(supabase: any, device: any) {
       }
     }
 
-    // Run ping targets
     const { data: pingTargets } = await supabase
       .from("mikrotik_ping_targets")
       .select("*")
@@ -311,10 +442,7 @@ async function fetchDeviceData(supabase: any, device: any) {
           const pingRes = await safeFetch(`${baseUrl}/ping`, {
             method: "POST",
             headers,
-            body: JSON.stringify({
-              address: target.target_ip,
-              count: "4",
-            }),
+            body: JSON.stringify({ address: target.target_ip, count: "4" }),
           });
 
           if (pingRes.ok) {
@@ -347,14 +475,20 @@ async function fetchDeviceData(supabase: any, device: any) {
     }
 
     await updateDevicePollStatus(supabase, device.id, null);
-
-    return { success: true, interfaces: interfacesData.length };
+    return { success: true, interfaces: interfacesData.length, via: "direct" };
   } catch (err: any) {
     const lastError = err?.message || "Erro desconhecido ao coletar dados da Mikrotik.";
     console.error(`Error polling device ${device.name}:`, err);
-
     await updateDevicePollStatus(supabase, device.id, lastError);
-
     return { success: false, error: lastError };
   }
+}
+
+async function fetchDeviceData(supabase: any, device: any) {
+  if (device.proxy_url) {
+    console.log(`Device ${device.name}: using proxy at ${device.proxy_url}`);
+    return fetchDeviceDataViaProxy(supabase, device);
+  }
+  console.log(`Device ${device.name}: using direct REST API`);
+  return fetchDeviceDataDirect(supabase, device);
 }
