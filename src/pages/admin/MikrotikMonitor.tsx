@@ -634,9 +634,17 @@ const MikrotikMonitor = () => {
             <h1 className="text-2xl font-bold">Monitoramento Mikrotik</h1>
             <p className="text-muted-foreground">Monitore links e interfaces de RouterBoards</p>
           </div>
-          <Button onClick={() => { setDeviceForm(emptyDevice); setShowCreateDialog(true); }}>
-            <Plus className="w-4 h-4 mr-2" /> Novo Dispositivo
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mr-2">
+              <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} id="auto-refresh" />
+              <Label htmlFor="auto-refresh" className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+                Auto-refresh 30s
+              </Label>
+            </div>
+            <Button onClick={() => { setDeviceForm(emptyDevice); setShowCreateDialog(true); }}>
+              <Plus className="w-4 h-4 mr-2" /> Novo Dispositivo
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
