@@ -822,6 +822,33 @@ const MikrotikMonitor = () => {
                       ) : (
                         <p className="text-center text-muted-foreground py-4">Dados DHCP não disponíveis. Execute o collector na VPS para coletar.</p>
                       )}
+
+                      {/* Gráfico de histórico DHCP */}
+                      {dhcpHistory.length > 1 && (
+                        <Card className="mt-4">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <TrendingUp className="w-4 h-4" />
+                              Histórico DHCP
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                              <LineChart data={dhcpHistory}>
+                                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                                <XAxis dataKey="time" tick={{ fontSize: 11 }} />
+                                <YAxis tick={{ fontSize: 11 }} />
+                                <RechartsTooltip />
+                                <Legend />
+                                <Line type="monotone" dataKey="total_leases" name="Total" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="active_leases" name="Ativos" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="dynamic_leases" name="Dinâmicos" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="static_leases" name="Estáticos" stroke="hsl(var(--chart-4))" strokeWidth={2} dot={false} />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </CardContent>
+                        </Card>
+                      )}
                     </CardContent>
                   </Card>
                 </TabsContent>
