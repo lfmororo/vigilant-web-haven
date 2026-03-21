@@ -316,6 +316,7 @@ const MikrotikMonitor = () => {
   const [deleteDevice, setDeleteDevice] = useState<MikrotikDevice | null>(null);
   const [pingForm, setPingForm] = useState({ target_ip: "", label: "" });
   const [showPassword, setShowPassword] = useState(false);
+  const [dhcpHistory, setDhcpHistory] = useState<any[]>([]);
 
   const fetchDevices = useCallback(async () => {
     const { data } = await supabase
