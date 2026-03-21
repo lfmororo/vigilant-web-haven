@@ -380,11 +380,34 @@ const MikrotikMonitor = () => {
     })));
   };
 
+  const fetchTrafficHistory = async (deviceId: string) => {
+    const { data } = await supabase
+      .from("mikrotik_traffic_history")
+      .select("*")
+      .eq("device_id", deviceId)
+      .order("recorded_at", { ascending: true })
+      .limit(500);
+    const records = data || [];
+    // Get unique interface names
+    const ifaceNames = [...new Set(records.map((r: any) => r.interface_name))];
+    if (ifaceNames.length > 0 && !selectedTrafficIface) {
+      setSelectedTrafficIface(ifaceNames[0]);
+    }
+    setTrafficHistory(records.map((d: any) => ({
+      ...d,
+      time: new Date(d.recorded_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+      tx_mb: Number((d.tx_bytes / (1024 * 1024)).toFixed(2)),
+      rx_mb: Number((d.rx_bytes / (1024 * 1024)).toFixed(2)),
+    })));
+  };
+
   useEffect(() => {
     if (selectedDevice) {
       fetchInterfaces(selectedDevice.id);
       fetchPingTargets(selectedDevice.id);
       fetchDhcpHistory(selectedDevice.id);
+      fetchTrafficHistory(selectedDevice.id);
+      setSelectedTrafficIface("");
     }
   }, [selectedDevice]);
 
