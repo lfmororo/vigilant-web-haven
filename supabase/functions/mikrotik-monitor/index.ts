@@ -298,6 +298,7 @@ async function fetchDeviceDataDirect(supabase: any, device: any) {
   let baseUrl = "";
   let connected = false;
   const connectionAttempts: string[] = [];
+  let detectedRouterOS6 = false;
 
   for (const proto of protocols) {
     const candidateBaseUrl = `${proto}://${device.host}:${device.port}/rest`;
@@ -318,8 +319,13 @@ async function fetchDeviceDataDirect(supabase: any, device: any) {
         break;
       }
 
+      // Detect RouterOS 6.x from WebFig HTML page
+      if (looksLikeHtml && testBody.includes("RouterOS router configuration page")) {
+        detectedRouterOS6 = true;
+      }
+
       connectionAttempts.push(
-        `${proto.toUpperCase()} respondeu ${testRes.status}${looksLikeHtml ? " (HTML)" : ""}`
+        `${proto.toUpperCase()} respondeu ${testRes.status}${looksLikeHtml ? " (HTML/WebFig)" : ""}`
       );
     } catch (err: any) {
       connectionAttempts.push(`${proto.toUpperCase()} erro: ${err?.message || "desconhecido"}`);
@@ -327,14 +333,36 @@ async function fetchDeviceDataDirect(supabase: any, device: any) {
     }
   }
 
+  // Also try root path to detect RouterOS version
+  if (!connected && !detectedRouterOS6) {
+    for (const proto of (device.use_ssl ? ["https", "http"] : ["http"])) {
+      try {
+        const rootRes = await safeFetch(`${proto}://${device.host}:${device.port}/`, {
+          headers: { "Content-Type": "text/html" },
+          redirect: "manual",
+        });
+        const rootBody = await rootRes.text();
+        if (rootBody.includes("RouterOS router configuration page")) {
+          detectedRouterOS6 = true;
+          break;
+        }
+      } catch (_) {}
+    }
+  }
+
   if (!connected) {
-    const details = connectionAttempts.length
-      ? ` Detalhes: ${connectionAttempts.join(" | ")}`
-      : "";
-    const connectionError = `Não foi possível conectar à Mikrotik ${device.host}:${device.port}. Verifique se a API REST está habilitada (RouterOS 7.1+), o IP/porta está acessível e as credenciais estão corretas.${details}`;
+    let connectionError: string;
+    if (detectedRouterOS6) {
+      connectionError = `⚠️ ROUTEROS 6.x DETECTADO: O equipamento ${device.host}:${device.port} está rodando RouterOS 6.x que NÃO possui API REST. Para monitorar este dispositivo, configure um proxy intermediário: 1) Instale o script mikrotik-proxy.js em um VPS; 2) Preencha o campo "URL do Proxy" no cadastro deste dispositivo.`;
+    } else {
+      const details = connectionAttempts.length
+        ? ` Detalhes: ${connectionAttempts.join(" | ")}`
+        : "";
+      connectionError = `Não foi possível conectar à Mikrotik ${device.host}:${device.port}. Verifique se a API REST está habilitada (RouterOS 7.1+), o IP/porta está acessível e as credenciais estão corretas.${details}`;
+    }
 
     await updateDevicePollStatus(supabase, device.id, connectionError);
-    return { success: false, error: connectionError };
+    return { success: false, error: connectionError, routeros6_detected: detectedRouterOS6 };
   }
 
   let interfacesData: any[] = [];
