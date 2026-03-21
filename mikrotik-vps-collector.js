@@ -114,6 +114,31 @@ async function collectDeviceData(device) {
     // Coletar interfaces
     const interfaces = await client.menu('/interface').getAll();
 
+    // Coletar taxa de banda em tempo real (tx-rate/rx-rate) das interfaces UP
+    const runningIfaces = (interfaces || []).filter(i => 
+      (i.running === 'true' || i.running === true) && 
+      (i.disabled !== 'true' && i.disabled !== true)
+    );
+    const trafficRates = new Map();
+    for (const iface of runningIfaces) {
+      const ifName = iface.name;
+      if (!ifName) continue;
+      try {
+        const monitor = await client.menu('/interface').exec('monitor-traffic', {
+          interface: ifName,
+          once: '',
+        });
+        if (monitor && monitor.length > 0) {
+          trafficRates.set(ifName, {
+            'tx-bits-per-second': parseInt(monitor[0]['tx-bits-per-second'] || '0') || 0,
+            'rx-bits-per-second': parseInt(monitor[0]['rx-bits-per-second'] || '0') || 0,
+          });
+        }
+      } catch (_) {
+        // Alguns tipos de interface podem não suportar monitor-traffic
+      }
+    }
+
     // Coletar endereços IP
     let ipAddresses = [];
     try { ipAddresses = await client.menu('/ip/address').getAll(); } catch (_) {}
@@ -177,6 +202,15 @@ async function collectDeviceData(device) {
     try { dhcpServers = await client.menu('/ip/dhcp-server').getAll(); } catch (_) {}
 
     await api.disconnect();
+
+    // Enriquecer interfaces com dados de banda em tempo real
+    for (const iface of (interfaces || [])) {
+      const rates = trafficRates.get(iface.name);
+      if (rates) {
+        iface['tx-bits-per-second'] = rates['tx-bits-per-second'];
+        iface['rx-bits-per-second'] = rates['rx-bits-per-second'];
+      }
+    }
 
     return {
       success: true,
@@ -453,6 +487,23 @@ async function pollDevice(config, device) {
   console.log(`  📊 ${data.interfaces.length} interfaces, ${data.ipAddresses.length} IPs, ${data.pppoeClients.length} PPPoE, ${data.dhcpLeases.length} DHCP leases`);
   if (data.resource.version) {
     console.log(`  ℹ️  RouterOS ${data.resource.version}, Uptime: ${data.resource.uptime || 'N/A'}`);
+  }
+
+  // Mostrar consumo de banda das interfaces UP
+  const upIfaces = data.interfaces.filter(i => (i.running === 'true' || i.running === true) && i['tx-bits-per-second'] !== undefined);
+  if (upIfaces.length > 0) {
+    console.log(`  📶 Banda em tempo real:`);
+    for (const iface of upIfaces) {
+      const txBps = iface['tx-bits-per-second'] || 0;
+      const rxBps = iface['rx-bits-per-second'] || 0;
+      const fmtRate = (bps) => {
+        if (bps >= 1000000000) return `${(bps / 1000000000).toFixed(2)} Gbps`;
+        if (bps >= 1000000) return `${(bps / 1000000).toFixed(2)} Mbps`;
+        if (bps >= 1000) return `${(bps / 1000).toFixed(1)} Kbps`;
+        return `${bps} bps`;
+      };
+      console.log(`     📡 ${iface.name}: ↑ ${fmtRate(txBps)} | ↓ ${fmtRate(rxBps)}`);
+    }
   }
 
   // Analisar DHCP leases com capacidade dos pools

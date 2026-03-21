@@ -97,6 +97,8 @@ Deno.serve(async (req) => {
         rx_drops: parseInt(iface["rx-drop"] || iface.rxDrop || "0") || 0,
         speed: iface.speed || null,
         ip_address: ipMap.get(iface.name) || null,
+        tx_rate: parseInt(iface["tx-bits-per-second"] || iface.txBitsPerSecond || "0") || 0,
+        rx_rate: parseInt(iface["rx-bits-per-second"] || iface.rxBitsPerSecond || "0") || 0,
         updated_at: new Date().toISOString(),
       };
 
