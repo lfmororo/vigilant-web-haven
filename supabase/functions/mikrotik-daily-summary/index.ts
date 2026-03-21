@@ -286,52 +286,88 @@ Deno.serve(async (req) => {
       .select("user_id")
       .eq("role", "admin");
 
-    if (!adminRoles?.length) {
-      return new Response(JSON.stringify({ error: "Nenhum admin encontrado" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const adminIds = (adminRoles || []).map((r: any) => r.user_id);
+    const { data: adminProfiles } = adminIds.length > 0
+      ? await supabase.from("profiles").select("phone, full_name").in("id", adminIds).not("phone", "is", null)
+      : { data: [] };
+
+    // Collect all unique client_ids from devices
+    const clientIds = [...new Set(devices.map((d: any) => d.client_id).filter(Boolean))];
+
+    // Get technicians linked to these clients
+    const { data: techRoles } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "technician");
+
+    let techProfiles: any[] = [];
+    if (techRoles?.length && clientIds.length > 0) {
+      const techIds = techRoles.map((r: any) => r.user_id);
+      const { data: techs } = await supabase
+        .from("profiles")
+        .select("phone, full_name, parent_client_id")
+        .in("id", techIds)
+        .in("parent_client_id", clientIds)
+        .not("phone", "is", null);
+      techProfiles = techs || [];
     }
 
-    const adminIds = adminRoles.map((r: any) => r.user_id);
-    const { data: adminProfiles } = await supabase
-      .from("profiles")
-      .select("phone, full_name")
-      .in("id", adminIds)
-      .not("phone", "is", null);
+    // Build unique phone list: admins + client phones + technician phones
+    const phoneSet = new Set<string>();
+    const allPhones: { phone: string; source: string }[] = [];
 
-    if (!adminProfiles?.length) {
-      return new Response(JSON.stringify({ error: "Nenhum admin com telefone" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // Send to admins
-    let sent = false;
-    for (const admin of adminProfiles) {
+    for (const admin of (adminProfiles || [])) {
       const phone = cleanPhone(admin.phone);
-      if (!phone || phone.length < 10) continue;
+      if (phone && phone.length >= 10 && !phoneSet.has(phone)) {
+        phoneSet.add(phone);
+        allPhones.push({ phone, source: "admin" });
+      }
+    }
 
+    // Add client phones
+    for (const device of devices) {
+      const clientPhone = device.client?.phone;
+      if (clientPhone) {
+        const phone = cleanPhone(clientPhone);
+        if (phone && phone.length >= 10 && !phoneSet.has(phone)) {
+          phoneSet.add(phone);
+          allPhones.push({ phone, source: "client" });
+        }
+      }
+    }
+
+    // Add technician phones
+    for (const tech of techProfiles) {
+      const phone = cleanPhone(tech.phone);
+      if (phone && phone.length >= 10 && !phoneSet.has(phone)) {
+        phoneSet.add(phone);
+        allPhones.push({ phone, source: "technician" });
+      }
+    }
+
+    // Send to all recipients
+    let sent = false;
+    for (const recipient of allPhones) {
       try {
         const res = await fetch(`${apiUrl}/send/text`, {
           method: "POST",
           headers: { "Content-Type": "application/json", token: apiToken },
-          body: JSON.stringify({ number: phone, text, linkPreview: false }),
+          body: JSON.stringify({ number: recipient.phone, text, linkPreview: false }),
         });
-
-        const status = res.ok ? "sent" : "failed";
-        const errMsg = res.ok ? null : await res.text();
 
         await supabase.from("whatsapp_notification_logs").insert({
           notification_type: "mikrotik_daily_summary",
-          recipient_phone: phone,
+          recipient_phone: recipient.phone,
           message_preview: text.substring(0, 200),
-          status,
-          error_message: errMsg,
+          status: res.ok ? "sent" : "failed",
+          error_message: res.ok ? null : await res.text(),
         });
 
         if (res.ok) sent = true;
       } catch (err: any) {
         await supabase.from("whatsapp_notification_logs").insert({
           notification_type: "mikrotik_daily_summary",
-          recipient_phone: phone,
+          recipient_phone: recipient.phone,
           message_preview: text.substring(0, 200),
           status: "failed",
           error_message: err.message,
