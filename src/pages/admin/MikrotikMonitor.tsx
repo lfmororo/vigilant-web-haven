@@ -1273,6 +1273,39 @@ const MikrotikMonitor = () => {
                                             </div>
                                           )}
                                         </div>
+
+                                        {/* Gráfico de histórico por pool */}
+                                        {(() => {
+                                          const poolHistory = dhcpHistory.map((h: any) => {
+                                            const srv = h.by_server?.[serverName];
+                                            return srv ? { time: h.time, total: srv.total || 0, active: srv.active || 0, capacity: srv.capacity || 0 } : null;
+                                          }).filter(Boolean);
+                                          if (poolHistory.length < 2) return null;
+                                          return (
+                                            <Card>
+                                              <CardHeader className="pb-3">
+                                                <CardTitle className="text-sm flex items-center gap-2">
+                                                  <TrendingUp className="w-4 h-4" />
+                                                  Histórico - {serverName}
+                                                </CardTitle>
+                                              </CardHeader>
+                                              <CardContent>
+                                                <ResponsiveContainer width="100%" height={220}>
+                                                  <LineChart data={poolHistory}>
+                                                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                                                    <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                                                    <YAxis tick={{ fontSize: 10 }} />
+                                                    <RechartsTooltip />
+                                                    <Legend />
+                                                    <Line type="monotone" dataKey="active" name="Ativos" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                                                    <Line type="monotone" dataKey="total" name="Total Leases" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} />
+                                                    <Line type="monotone" dataKey="capacity" name="Capacidade" stroke="hsl(var(--muted-foreground))" strokeWidth={1} strokeDasharray="5 5" dot={false} />
+                                                  </LineChart>
+                                                </ResponsiveContainer>
+                                              </CardContent>
+                                            </Card>
+                                          );
+                                        })()}
                                       </div>
                                     </TabsContent>
                                   );
