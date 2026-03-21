@@ -233,10 +233,13 @@ Deno.serve(async (req) => {
     const currentDhcpIsHigh = dhcpAlerts.length > 0;
     const dhcpAlertsToSend = (currentDhcpIsHigh && !previousDhcpWasHigh) ? dhcpAlerts : [];
 
+    // Detect reboot for WhatsApp notification
+    const rebootDetected = deviceUpdate.last_system_info?.reboot_detected === true;
+
     // Enviar notificação WhatsApp somente se há mudanças reais
     let whatsappSent = false;
-    if ((status_changes?.length > 0) || (newLogAlerts.length > 0) || (dhcpAlertsToSend.length > 0)) {
-      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], newLogAlerts, dhcp_summary, dhcpAlertsToSend);
+    if ((status_changes?.length > 0) || (newLogAlerts.length > 0) || (dhcpAlertsToSend.length > 0) || rebootDetected) {
+      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], newLogAlerts, dhcp_summary, dhcpAlertsToSend, rebootDetected ? deviceUpdate.last_system_info : null);
     }
 
     return new Response(
