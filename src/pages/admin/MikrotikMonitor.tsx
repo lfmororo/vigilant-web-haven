@@ -14,8 +14,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download, Server, ScrollText, Globe } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download, Server, ScrollText, Globe, TrendingUp } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from "recharts";
 
 interface MikrotikDevice {
   id: string;
@@ -315,6 +316,7 @@ const MikrotikMonitor = () => {
   const [deleteDevice, setDeleteDevice] = useState<MikrotikDevice | null>(null);
   const [pingForm, setPingForm] = useState({ target_ip: "", label: "" });
   const [showPassword, setShowPassword] = useState(false);
+  const [dhcpHistory, setDhcpHistory] = useState<any[]>([]);
 
   const fetchDevices = useCallback(async () => {
     const { data } = await supabase
@@ -363,10 +365,24 @@ const MikrotikMonitor = () => {
     }
   }, [devices]);
 
+  const fetchDhcpHistory = async (deviceId: string) => {
+    const { data } = await supabase
+      .from("mikrotik_dhcp_history")
+      .select("*")
+      .eq("device_id", deviceId)
+      .order("recorded_at", { ascending: true })
+      .limit(100);
+    setDhcpHistory((data || []).map((d: any) => ({
+      ...d,
+      time: new Date(d.recorded_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+    })));
+  };
+
   useEffect(() => {
     if (selectedDevice) {
       fetchInterfaces(selectedDevice.id);
       fetchPingTargets(selectedDevice.id);
+      fetchDhcpHistory(selectedDevice.id);
     }
   }, [selectedDevice]);
 
@@ -805,6 +821,33 @@ const MikrotikMonitor = () => {
                         </div>
                       ) : (
                         <p className="text-center text-muted-foreground py-4">Dados DHCP não disponíveis. Execute o collector na VPS para coletar.</p>
+                      )}
+
+                      {/* Gráfico de histórico DHCP */}
+                      {dhcpHistory.length > 1 && (
+                        <Card className="mt-4">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <TrendingUp className="w-4 h-4" />
+                              Histórico DHCP
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                              <LineChart data={dhcpHistory}>
+                                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                                <XAxis dataKey="time" tick={{ fontSize: 11 }} />
+                                <YAxis tick={{ fontSize: 11 }} />
+                                <RechartsTooltip />
+                                <Legend />
+                                <Line type="monotone" dataKey="total_leases" name="Total" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="active_leases" name="Ativos" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="dynamic_leases" name="Dinâmicos" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="static_leases" name="Estáticos" stroke="hsl(var(--chart-4))" strokeWidth={2} dot={false} />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </CardContent>
+                        </Card>
                       )}
                     </CardContent>
                   </Card>
