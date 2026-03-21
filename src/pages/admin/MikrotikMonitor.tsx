@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download, Server, ScrollText, Globe } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface MikrotikDevice {
@@ -33,6 +33,9 @@ interface MikrotikDevice {
   proxy_url: string | null;
   api_port: number | null;
   client?: { full_name: string };
+  last_dhcp_summary?: any;
+  last_log_alerts?: any[];
+  last_system_info?: any;
 }
 
 interface MikrotikInterface {
@@ -628,9 +631,12 @@ const MikrotikMonitor = () => {
           <div className="lg:col-span-2">
             {selectedDevice ? (
               <Tabs defaultValue="interfaces">
-                <TabsList>
+                <TabsList className="flex-wrap h-auto gap-1">
                   <TabsTrigger value="interfaces"><Activity className="w-4 h-4 mr-1" /> Interfaces</TabsTrigger>
                   <TabsTrigger value="traffic"><ArrowUpDown className="w-4 h-4 mr-1" /> Tráfego</TabsTrigger>
+                  <TabsTrigger value="dhcp"><Globe className="w-4 h-4 mr-1" /> DHCP</TabsTrigger>
+                  <TabsTrigger value="logs"><ScrollText className="w-4 h-4 mr-1" /> Logs</TabsTrigger>
+                  <TabsTrigger value="system"><Server className="w-4 h-4 mr-1" /> Sistema</TabsTrigger>
                   <TabsTrigger value="ping"><Target className="w-4 h-4 mr-1" /> Ping</TabsTrigger>
                 </TabsList>
 
@@ -719,12 +725,141 @@ const MikrotikMonitor = () => {
                                 <TableCell className="text-xs">{iface.rx_packets.toLocaleString()}</TableCell>
                                 <TableCell className={`text-xs ${iface.tx_errors > 0 ? "text-destructive font-bold" : ""}`}>{iface.tx_errors}</TableCell>
                                 <TableCell className={`text-xs ${iface.rx_errors > 0 ? "text-destructive font-bold" : ""}`}>{iface.rx_errors}</TableCell>
-                                <TableCell className={`text-xs ${iface.tx_drops > 0 ? "text-orange-500 font-bold" : ""}`}>{iface.tx_drops}</TableCell>
-                                <TableCell className={`text-xs ${iface.rx_drops > 0 ? "text-orange-500 font-bold" : ""}`}>{iface.rx_drops}</TableCell>
+                                <TableCell className={`text-xs ${iface.tx_drops > 0 ? "text-destructive font-bold" : ""}`}>{iface.tx_drops}</TableCell>
+                                <TableCell className={`text-xs ${iface.rx_drops > 0 ? "text-destructive font-bold" : ""}`}>{iface.rx_drops}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
                         </Table>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="dhcp" className="mt-4">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">DHCP Leases - {selectedDevice.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {selectedDevice.last_dhcp_summary ? (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="p-3 rounded-lg border bg-card">
+                              <p className="text-xs text-muted-foreground">Total Leases</p>
+                              <p className="text-2xl font-bold">{selectedDevice.last_dhcp_summary.total_leases}</p>
+                            </div>
+                            <div className="p-3 rounded-lg border bg-card">
+                              <p className="text-xs text-muted-foreground">Ativos</p>
+                              <p className="text-2xl font-bold text-primary">{selectedDevice.last_dhcp_summary.active_leases}</p>
+                            </div>
+                            <div className="p-3 rounded-lg border bg-card">
+                              <p className="text-xs text-muted-foreground">Dinâmicos</p>
+                              <p className="text-2xl font-bold">{selectedDevice.last_dhcp_summary.dynamic_leases}</p>
+                            </div>
+                            <div className="p-3 rounded-lg border bg-card">
+                              <p className="text-xs text-muted-foreground">Estáticos</p>
+                              <p className="text-2xl font-bold">{selectedDevice.last_dhcp_summary.static_leases}</p>
+                            </div>
+                          </div>
+                          {selectedDevice.last_dhcp_summary.by_server && Object.keys(selectedDevice.last_dhcp_summary.by_server).length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-semibold mb-2">Por Servidor DHCP</h4>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Servidor</TableHead>
+                                    <TableHead>Total</TableHead>
+                                    <TableHead>Ativos</TableHead>
+                                    <TableHead>Utilização</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {Object.entries(selectedDevice.last_dhcp_summary.by_server).map(([server, info]: [string, any]) => (
+                                    <TableRow key={server}>
+                                      <TableCell className="font-medium text-sm">{server}</TableCell>
+                                      <TableCell>{info.total}</TableCell>
+                                      <TableCell>{info.active}</TableCell>
+                                      <TableCell>
+                                        <div className="flex items-center gap-2">
+                                          <Progress value={info.total > 0 ? (info.active / info.total) * 100 : 0} className="h-2 w-20" />
+                                          <span className="text-xs">{info.total > 0 ? Math.round((info.active / info.total) * 100) : 0}%</span>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-center text-muted-foreground py-4">Dados DHCP não disponíveis. Execute o collector na VPS para coletar.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="logs" className="mt-4">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        Alertas nos Logs - {selectedDevice.name}
+                        {selectedDevice.last_log_alerts && selectedDevice.last_log_alerts.length > 0 && (
+                          <Badge variant="destructive" className="text-xs">{selectedDevice.last_log_alerts.length}</Badge>
+                        )}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {selectedDevice.last_log_alerts && selectedDevice.last_log_alerts.length > 0 ? (
+                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                          {selectedDevice.last_log_alerts.map((log: any, i: number) => (
+                            <div key={i} className="flex items-start gap-2 p-2 rounded border text-sm">
+                              <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  {log.time && <span className="text-xs text-muted-foreground font-mono">{log.time}</span>}
+                                  {log.topics && <Badge variant="outline" className="text-xs">{log.topics}</Badge>}
+                                </div>
+                                <p className="text-sm mt-0.5 break-words">{log.message}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-center text-muted-foreground py-4">Nenhum alerta nos logs. Execute o collector na VPS para monitorar.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="system" className="mt-4">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Informações do Sistema - {selectedDevice.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {selectedDevice.last_system_info ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {[
+                            { label: "Identidade", value: selectedDevice.last_system_info.identity },
+                            { label: "RouterOS", value: selectedDevice.last_system_info.version },
+                            { label: "Uptime", value: selectedDevice.last_system_info.uptime },
+                            { label: "Board", value: selectedDevice.last_system_info['board-name'] },
+                            { label: "Arquitetura", value: selectedDevice.last_system_info.architecture },
+                            { label: "CPU", value: selectedDevice.last_system_info.cpu },
+                            { label: "Carga CPU", value: selectedDevice.last_system_info['cpu-load'] ? `${selectedDevice.last_system_info['cpu-load']}%` : '' },
+                            { label: "Memória Total", value: selectedDevice.last_system_info['total-memory'] ? formatBytes(parseInt(selectedDevice.last_system_info['total-memory']) || 0) : '' },
+                            { label: "Memória Livre", value: selectedDevice.last_system_info['free-memory'] ? formatBytes(parseInt(selectedDevice.last_system_info['free-memory']) || 0) : '' },
+                          ].filter(item => item.value).map((item) => (
+                            <div key={item.label} className="p-3 rounded-lg border bg-card">
+                              <p className="text-xs text-muted-foreground">{item.label}</p>
+                              <p className="text-sm font-medium mt-0.5">{item.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-center text-muted-foreground py-4">Dados do sistema não disponíveis. Execute o collector na VPS para coletar.</p>
                       )}
                     </CardContent>
                   </Card>
@@ -755,7 +890,7 @@ const MikrotikMonitor = () => {
                                 {t.latency_ms !== null && (
                                   <div className="text-right">
                                     <p className="text-sm font-mono">{t.latency_ms}ms</p>
-                                    <p className={`text-xs ${(t.packet_loss_pct || 0) > 0 ? "text-destructive" : "text-green-500"}`}>
+                                    <p className={`text-xs ${(t.packet_loss_pct || 0) > 0 ? "text-destructive" : "text-primary"}`}>
                                       {t.packet_loss_pct}% perda
                                     </p>
                                   </div>
