@@ -498,8 +498,11 @@ export type Database = {
           host: string
           id: string
           is_active: boolean
+          last_dhcp_summary: Json | null
           last_error: string | null
+          last_log_alerts: Json | null
           last_polled_at: string | null
+          last_system_info: Json | null
           name: string
           password: string
           port: number
@@ -515,8 +518,11 @@ export type Database = {
           host: string
           id?: string
           is_active?: boolean
+          last_dhcp_summary?: Json | null
           last_error?: string | null
+          last_log_alerts?: Json | null
           last_polled_at?: string | null
+          last_system_info?: Json | null
           name: string
           password?: string
           port?: number
@@ -532,8 +538,11 @@ export type Database = {
           host?: string
           id?: string
           is_active?: boolean
+          last_dhcp_summary?: Json | null
           last_error?: string | null
+          last_log_alerts?: Json | null
           last_polled_at?: string | null
+          last_system_info?: Json | null
           name?: string
           password?: string
           port?: number
