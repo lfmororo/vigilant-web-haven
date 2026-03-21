@@ -34,6 +34,7 @@ const allNavItems = [
 { label: "Clientes", href: "/admin/clients", icon: UserCheck, roles: ["admin"] },
 
 { label: "Inventário", href: "/admin/inventory", icon: Package, roles: ["admin"] },
+{ label: "Mikrotik", href: "/admin/mikrotik", icon: Router, roles: ["admin"] },
 { label: "Dashboard Suporte", href: "/admin/helpdesk", icon: Headphones, roles: ["admin", "technician"] },
 { label: "Chamados", href: "/admin/tickets", icon: TicketCheck, roles: ["admin", "technician"] },
 { label: "Ordens de Serviço", href: "/admin/service-orders", icon: FileText, roles: ["admin", "technician"] },
