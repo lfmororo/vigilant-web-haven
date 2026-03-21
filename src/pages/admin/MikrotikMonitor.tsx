@@ -715,6 +715,16 @@ const MikrotikMonitor = () => {
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleSendWeeklyReport(); }} disabled={!!polling}>
+                                {polling === "weekly" ? <Loader2 className="w-3 h-3 animate-spin" /> : <CalendarDays className="w-3 h-3 text-accent-foreground" />}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Enviar relatório semanal</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
                               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); generateCollectorScript(device); }}>
                                 <Download className="w-3 h-3" />
                               </Button>
