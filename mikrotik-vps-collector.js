@@ -220,17 +220,29 @@ function detectChanges(deviceId, deviceName, currentInterfaces, watchInterfaces)
 
 function detectLogAlerts(logs) {
   const alerts = [];
-  const keywords = ['down', 'error', 'fail', 'critical', 'link down', 'disconnected', 'ppp', 'timeout', 'login failure', 'denied', 'unreachable', 'duplicate'];
+  const loginKeywords = ['login failure', 'denied', 'invalid user', 'wrong password', 'authentication failed'];
+  const interfaceKeywords = ['link down', 'disconnected', 'down', 'lost connection'];
+  const systemKeywords = ['error', 'fail', 'critical', 'kernel', 'out of memory', 'watchdog', 'reboot', 'unreachable', 'duplicate'];
   
   for (const log of logs) {
     const msg = (log.message || '').toLowerCase();
     const topic = (log.topics || '').toLowerCase();
     
-    if (keywords.some(kw => msg.includes(kw)) || topic.includes('error') || topic.includes('critical') || topic.includes('warning')) {
+    let category = null;
+    if (loginKeywords.some(kw => msg.includes(kw))) {
+      category = 'login';
+    } else if (interfaceKeywords.some(kw => msg.includes(kw)) || (topic.includes('interface') && msg.includes('down'))) {
+      category = 'interface';
+    } else if (systemKeywords.some(kw => msg.includes(kw)) || topic.includes('error') || topic.includes('critical') || topic.includes('warning')) {
+      category = 'system';
+    }
+    
+    if (category) {
       alerts.push({
         time: log.time || '',
         topics: log.topics || '',
         message: log.message || '',
+        category,
       });
     }
   }
