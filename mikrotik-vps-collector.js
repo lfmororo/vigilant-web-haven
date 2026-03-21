@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * Mikrotik VPS Collector
+ * Mikrotik & SNMP VPS Collector
  * 
  * Script para rodar em uma VPS que coleta dados de dispositivos Mikrotik
- * (RouterOS 6.x ou 7.x) via API binária e envia para o sistema via Edge Function.
- * O sistema então notifica via WhatsApp quando detecta mudanças de status.
+ * (RouterOS 6.x ou 7.x) via API binária e dispositivos SNMP (ex: TP-Link ER605)
+ * e envia para o sistema via Edge Function.
  * 
  * Instalação:
  *   npm init -y
- *   npm install routeros-client node-cron
+ *   npm install routeros-client net-snmp node-cron
  * 
  * Configuração:
  *   Edite o arquivo config.json (será criado automaticamente na primeira execução)
@@ -20,7 +20,7 @@
  *   sudo nano /etc/systemd/system/mikrotik-collector.service
  *   ---
  *   [Unit]
- *   Description=Mikrotik VPS Collector
+ *   Description=Mikrotik & SNMP VPS Collector
  *   After=network.target
  *   [Service]
  *   Type=simple
@@ -37,6 +37,7 @@
  */
 
 const { RouterOSClient } = require('routeros-client');
+const snmp = require('net-snmp');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -58,12 +59,22 @@ const DEFAULT_CONFIG = {
   devices: [
     {
       device_id: 'UUID_DO_DISPOSITIVO_NO_SISTEMA',
+      device_type: 'mikrotik', // 'mikrotik' ou 'snmp'
       name: 'Mikrotik Principal',
       host: '192.168.0.1',
       port: 8728,
       username: 'admin',
       password: 'senha',
       // Interfaces para monitorar mudanças de status (vazio = todas)
+      watch_interfaces: [],
+    },
+    {
+      device_id: 'UUID_DO_ER605_NO_SISTEMA',
+      device_type: 'snmp',
+      name: 'TP-Link ER605',
+      host: '192.168.0.2',
+      snmp_community: 'public',
+      snmp_version: '2c', // '1' ou '2c'
       watch_interfaces: [],
     }
   ]
