@@ -1497,11 +1497,13 @@ const MikrotikMonitor = () => {
                   </Card>
                 </TabsContent>
               </Tabs>
+              </>
             ) : (
               <Card>
                 <CardContent className="py-16 text-center text-muted-foreground">
                   <Network className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                  <p>Selecione um dispositivo para ver as interfaces</p>
+                  <p className="text-lg font-medium mb-1">Selecione um dispositivo</p>
+                  <p className="text-sm">Clique em um dispositivo na lista para ver detalhes</p>
                 </CardContent>
               </Card>
             )}
