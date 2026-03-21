@@ -455,12 +455,15 @@ async function pollDevice(config, device) {
     console.log(`  ℹ️  RouterOS ${data.resource.version}, Uptime: ${data.resource.uptime || 'N/A'}`);
   }
 
-  // Analisar DHCP leases
-  const dhcpSummary = analyzeDhcpLeases(data.dhcpLeases);
-  console.log(`  🌐 DHCP: ${dhcpSummary.active_leases} ativos / ${dhcpSummary.total_leases} total (${dhcpSummary.dynamic_leases} dinâmicos, ${dhcpSummary.static_leases} estáticos)`);
+  // Analisar DHCP leases com capacidade dos pools
+  const dhcpSummary = analyzeDhcpLeases(data.dhcpLeases, data.dhcpPools, data.dhcpServers);
+  const usageStr = dhcpSummary.usage_pct !== null ? ` | Utilização: ${dhcpSummary.usage_pct}%` : '';
+  const capStr = dhcpSummary.total_capacity > 0 ? ` | Capacidade: ${dhcpSummary.total_capacity} IPs` : '';
+  console.log(`  🌐 DHCP: ${dhcpSummary.active_leases} ativos / ${dhcpSummary.total_leases} total (${dhcpSummary.dynamic_leases} dinâmicos, ${dhcpSummary.static_leases} estáticos)${capStr}${usageStr}`);
   if (Object.keys(dhcpSummary.by_server).length > 0) {
     for (const [server, info] of Object.entries(dhcpSummary.by_server)) {
-      console.log(`     📡 ${server}: ${info.active}/${info.total} leases`);
+      const srvUsage = info.usage_pct !== null ? ` (${info.usage_pct}% de ${info.capacity} IPs)` : '';
+      console.log(`     📡 ${server}: ${info.active}/${info.total} leases${srvUsage}`);
     }
   }
 
