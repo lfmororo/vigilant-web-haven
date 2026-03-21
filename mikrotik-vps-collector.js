@@ -340,9 +340,18 @@ async function pollDevice(config, device) {
     return;
   }
 
-  console.log(`  📊 ${data.interfaces.length} interfaces, ${data.ipAddresses.length} IPs, ${data.pppoeClients.length} PPPoE`);
+  console.log(`  📊 ${data.interfaces.length} interfaces, ${data.ipAddresses.length} IPs, ${data.pppoeClients.length} PPPoE, ${data.dhcpLeases.length} DHCP leases`);
   if (data.resource.version) {
     console.log(`  ℹ️  RouterOS ${data.resource.version}, Uptime: ${data.resource.uptime || 'N/A'}`);
+  }
+
+  // Analisar DHCP leases
+  const dhcpSummary = analyzeDhcpLeases(data.dhcpLeases);
+  console.log(`  🌐 DHCP: ${dhcpSummary.active_leases} ativos / ${dhcpSummary.total_leases} total (${dhcpSummary.dynamic_leases} dinâmicos, ${dhcpSummary.static_leases} estáticos)`);
+  if (Object.keys(dhcpSummary.by_server).length > 0) {
+    for (const [server, info] of Object.entries(dhcpSummary.by_server)) {
+      console.log(`     📡 ${server}: ${info.active}/${info.total} leases`);
+    }
   }
 
   // Detectar mudanças de status
@@ -362,7 +371,7 @@ async function pollDevice(config, device) {
   }
 
   // Enviar ao sistema
-  await sendToSystem(config, device.device_id, data, changes, logAlerts);
+  await sendToSystem(config, device.device_id, data, changes, logAlerts, dhcpSummary);
 }
 
 async function mainLoop() {
