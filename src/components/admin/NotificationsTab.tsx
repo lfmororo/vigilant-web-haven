@@ -24,6 +24,7 @@ const NOTIFICATION_SETTINGS: NotificationSetting[] = [
   { key: "notif_daily_summary", label: "Resumo Diário", description: "Enviar resumo diário administrativo de chamados", category: "report" },
   { key: "notif_stale_ticket_alert", label: "Chamados Parados", description: "Alertar sobre chamados sem atualização há muito tempo", category: "report" },
   { key: "notif_pending_technician_summary", label: "Pendências do Técnico", description: "Enviar resumo de chamados pendentes ao técnico", category: "report" },
+  { key: "notif_mikrotik_alert", label: "Alerta Mikrotik", description: "Enviar alertas de mudanças de status e erros nos dispositivos Mikrotik", category: "automated" },
 ];
 
 const CATEGORIES = [
