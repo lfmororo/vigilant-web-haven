@@ -353,6 +353,16 @@ const MikrotikMonitor = () => {
     fetchClients();
   }, [fetchDevices]);
 
+  // Keep selectedDevice in sync with devices array
+  useEffect(() => {
+    if (selectedDevice) {
+      const updated = devices.find(d => d.id === selectedDevice.id);
+      if (updated && JSON.stringify(updated) !== JSON.stringify(selectedDevice)) {
+        setSelectedDevice(updated);
+      }
+    }
+  }, [devices]);
+
   useEffect(() => {
     if (selectedDevice) {
       fetchInterfaces(selectedDevice.id);
