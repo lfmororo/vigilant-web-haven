@@ -140,11 +140,17 @@ async function collectDeviceData(device) {
       resource = resData?.[0] || {};
     } catch (_) {}
 
-    // Coletar logs recentes (últimos 50)
+    // Coletar logs recentes (últimos 200 para análise de 24h)
     let logs = [];
     try {
       const logData = await client.menu('/log').getAll();
-      logs = (logData || []).slice(-50);
+      logs = (logData || []).slice(-200);
+    } catch (_) {}
+
+    // Coletar leases DHCP
+    let dhcpLeases = [];
+    try {
+      dhcpLeases = await client.menu('/ip/dhcp-server/lease').getAll();
     } catch (_) {}
 
     await api.disconnect();
@@ -157,6 +163,7 @@ async function collectDeviceData(device) {
       ipAddresses: ipAddresses || [],
       pppoeClients: pppoeClients || [],
       logs,
+      dhcpLeases: dhcpLeases || [],
     };
   } catch (err) {
     if (api) {
