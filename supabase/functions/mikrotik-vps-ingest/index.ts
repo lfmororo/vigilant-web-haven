@@ -155,8 +155,8 @@ Deno.serve(async (req) => {
       });
     }
     if (log_alerts?.length > 0) deviceUpdate.last_log_alerts = log_alerts.slice(0, 50);
-    if (collected_data?.resource || collected_data?.identity) {
-      deviceUpdate.last_system_info = {
+    if (collected_data?.resource || collected_data?.identity || collected_data?.health) {
+      const sysInfo: any = {
         identity: collected_data.identity || '',
         version: collected_data.resource?.version || '',
         uptime: collected_data.resource?.uptime || '',
@@ -166,7 +166,33 @@ Deno.serve(async (req) => {
         'total-memory': collected_data.resource?.['total-memory'] || collected_data.resource?.totalMemory || '',
         'board-name': collected_data.resource?.['board-name'] || collected_data.resource?.boardName || '',
         architecture: collected_data.resource?.['architecture-name'] || collected_data.resource?.architectureName || '',
+        'cpu-count': collected_data.resource?.['cpu-count'] || collected_data.resource?.cpuCount || '',
+        'cpu-frequency': collected_data.resource?.['cpu-frequency'] || collected_data.resource?.cpuFrequency || '',
       };
+      // Health data (temperature, voltage, fan)
+      if (collected_data.health && typeof collected_data.health === 'object') {
+        sysInfo.health = collected_data.health;
+      }
+      // Detect reboot by comparing uptime
+      const previousInfo = device.last_system_info;
+      if (previousInfo?.uptime && sysInfo.uptime) {
+        const parseUptimeSeconds = (u: string): number => {
+          let total = 0;
+          const weeks = u.match(/(\d+)w/); if (weeks) total += parseInt(weeks[1]) * 604800;
+          const days = u.match(/(\d+)d/); if (days) total += parseInt(days[1]) * 86400;
+          const hours = u.match(/(\d+)h/); if (hours) total += parseInt(hours[1]) * 3600;
+          const mins = u.match(/(\d+)m/); if (mins) total += parseInt(mins[1]) * 60;
+          const secs = u.match(/(\d+)s/); if (secs) total += parseInt(secs[1]);
+          return total;
+        };
+        const prevSec = parseUptimeSeconds(previousInfo.uptime);
+        const curSec = parseUptimeSeconds(sysInfo.uptime);
+        if (prevSec > 0 && curSec < prevSec && (prevSec - curSec) > 120) {
+          sysInfo.reboot_detected = true;
+          sysInfo.previous_uptime = previousInfo.uptime;
+        }
+      }
+      deviceUpdate.last_system_info = sysInfo;
     }
     await supabase
       .from("mikrotik_devices")
