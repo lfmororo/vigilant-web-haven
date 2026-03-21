@@ -745,7 +745,7 @@ async function mainLoop() {
   const config = loadConfig();
 
   console.log('='.repeat(60));
-  console.log('  MIKROTIK VPS COLLECTOR');
+  console.log('  MIKROTIK & SNMP VPS COLLECTOR');
   console.log(`  Dispositivos: ${config.devices.length}`);
   console.log(`  Intervalo: ${config.poll_interval_seconds}s`);
   console.log('='.repeat(60));
@@ -753,12 +753,13 @@ async function mainLoop() {
   // Primeiro poll (preencher estados iniciais sem alertar)
   console.log('\n🚀 Coletando estado inicial...');
   for (const device of config.devices) {
-    const data = await collectDeviceData(device);
+    const devType = device.device_type || 'mikrotik';
+    const data = devType === 'snmp' ? await collectSnmpData(device) : await collectDeviceData(device);
     if (data.success) {
       detectChanges(device.device_id, device.name, data.interfaces, device.watch_interfaces);
-      const dhcp = analyzeDhcpLeases(data.dhcpLeases, data.dhcpPools, data.dhcpServers);
+      const dhcp = analyzeDhcpLeases(data.dhcpLeases || [], data.dhcpPools || [], data.dhcpServers || []);
       const capInfo = dhcp.total_capacity > 0 ? `, ${dhcp.total_capacity} IPs no pool (${dhcp.usage_pct}% uso)` : '';
-      console.log(`  ✅ ${device.name}: ${data.interfaces.length} interfaces, ${dhcp.total_leases} DHCP leases${capInfo}`);
+      console.log(`  ✅ [${devType.toUpperCase()}] ${device.name}: ${data.interfaces.length} interfaces${dhcp.total_leases > 0 ? `, ${dhcp.total_leases} DHCP leases` : ''}${capInfo}`);
       await sendToSystem(config, device.device_id, data, [], [], dhcp);
     } else {
       console.error(`  ❌ ${device.name}: ${data.error}`);
