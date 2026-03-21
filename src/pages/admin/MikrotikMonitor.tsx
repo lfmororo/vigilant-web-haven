@@ -317,6 +317,8 @@ const MikrotikMonitor = () => {
   const [pingForm, setPingForm] = useState({ target_ip: "", label: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [dhcpHistory, setDhcpHistory] = useState<any[]>([]);
+  const [trafficHistory, setTrafficHistory] = useState<any[]>([]);
+  const [selectedTrafficIface, setSelectedTrafficIface] = useState<string>("");
 
   const fetchDevices = useCallback(async () => {
     const { data } = await supabase
