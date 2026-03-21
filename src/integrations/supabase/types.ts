@@ -495,6 +495,7 @@ export type Database = {
           api_port: number | null
           client_id: string
           created_at: string
+          device_type: string
           host: string
           id: string
           is_active: boolean
@@ -507,6 +508,8 @@ export type Database = {
           password: string
           port: number
           proxy_url: string | null
+          snmp_community: string | null
+          snmp_version: string | null
           updated_at: string
           use_ssl: boolean
           username: string
@@ -515,6 +518,7 @@ export type Database = {
           api_port?: number | null
           client_id: string
           created_at?: string
+          device_type?: string
           host: string
           id?: string
           is_active?: boolean
@@ -527,6 +531,8 @@ export type Database = {
           password?: string
           port?: number
           proxy_url?: string | null
+          snmp_community?: string | null
+          snmp_version?: string | null
           updated_at?: string
           use_ssl?: boolean
           username?: string
@@ -535,6 +541,7 @@ export type Database = {
           api_port?: number | null
           client_id?: string
           created_at?: string
+          device_type?: string
           host?: string
           id?: string
           is_active?: boolean
@@ -547,6 +554,8 @@ export type Database = {
           password?: string
           port?: number
           proxy_url?: string | null
+          snmp_community?: string | null
+          snmp_version?: string | null
           updated_at?: string
           use_ssl?: boolean
           username?: string
