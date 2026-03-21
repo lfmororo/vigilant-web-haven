@@ -36,6 +36,12 @@ interface MikrotikDevice {
   device_type: string;
   snmp_community: string | null;
   snmp_version: string | null;
+  snmp_security_level: string | null;
+  snmp_user: string | null;
+  snmp_auth_protocol: string | null;
+  snmp_auth_passphrase: string | null;
+  snmp_priv_protocol: string | null;
+  snmp_priv_passphrase: string | null;
   client?: { full_name: string };
   last_dhcp_summary?: any;
   last_log_alerts?: any[];
