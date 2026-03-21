@@ -1240,6 +1240,57 @@ const MikrotikMonitor = () => {
                       )}
                     </CardContent>
                   </Card>
+
+                  {/* Gráficos históricos de temperatura e CPU */}
+                  {systemHistory.length > 1 && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Thermometer className="w-4 h-4" />
+                            Histórico de Temperatura
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={250}>
+                            <LineChart data={systemHistory.filter(d => d.cpu_temp != null)}>
+                              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                              <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                              <YAxis tick={{ fontSize: 11 }} unit="°C" domain={['dataMin - 5', 'dataMax + 5']} />
+                              <RechartsTooltip formatter={(value: number) => [`${value}°C`, 'Temperatura']} />
+                              <Line type="monotone" dataKey="cpu_temp" name="Temp CPU" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
+                              {/* Linha de referência 70°C */}
+                              <Line type="monotone" dataKey={() => 70} name="Limite (70°C)" stroke="hsl(var(--muted-foreground))" strokeWidth={1} strokeDasharray="5 5" dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Cpu className="w-4 h-4" />
+                            Histórico de CPU Load
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={250}>
+                            <LineChart data={systemHistory.filter(d => d.cpu_load != null)}>
+                              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                              <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                              <YAxis tick={{ fontSize: 11 }} unit="%" domain={[0, 100]} />
+                              <RechartsTooltip formatter={(value: number) => [`${value}%`, 'CPU Load']} />
+                              <Legend />
+                              <Line type="monotone" dataKey="cpu_load" name="CPU Load" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                              {systemHistory.some(d => d.memory_used_pct != null) && (
+                                <Line type="monotone" dataKey="memory_used_pct" name="Memória %" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} />
+                              )}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
                 </TabsContent>
 
                 <TabsContent value="ping" className="mt-4">
