@@ -546,6 +546,16 @@ const MikrotikMonitor = () => {
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handlePollDevice(device.id); }} disabled={polling === device.id}>
                           {polling === device.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                         </Button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); generateCollectorScript(device); }}>
+                                <Download className="w-3 h-3" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Baixar script collector</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditDevice({ ...device }); setShowEditDialog(true); }}>
                           <Edit className="w-3 h-3" />
                         </Button>
