@@ -90,7 +90,194 @@ const formatBytes = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 };
 
-const MikrotikMonitor = () => {
+const generateCollectorScript = (device: MikrotikDevice) => {
+  const script = `#!/usr/bin/env node
+/**
+ * Mikrotik VPS Collector - ${device.name}
+ * Script pré-configurado para coleta de dados via API binária (porta 8728).
+ *
+ * Instalação na VPS:
+ *   npm init -y
+ *   npm install routeros-client
+ *   node mikrotik-collector.js
+ */
+
+const { RouterOSClient } = require('routeros-client');
+const http = require('http');
+const https = require('https');
+
+// ===== CONFIGURAÇÃO =====
+const CONFIG = {
+  supabase_url: '${import.meta.env.VITE_SUPABASE_URL}',
+  supabase_anon_key: '${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}',
+  poll_interval_seconds: 60,
+  devices: [
+    {
+      device_id: '${device.id}',
+      name: '${device.name}',
+      host: '${device.host}',
+      port: ${device.api_port || 8728},
+      username: '${device.username}',
+      password: '${device.password}',
+      watch_interfaces: [],
+    }
+  ]
+};
+
+// ===== STATE =====
+const previousStates = new Map();
+
+// ===== MIKROTIK CONNECTION =====
+async function connectToDevice(device) {
+  const api = new RouterOSClient({
+    host: device.host,
+    port: device.port || 8728,
+    user: device.username,
+    password: device.password,
+    timeout: 15,
+  });
+  const client = await api.connect();
+  return { api, client };
+}
+
+async function collectDeviceData(device) {
+  let api;
+  try {
+    const conn = await connectToDevice(device);
+    api = conn.api;
+    const client = conn.client;
+    console.log(\`✅ Conectado a \${device.name} (\${device.host})\`);
+
+    const interfaces = await client.menu('/interface').getAll();
+    let ipAddresses = []; try { ipAddresses = await client.menu('/ip/address').getAll(); } catch (_) {}
+    let pppoeClients = []; try { pppoeClients = await client.menu('/interface/pppoe-client').getAll(); } catch (_) {}
+    let identity = ''; try { const r = await client.menu('/system/identity').getAll(); identity = r?.[0]?.name || ''; } catch (_) {}
+    let resource = {}; try { const r = await client.menu('/system/resource').getAll(); resource = r?.[0] || {}; } catch (_) {}
+    let logs = []; try { const r = await client.menu('/log').getAll(); logs = (r || []).slice(-50); } catch (_) {}
+
+    await api.disconnect();
+    return { success: true, identity, resource, interfaces: interfaces || [], ipAddresses: ipAddresses || [], pppoeClients: pppoeClients || [], logs };
+  } catch (err) {
+    if (api) { try { await api.disconnect(); } catch (_) {} }
+    return { success: false, error: err.message };
+  }
+}
+
+// ===== CHANGE DETECTION =====
+function detectChanges(deviceId, deviceName, currentInterfaces, watchInterfaces) {
+  const changes = [];
+  const prevState = previousStates.get(deviceId) || {};
+  for (const iface of currentInterfaces) {
+    const ifName = iface.name || iface['.id'];
+    if (!ifName) continue;
+    if (watchInterfaces?.length > 0 && !watchInterfaces.includes(ifName)) continue;
+    const isRunning = iface.running === 'true' || iface.running === true;
+    const wasRunning = prevState[ifName];
+    if (wasRunning !== undefined && wasRunning !== isRunning) {
+      changes.push({ interface_name: ifName, previous_status: wasRunning ? 'up' : 'down', current_status: isRunning ? 'up' : 'down', device_name: deviceName });
+    }
+    prevState[ifName] = isRunning;
+  }
+  previousStates.set(deviceId, prevState);
+  return changes;
+}
+
+function detectLogAlerts(logs) {
+  const alerts = [];
+  const keywords = ['down', 'error', 'fail', 'critical', 'link down', 'disconnected'];
+  for (const log of logs) {
+    const msg = (log.message || '').toLowerCase();
+    const topic = (log.topics || '').toLowerCase();
+    if (keywords.some(kw => msg.includes(kw)) || topic.includes('error') || topic.includes('critical')) {
+      alerts.push({ time: log.time || '', topics: log.topics || '', message: log.message || '' });
+    }
+  }
+  return alerts;
+}
+
+// ===== HTTP POST =====
+function postJSON(url, data, headers) {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const mod = parsedUrl.protocol === 'https:' ? https : http;
+    const body = JSON.stringify(data);
+    const req = mod.request(parsedUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), ...headers }, timeout: 30000 }, (res) => {
+      let rb = ''; res.on('data', c => rb += c);
+      res.on('end', () => { try { resolve({ status: res.statusCode, data: JSON.parse(rb) }); } catch { resolve({ status: res.statusCode, data: rb }); } });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
+    req.write(body); req.end();
+  });
+}
+
+async function sendToSystem(deviceId, data, changes, logAlerts) {
+  const url = \`\${CONFIG.supabase_url}/functions/v1/mikrotik-vps-ingest\`;
+  try {
+    const result = await postJSON(url, { device_id: deviceId, collected_data: data, status_changes: changes, log_alerts: logAlerts }, {
+      'Authorization': \`Bearer \${CONFIG.supabase_anon_key}\`, 'apikey': CONFIG.supabase_anon_key
+    });
+    if (result.status >= 200 && result.status < 300) {
+      console.log(\`  📤 Dados enviados (\${data.interfaces?.length || 0} interfaces, \${changes.length} mudanças)\`);
+    } else {
+      console.error(\`  ❌ Erro: \${result.status}\`, result.data);
+    }
+  } catch (err) {
+    console.error(\`  ❌ Falha: \${err.message}\`);
+  }
+}
+
+// ===== MAIN =====
+async function pollDevice(device) {
+  console.log(\`\\n🔄 Coletando \${device.name}...\`);
+  const data = await collectDeviceData(device);
+  if (!data.success) {
+    console.error(\`  ❌ \${data.error}\`);
+    await sendToSystem(device.device_id, data, [{ interface_name: 'connection', previous_status: 'up', current_status: 'down', device_name: device.name }], []);
+    return;
+  }
+  console.log(\`  📊 \${data.interfaces.length} interfaces\`);
+  const changes = detectChanges(device.device_id, device.name, data.interfaces, device.watch_interfaces);
+  if (changes.length > 0) {
+    console.log(\`  ⚠️  \${changes.length} mudança(s)\`);
+    changes.forEach(c => console.log(\`     \${c.current_status === 'up' ? '🟢' : '🔴'} \${c.interface_name}: \${c.previous_status} → \${c.current_status}\`));
+  }
+  const logAlerts = detectLogAlerts(data.logs);
+  await sendToSystem(device.device_id, data, changes, logAlerts);
+}
+
+async function main() {
+  console.log('=' .repeat(50));
+  console.log('  MIKROTIK COLLECTOR - ${device.name}');
+  console.log('=' .repeat(50));
+  console.log('\\n🚀 Coletando estado inicial...');
+  for (const d of CONFIG.devices) {
+    const data = await collectDeviceData(d);
+    if (data.success) {
+      detectChanges(d.device_id, d.name, data.interfaces, d.watch_interfaces);
+      console.log(\`  ✅ \${d.name}: \${data.interfaces.length} interfaces\`);
+      await sendToSystem(d.device_id, data, [], []);
+    } else {
+      console.error(\`  ❌ \${d.name}: \${data.error}\`);
+    }
+  }
+  console.log('\\n⏰ Monitoramento iniciado...');
+  setInterval(async () => { for (const d of CONFIG.devices) await pollDevice(d); }, CONFIG.poll_interval_seconds * 1000);
+}
+
+main().catch(err => { console.error('Erro fatal:', err); process.exit(1); });
+`;
+
+  const blob = new Blob([script], { type: 'text/javascript' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `mikrotik-collector-${device.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.js`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast.success('Script baixado com sucesso!');
+};
+
   const [devices, setDevices] = useState<MikrotikDevice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<MikrotikDevice | null>(null);
