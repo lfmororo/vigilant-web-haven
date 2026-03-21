@@ -1594,7 +1594,7 @@ const MikrotikMonitor = () => {
                     </CardHeader>
                     <CardContent>
                       {(() => {
-                        const runningIfaces = interfaces.filter(i => i.running && !i.disabled);
+                        const runningIfaces = interfaces.filter(i => i.running && !i.disabled && !/^(lo|null|dummy)$/i.test(i.interface_name) && i.interface_type !== 'loopback' && i.interface_type !== 'snmp-type-24');
                         if (runningIfaces.length === 0) return (
                           <p className="text-center text-muted-foreground py-4">Nenhuma interface ativa. Clique em Atualizar para coletar.</p>
                         );
