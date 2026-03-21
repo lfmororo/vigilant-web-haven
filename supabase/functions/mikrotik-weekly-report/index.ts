@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     // Get active devices
     const { data: devices } = await supabase
       .from("mikrotik_devices")
-      .select("*, client:clients(full_name, whatsapp_group_id)")
+      .select("*, client:clients(full_name, whatsapp_group_id, phone)")
       .eq("is_active", true);
 
     if (!devices?.length) {
