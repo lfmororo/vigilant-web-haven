@@ -358,6 +358,18 @@ const MikrotikMonitor = () => {
     setInterfaces((data as any) || []);
   };
 
+  const fetchInterfaceEvents = async (deviceId: string) => {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase
+      .from("mikrotik_interface_events")
+      .select("*")
+      .eq("device_id", deviceId)
+      .gte("recorded_at", since)
+      .order("recorded_at", { ascending: false })
+      .limit(200);
+    setInterfaceEvents((data as any) || []);
+  };
+
   const fetchPingTargets = async (deviceId: string) => {
     const { data } = await supabase
       .from("mikrotik_ping_targets")
