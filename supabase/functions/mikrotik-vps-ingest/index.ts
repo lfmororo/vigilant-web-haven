@@ -453,12 +453,61 @@ async function sendWhatsAppAlert(
 
   const text = lines.join("\n");
 
-  // Enviar para cada admin
-  let sent = false;
+  // Collect all recipient phones: admins + client phone + technicians linked to client
+  const phoneSet = new Set<string>();
+  const allPhones: { phone: string; source: string }[] = [];
+
+  // 1. Admin phones
   for (const admin of adminProfiles) {
     const phone = cleanPhone(admin.phone);
-    if (!phone || phone.length < 10) continue;
+    if (phone && phone.length >= 10 && !phoneSet.has(phone)) {
+      phoneSet.add(phone);
+      allPhones.push({ phone, source: "admin" });
+    }
+  }
 
+  // 2. Client phone
+  const { data: fullClient } = await supabase
+    .from("clients")
+    .select("phone, whatsapp_group_id")
+    .eq("id", device.client_id)
+    .single();
+
+  if (fullClient?.phone) {
+    const phone = cleanPhone(fullClient.phone);
+    if (phone && phone.length >= 10 && !phoneSet.has(phone)) {
+      phoneSet.add(phone);
+      allPhones.push({ phone, source: "client" });
+    }
+  }
+
+  // 3. Technicians linked to this client (via parent_client_id)
+  const { data: techRoles } = await supabase
+    .from("user_roles")
+    .select("user_id")
+    .eq("role", "technician");
+
+  if (techRoles?.length) {
+    const techIds = techRoles.map((r: any) => r.user_id);
+    const { data: techProfiles } = await supabase
+      .from("profiles")
+      .select("phone, full_name")
+      .in("id", techIds)
+      .eq("parent_client_id", device.client_id)
+      .not("phone", "is", null);
+
+    for (const tech of (techProfiles || [])) {
+      const phone = cleanPhone(tech.phone);
+      if (phone && phone.length >= 10 && !phoneSet.has(phone)) {
+        phoneSet.add(phone);
+        allPhones.push({ phone, source: "technician" });
+      }
+    }
+  }
+
+  // Send to all recipients
+  let sent = false;
+  for (const recipient of allPhones) {
     try {
       const res = await fetch(`${apiUrl}/send/text`, {
         method: "POST",
@@ -467,7 +516,7 @@ async function sendWhatsAppAlert(
           token: apiToken,
         },
         body: JSON.stringify({
-          number: phone,
+          number: recipient.phone,
           text,
           linkPreview: false,
         }),
@@ -476,10 +525,9 @@ async function sendWhatsAppAlert(
       const status = res.ok ? "sent" : "failed";
       const errMsg = res.ok ? null : await res.text();
 
-      // Log no banco
       await supabase.from("whatsapp_notification_logs").insert({
         notification_type: "mikrotik_alert",
-        recipient_phone: phone,
+        recipient_phone: recipient.phone,
         message_preview: text.substring(0, 200),
         status,
         error_message: errMsg,
@@ -487,10 +535,10 @@ async function sendWhatsAppAlert(
 
       if (res.ok) sent = true;
     } catch (err: any) {
-      console.error(`Erro ao enviar WhatsApp para ${phone}:`, err);
+      console.error(`Erro ao enviar WhatsApp para ${recipient.phone}:`, err);
       await supabase.from("whatsapp_notification_logs").insert({
         notification_type: "mikrotik_alert",
-        recipient_phone: phone,
+        recipient_phone: recipient.phone,
         message_preview: text.substring(0, 200),
         status: "failed",
         error_message: err.message,
@@ -498,30 +546,22 @@ async function sendWhatsAppAlert(
     }
   }
 
-  // Enviar também para o grupo WhatsApp do cliente se configurado
-  if (client) {
-    const { data: fullClient } = await supabase
-      .from("clients")
-      .select("whatsapp_group_id")
-      .eq("id", device.client_id)
-      .single();
-
-    if (fullClient?.whatsapp_group_id) {
-      try {
-        await fetch(`${apiUrl}/send/text`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            token: apiToken,
-          },
-          body: JSON.stringify({
-            number: fullClient.whatsapp_group_id,
-            text,
-            linkPreview: false,
-          }),
-        });
-      } catch (_) {}
-    }
+  // Send to client WhatsApp group if configured
+  if (fullClient?.whatsapp_group_id) {
+    try {
+      await fetch(`${apiUrl}/send/text`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          token: apiToken,
+        },
+        body: JSON.stringify({
+          number: fullClient.whatsapp_group_id,
+          text,
+          linkPreview: false,
+        }),
+      });
+    } catch (_) {}
   }
 
   return sent;
