@@ -278,6 +278,7 @@ main().catch(err => { console.error('Erro fatal:', err); process.exit(1); });
   toast.success('Script baixado com sucesso!');
 };
 
+const MikrotikMonitor = () => {
   const [devices, setDevices] = useState<MikrotikDevice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<MikrotikDevice | null>(null);
