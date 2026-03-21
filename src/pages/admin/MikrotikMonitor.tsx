@@ -429,6 +429,19 @@ const MikrotikMonitor = () => {
     })));
   };
 
+  const fetchSystemHistory = async (deviceId: string) => {
+    const { data } = await supabase
+      .from("mikrotik_system_history")
+      .select("*")
+      .eq("device_id", deviceId)
+      .order("recorded_at", { ascending: true })
+      .limit(200);
+    setSystemHistory((data || []).map((d: any) => ({
+      ...d,
+      time: new Date(d.recorded_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+    })));
+  };
+
   useEffect(() => {
     if (selectedDevice) {
       fetchInterfaces(selectedDevice.id);
