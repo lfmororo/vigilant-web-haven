@@ -489,6 +489,23 @@ async function pollDevice(config, device) {
     console.log(`  ℹ️  RouterOS ${data.resource.version}, Uptime: ${data.resource.uptime || 'N/A'}`);
   }
 
+  // Mostrar consumo de banda das interfaces UP
+  const upIfaces = data.interfaces.filter(i => (i.running === 'true' || i.running === true) && i['tx-bits-per-second'] !== undefined);
+  if (upIfaces.length > 0) {
+    console.log(`  📶 Banda em tempo real:`);
+    for (const iface of upIfaces) {
+      const txBps = iface['tx-bits-per-second'] || 0;
+      const rxBps = iface['rx-bits-per-second'] || 0;
+      const fmtRate = (bps) => {
+        if (bps >= 1000000000) return `${(bps / 1000000000).toFixed(2)} Gbps`;
+        if (bps >= 1000000) return `${(bps / 1000000).toFixed(2)} Mbps`;
+        if (bps >= 1000) return `${(bps / 1000).toFixed(1)} Kbps`;
+        return `${bps} bps`;
+      };
+      console.log(`     📡 ${iface.name}: ↑ ${fmtRate(txBps)} | ↓ ${fmtRate(rxBps)}`);
+    }
+  }
+
   // Analisar DHCP leases com capacidade dos pools
   const dhcpSummary = analyzeDhcpLeases(data.dhcpLeases, data.dhcpPools, data.dhcpServers);
   const usageStr = dhcpSummary.usage_pct !== null ? ` | Utilização: ${dhcpSummary.usage_pct}%` : '';
