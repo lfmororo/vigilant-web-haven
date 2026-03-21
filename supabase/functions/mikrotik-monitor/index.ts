@@ -155,9 +155,9 @@ async function fetchDeviceData(supabase: any, device: any) {
 
     // Fetch IP addresses
     try {
-      const ipRes = await fetch(`${baseUrl}/ip/address`, { headers });
+      const ipRes = await safeFetch(`${baseUrl}/ip/address`, { headers });
       if (ipRes.ok) ipAddresses = await ipRes.json();
-    } catch (_) { /* optional */ }
+      else await ipRes.text();
 
     // Fetch PPPoE client interfaces
     try {
