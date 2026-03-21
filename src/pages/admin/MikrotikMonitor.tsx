@@ -33,6 +33,9 @@ interface MikrotikDevice {
   proxy_url: string | null;
   api_port: number | null;
   client?: { full_name: string };
+  last_dhcp_summary?: any;
+  last_log_alerts?: any[];
+  last_system_info?: any;
 }
 
 interface MikrotikInterface {
