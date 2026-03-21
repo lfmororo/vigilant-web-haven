@@ -107,37 +107,70 @@ Deno.serve(async (req) => {
       const freeMem = parseInt(sysInfo['free-memory'] || '0') || 0;
       const memPct = totalMem > 0 ? Math.round(((totalMem - freeMem) / totalMem) * 100) : null;
 
-      // 2. Reboots in last 24h — check whatsapp logs for reboot alerts
-      const { count: rebootCount } = await supabase
+      // 2. Reboots in last 24h
+      const { data: rebootEvents } = await supabase
         .from("whatsapp_notification_logs")
-        .select("id", { count: "exact", head: true })
+        .select("id")
         .eq("notification_type", "mikrotik_alert")
         .gte("created_at", since24h)
         .like("message_preview", `%REINICIALIZAÇÃO%${device.name}%`);
-
-      // Also check if current system info has reboot_detected
       const currentReboot = sysInfo.reboot_detected ? 1 : 0;
-      const totalReboots = Math.max(rebootCount || 0, currentReboot);
+      const totalReboots = Math.max((rebootEvents || []).length, currentReboot);
 
-      // 3. Interface down events — count from whatsapp logs
-      const { data: alertLogs } = await supabase
-        .from("whatsapp_notification_logs")
-        .select("message_preview")
-        .eq("notification_type", "mikrotik_alert")
-        .gte("created_at", since24h)
-        .like("message_preview", `%${device.name}%`);
+      // 3. Interface events from mikrotik_interface_events table
+      const { data: ifaceEvents } = await supabase
+        .from("mikrotik_interface_events")
+        .select("interface_name, event_type, recorded_at")
+        .eq("device_id", device.id)
+        .gte("recorded_at", since24h)
+        .order("recorded_at", { ascending: true });
 
-      let interfaceDownCount = 0;
+      // Analyze per-interface down stats
+      const ifaceStats: Record<string, { downCount: number; totalDownMs: number; lastDown: string | null }> = {};
+      const ifaceState: Record<string, { isDown: boolean; downSince: string | null }> = {};
+
+      for (const evt of (ifaceEvents || [])) {
+        const name = evt.interface_name;
+        if (!ifaceStats[name]) {
+          ifaceStats[name] = { downCount: 0, totalDownMs: 0, lastDown: null };
+          ifaceState[name] = { isDown: false, downSince: null };
+        }
+
+        if (evt.event_type === "down") {
+          ifaceStats[name].downCount++;
+          ifaceState[name].isDown = true;
+          ifaceState[name].downSince = evt.recorded_at;
+        } else if (evt.event_type === "up" && ifaceState[name].isDown && ifaceState[name].downSince) {
+          const downDuration = new Date(evt.recorded_at).getTime() - new Date(ifaceState[name].downSince!).getTime();
+          ifaceStats[name].totalDownMs += downDuration;
+          ifaceState[name].isDown = false;
+          ifaceState[name].downSince = null;
+        }
+      }
+
+      // If still down, add time until now
+      for (const [name, state] of Object.entries(ifaceState)) {
+        if (state.isDown && state.downSince) {
+          ifaceStats[name].totalDownMs += now.getTime() - new Date(state.downSince).getTime();
+        }
+      }
+
+      // 4. Current interfaces that are down
+      const { data: currentInterfaces } = await supabase
+        .from("mikrotik_interfaces")
+        .select("interface_name, status, running, disabled")
+        .eq("device_id", device.id);
+
+      const currentlyDown = (currentInterfaces || []).filter(
+        (i: any) => !i.disabled && i.status === "down"
+      );
+
+      // Count ARP conflicts and login denied from log_alerts
       let arpConflicts = 0;
       let loginDenied = 0;
-
-      // Count from log_alerts stored on device
       const logAlerts = device.last_log_alerts || [];
       for (const log of logAlerts) {
         const msg = (log.message || "").toLowerCase();
-        if (log.category === "interface" || msg.includes("link down") || msg.includes("link changed")) {
-          interfaceDownCount++;
-        }
         if (msg.includes("arp") && (msg.includes("conflict") || msg.includes("duplicate"))) {
           arpConflicts++;
         }
@@ -146,13 +179,17 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Also count from recent alert logs
-      for (const log of (alertLogs || [])) {
-        const preview = (log.message_preview || "").toLowerCase();
-        // Count interface down mentions
-        const downMatches = preview.match(/🔴/g);
-        if (downMatches) interfaceDownCount += downMatches.length;
-      }
+      // Format duration
+      const formatDuration = (ms: number): string => {
+        if (ms < 60000) return `${Math.round(ms / 1000)}s`;
+        if (ms < 3600000) return `${Math.round(ms / 60000)}min`;
+        const hours = Math.floor(ms / 3600000);
+        const mins = Math.round((ms % 3600000) / 60000);
+        return `${hours}h${mins > 0 ? mins + 'min' : ''}`;
+      };
+
+      // Total interface down events
+      const totalDownEvents = Object.values(ifaceStats).reduce((sum, s) => sum + s.downCount, 0);
 
       // Build device summary
       const lines: string[] = [];
@@ -162,9 +199,37 @@ Deno.serve(async (req) => {
       lines.push("━━━━ Resumo 24h ━━━━");
       lines.push("");
       lines.push(`🔄 Reinicializações: *${totalReboots}*`);
-      lines.push(`🔴 Interface Down: *${interfaceDownCount}*`);
+      lines.push(`🔴 Interface Down: *${totalDownEvents} evento(s)*`);
       lines.push(`⚠️ Conflitos ARP: *${arpConflicts}*`);
       lines.push(`🔐 Login negado: *${loginDenied}*`);
+
+      // Per-interface down details
+      const downInterfaces = Object.entries(ifaceStats).filter(([_, s]) => s.downCount > 0);
+      if (downInterfaces.length > 0) {
+        lines.push("");
+        lines.push("🔌 *Detalhes Interface Down:*");
+        for (const [name, stats] of downInterfaces) {
+          const stillDown = ifaceState[name]?.isDown;
+          const statusIcon = stillDown ? "🔴" : "🟢";
+          lines.push(`  ${statusIcon} *${name}*: ${stats.downCount}x down, tempo total: ${formatDuration(stats.totalDownMs)}${stillDown ? ' _(ainda down)_' : ''}`);
+        }
+      }
+
+      // Currently down interfaces (even if no events in 24h)
+      if (currentlyDown.length > 0) {
+        const eventNames = new Set(downInterfaces.map(([n]) => n));
+        const additionalDown = currentlyDown.filter((i: any) => !eventNames.has(i.interface_name));
+        if (additionalDown.length > 0) {
+          if (downInterfaces.length === 0) {
+            lines.push("");
+            lines.push("🔌 *Interfaces Down Atualmente:*");
+          }
+          for (const iface of additionalDown) {
+            lines.push(`  🔴 *${iface.interface_name}*: down _(sem eventos registrados nas 24h)_`);
+          }
+        }
+      }
+
       lines.push("");
       lines.push("━━━━ Status Atual ━━━━");
       lines.push("");
