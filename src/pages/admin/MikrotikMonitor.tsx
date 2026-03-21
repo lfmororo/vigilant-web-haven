@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download, Server, ScrollText, Globe, TrendingUp, Thermometer, Cpu, CalendarDays } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download, Server, ScrollText, Globe, TrendingUp, Thermometer, Cpu, CalendarDays, Clock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
 
@@ -333,6 +333,7 @@ const MikrotikMonitor = () => {
   const [selectedTrafficIface, setSelectedTrafficIface] = useState<string>("");
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [systemHistory, setSystemHistory] = useState<any[]>([]);
+  const [interfaceEvents, setInterfaceEvents] = useState<any[]>([]);
 
   const fetchDevices = useCallback(async () => {
     const { data } = await supabase
@@ -357,6 +358,18 @@ const MikrotikMonitor = () => {
     setInterfaces((data as any) || []);
   };
 
+  const fetchInterfaceEvents = async (deviceId: string) => {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase
+      .from("mikrotik_interface_events")
+      .select("*")
+      .eq("device_id", deviceId)
+      .gte("recorded_at", since)
+      .order("recorded_at", { ascending: false })
+      .limit(200);
+    setInterfaceEvents((data as any) || []);
+  };
+
   const fetchPingTargets = async (deviceId: string) => {
     const { data } = await supabase
       .from("mikrotik_ping_targets")
@@ -378,6 +391,7 @@ const MikrotikMonitor = () => {
       fetchDevices();
       if (selectedDevice) {
         fetchInterfaces(selectedDevice.id);
+        fetchInterfaceEvents(selectedDevice.id);
         fetchDhcpHistory(selectedDevice.id);
         fetchTrafficHistory(selectedDevice.id);
         fetchSystemHistory(selectedDevice.id);
@@ -446,6 +460,7 @@ const MikrotikMonitor = () => {
   useEffect(() => {
     if (selectedDevice) {
       fetchInterfaces(selectedDevice.id);
+      fetchInterfaceEvents(selectedDevice.id);
       fetchPingTargets(selectedDevice.id);
       fetchDhcpHistory(selectedDevice.id);
       fetchTrafficHistory(selectedDevice.id);
@@ -846,6 +861,71 @@ const MikrotikMonitor = () => {
                       )}
                     </CardContent>
                   </Card>
+
+                  {/* Timeline de eventos de interface */}
+                  {interfaceEvents.length > 0 && (
+                    <Card className="mt-4">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Clock className="w-4 h-4" />
+                          Histórico de Eventos (últimos 7 dias)
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {(() => {
+                          const groupedByIface: Record<string, any[]> = {};
+                          for (const evt of interfaceEvents) {
+                            if (!groupedByIface[evt.interface_name]) groupedByIface[evt.interface_name] = [];
+                            groupedByIface[evt.interface_name].push(evt);
+                          }
+                          return (
+                            <div className="space-y-4">
+                              {Object.entries(groupedByIface).map(([ifaceName, events]) => (
+                                <div key={ifaceName}>
+                                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                    <Activity className="w-3.5 h-3.5" />
+                                    {ifaceName}
+                                    <Badge variant="outline" className="text-xs">{events.length} eventos</Badge>
+                                  </h4>
+                                  <div className="relative border-l-2 border-border ml-2 pl-4 space-y-2">
+                                    {events.slice(0, 20).map((evt: any) => {
+                                      const isDown = evt.event_type === "down";
+                                      const time = new Date(evt.recorded_at);
+                                      const timeStr = time.toLocaleString("pt-BR", {
+                                        day: "2-digit", month: "2-digit",
+                                        hour: "2-digit", minute: "2-digit", second: "2-digit",
+                                        timeZone: "America/Sao_Paulo",
+                                      });
+                                      return (
+                                        <div key={evt.id} className="relative flex items-start gap-3">
+                                          <div className={`absolute -left-[1.35rem] top-1 w-3 h-3 rounded-full border-2 border-background ${isDown ? "bg-destructive" : "bg-green-500"}`} />
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                              <Badge variant={isDown ? "destructive" : "default"} className="text-xs">
+                                                {isDown ? (
+                                                  <><WifiOff className="w-3 h-3 mr-1" /> DOWN</>
+                                                ) : (
+                                                  <><Wifi className="w-3 h-3 mr-1" /> UP</>
+                                                )}
+                                              </Badge>
+                                              <span className="text-xs text-muted-foreground">{timeStr}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                    {events.length > 20 && (
+                                      <p className="text-xs text-muted-foreground">... e mais {events.length - 20} eventos</p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </CardContent>
+                    </Card>
+                  )}
                 </TabsContent>
 
                 <TabsContent value="traffic" className="mt-4">
