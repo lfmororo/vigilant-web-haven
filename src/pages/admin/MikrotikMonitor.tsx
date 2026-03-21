@@ -1722,7 +1722,7 @@ const MikrotikMonitor = () => {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {interfaces.filter(i => !i.disabled).map((iface) => (
+                              {interfaces.filter(i => !i.disabled && !/^(lo|null|dummy)$/i.test(i.interface_name) && i.interface_type !== 'loopback' && i.interface_type !== 'snmp-type-24' && i.interface_type !== 'snmp-type-1').map((iface) => (
                                 <TableRow key={iface.id}>
                                   <TableCell className="font-medium text-sm">{iface.interface_name}</TableCell>
                                   <TableCell className="text-xs">{formatBytes(iface.tx_bytes)}</TableCell>
