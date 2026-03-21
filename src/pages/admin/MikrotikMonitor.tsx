@@ -1138,21 +1138,21 @@ const MikrotikMonitor = () => {
                 <TabsContent value="dhcp" className="mt-4">
                   <Card>
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-base">DHCP Leases - {selectedDevice.name}</CardTitle>
+                      <CardTitle className="text-base">DHCP - {selectedDevice.name}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       {selectedDevice.last_dhcp_summary ? (() => {
                         const ds = selectedDevice.last_dhcp_summary;
-                        const usagePct = ds.total_leases > 0 ? Math.round((ds.active_leases / ds.total_leases) * 100) : 0;
-                        const pieData = [
-                          { name: "Dinâmicos", value: ds.dynamic_leases || 0 },
-                          { name: "Estáticos", value: ds.static_leases || 0 },
-                          { name: "Inativos", value: Math.max(0, (ds.total_leases || 0) - (ds.active_leases || 0)) },
-                        ].filter(d => d.value > 0);
-                        const PIE_COLORS = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--muted))"];
+                        const servers = ds.by_server ? Object.entries(ds.by_server) : [];
+                        const overallUsagePct = ds.usage_pct !== null && ds.usage_pct !== undefined
+                          ? ds.usage_pct
+                          : (ds.total_leases > 0 ? Math.round((ds.active_leases / ds.total_leases) * 100) : 0);
+                        const PIE_COLORS = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-4))", "hsl(var(--chart-3))", "hsl(var(--muted))"];
+
                         return (
                           <div className="space-y-4">
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {/* Resumo Geral */}
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                               <div className="p-3 rounded-lg border bg-card">
                                 <p className="text-xs text-muted-foreground">Total Leases</p>
                                 <p className="text-2xl font-bold">{ds.total_leases}</p>
@@ -1169,71 +1169,115 @@ const MikrotikMonitor = () => {
                                 <p className="text-xs text-muted-foreground">Estáticos</p>
                                 <p className="text-2xl font-bold">{ds.static_leases}</p>
                               </div>
-                            </div>
-
-                            {/* Utilização geral + Pie chart */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                              <div className="p-4 rounded-lg border bg-card space-y-3">
-                                <h4 className="text-sm font-semibold">Utilização Geral</h4>
-                                <div className="flex items-center gap-3">
-                                  <Progress value={usagePct} className="h-3 flex-1" />
-                                  <span className={`text-lg font-bold ${usagePct > 80 ? "text-destructive" : usagePct > 60 ? "text-orange-500" : "text-primary"}`}>
-                                    {usagePct}%
-                                  </span>
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                  {ds.active_leases} de {ds.total_leases} leases em uso
-                                </p>
-                              </div>
-                              {pieData.length > 0 && (
-                                <div className="p-4 rounded-lg border bg-card">
-                                  <h4 className="text-sm font-semibold mb-2">Distribuição</h4>
-                                  <ResponsiveContainer width="100%" height={150}>
-                                    <PieChart>
-                                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                                        {pieData.map((_, idx) => (
-                                          <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
-                                        ))}
-                                      </Pie>
-                                      <RechartsTooltip />
-                                    </PieChart>
-                                  </ResponsiveContainer>
+                              {ds.total_capacity > 0 && (
+                                <div className="p-3 rounded-lg border bg-card">
+                                  <p className="text-xs text-muted-foreground">Capacidade Total</p>
+                                  <p className="text-2xl font-bold">{ds.total_capacity} <span className="text-sm font-normal text-muted-foreground">IPs</span></p>
                                 </div>
                               )}
                             </div>
 
-                            {ds.by_server && Object.keys(ds.by_server).length > 0 && (
-                              <div>
-                                <h4 className="text-sm font-semibold mb-2">Por Servidor DHCP</h4>
-                                <Table>
-                                  <TableHeader>
-                                    <TableRow>
-                                      <TableHead>Servidor</TableHead>
-                                      <TableHead>Total</TableHead>
-                                      <TableHead>Ativos</TableHead>
-                                      <TableHead>Utilização</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {Object.entries(ds.by_server).map(([server, info]: [string, any]) => {
-                                      const serverPct = info.total > 0 ? Math.round((info.active / info.total) * 100) : 0;
-                                      return (
-                                        <TableRow key={server}>
-                                          <TableCell className="font-medium text-sm">{server}</TableCell>
-                                          <TableCell>{info.total}</TableCell>
-                                          <TableCell>{info.active}</TableCell>
-                                          <TableCell>
-                                            <div className="flex items-center gap-2">
-                                              <Progress value={serverPct} className="h-2 w-20" />
-                                              <span className={`text-xs font-medium ${serverPct > 80 ? "text-destructive" : ""}`}>{serverPct}%</span>
-                                            </div>
-                                          </TableCell>
-                                        </TableRow>
-                                      );
-                                    })}
-                                  </TableBody>
-                                </Table>
+                            {/* Barra de utilização geral */}
+                            <div className="p-4 rounded-lg border bg-card space-y-2">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-semibold">Utilização Geral</h4>
+                                <span className={`text-lg font-bold ${overallUsagePct > 80 ? "text-destructive" : overallUsagePct > 60 ? "text-chart-4" : "text-primary"}`}>
+                                  {overallUsagePct}%
+                                </span>
                               </div>
+                              <Progress value={overallUsagePct} className="h-3" />
+                              <p className="text-xs text-muted-foreground">
+                                {ds.active_leases} ativos {ds.total_capacity > 0 ? `de ${ds.total_capacity} IPs disponíveis` : `de ${ds.total_leases} leases`}
+                              </p>
+                            </div>
+
+                            {/* Sub-abas por Pool/Servidor */}
+                            {servers.length > 0 && (
+                              <Tabs defaultValue={servers[0]?.[0] || "all"} className="w-full">
+                                <TabsList className="flex flex-wrap h-auto gap-1">
+                                  {servers.map(([serverName, info]: [string, any]) => (
+                                    <TabsTrigger key={serverName} value={serverName} className="text-xs gap-1">
+                                      <Server className="w-3 h-3" />
+                                      {serverName}
+                                      {info.usage_pct !== null && info.usage_pct !== undefined && (
+                                        <Badge variant={info.usage_pct > 80 ? "destructive" : "secondary"} className="text-[10px] px-1 py-0 ml-1">
+                                          {info.usage_pct}%
+                                        </Badge>
+                                      )}
+                                    </TabsTrigger>
+                                  ))}
+                                </TabsList>
+
+                                {servers.map(([serverName, info]: [string, any]) => {
+                                  const srvUsagePct = info.usage_pct !== null && info.usage_pct !== undefined ? info.usage_pct : (info.total > 0 ? Math.round((info.active / info.total) * 100) : 0);
+                                  const srvPieData = [
+                                    { name: "Ativos", value: info.active || 0 },
+                                    { name: "Inativos", value: Math.max(0, (info.total || 0) - (info.active || 0)) },
+                                    ...(info.capacity > 0 ? [{ name: "Livres", value: Math.max(0, info.capacity - (info.active || 0)) }] : []),
+                                  ].filter(d => d.value > 0);
+
+                                  return (
+                                    <TabsContent key={serverName} value={serverName} className="mt-3">
+                                      <div className="space-y-4">
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                          <div className="p-3 rounded-lg border bg-card">
+                                            <p className="text-xs text-muted-foreground">Pool</p>
+                                            <p className="text-sm font-bold">{info.pool || "—"}</p>
+                                          </div>
+                                          <div className="p-3 rounded-lg border bg-card">
+                                            <p className="text-xs text-muted-foreground">Capacidade</p>
+                                            <p className="text-2xl font-bold">{info.capacity > 0 ? info.capacity : "—"}</p>
+                                          </div>
+                                          <div className="p-3 rounded-lg border bg-card">
+                                            <p className="text-xs text-muted-foreground">Leases Ativos</p>
+                                            <p className="text-2xl font-bold text-primary">{info.active}</p>
+                                          </div>
+                                          <div className="p-3 rounded-lg border bg-card">
+                                            <p className="text-xs text-muted-foreground">Leases Totais</p>
+                                            <p className="text-2xl font-bold">{info.total}</p>
+                                          </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                          <div className="p-4 rounded-lg border bg-card space-y-3">
+                                            <h4 className="text-sm font-semibold">Utilização do Pool</h4>
+                                            <div className="flex items-center gap-3">
+                                              <Progress value={srvUsagePct} className="h-3 flex-1" />
+                                              <span className={`text-lg font-bold ${srvUsagePct > 80 ? "text-destructive" : srvUsagePct > 60 ? "text-chart-4" : "text-primary"}`}>
+                                                {srvUsagePct}%
+                                              </span>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                              {info.active} ativos {info.capacity > 0 ? `de ${info.capacity} IPs` : `de ${info.total} leases`}
+                                            </p>
+                                            {info.capacity > 0 && (info.capacity - info.active) < 10 && (
+                                              <div className="flex items-center gap-1 text-destructive text-xs font-medium mt-1">
+                                                <AlertTriangle className="w-3 h-3" />
+                                                Apenas {Math.max(0, info.capacity - info.active)} IPs livres!
+                                              </div>
+                                            )}
+                                          </div>
+                                          {srvPieData.length > 0 && (
+                                            <div className="p-4 rounded-lg border bg-card">
+                                              <h4 className="text-sm font-semibold mb-2">Distribuição</h4>
+                                              <ResponsiveContainer width="100%" height={150}>
+                                                <PieChart>
+                                                  <Pie data={srvPieData} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                                                    {srvPieData.map((_, idx) => (
+                                                      <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+                                                    ))}
+                                                  </Pie>
+                                                  <RechartsTooltip />
+                                                </PieChart>
+                                              </ResponsiveContainer>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </TabsContent>
+                                  );
+                                })}
+                              </Tabs>
                             )}
                           </div>
                         );
