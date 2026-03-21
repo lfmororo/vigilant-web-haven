@@ -94,82 +94,135 @@ async function safeFetch(url: string, options: RequestInit): Promise<Response> {
     return await fetch(url, options);
   } catch (err: any) {
     const msg = (err?.message || "").toLowerCase();
-    if (msg.includes("certificate") || msg.includes("connection reset") || msg.includes("ssl") || msg.includes("tls") || msg.includes("invalidcontenttype") || msg.includes("corrupt message")) {
+    const isTlsLikeError = [
+      "certificate",
+      "connection reset",
+      "ssl",
+      "tls",
+      "invalidcontenttype",
+      "corrupt message",
+      "handshake",
+      "wrong version number",
+      "eof",
+    ].some((fragment) => msg.includes(fragment));
+
+    if (url.startsWith("https://") && isTlsLikeError) {
       try {
         const client = Deno.createHttpClient({ caCerts: [] });
         return await fetch(url, { ...options, client } as any);
-      } catch (innerErr: any) {
-        const innerMsg = (innerErr?.message || "").toLowerCase();
-        if (url.startsWith("https://") && (innerMsg.includes("corrupt") || innerMsg.includes("invalidcontent") || innerMsg.includes("connection reset"))) {
-          const httpUrl = url.replace("https://", "http://");
-          console.log(`HTTPS failed, trying HTTP: ${httpUrl}`);
-          return await fetch(httpUrl, options);
-        }
-        throw innerErr;
+      } catch (_) {
+        const httpUrl = url.replace("https://", "http://");
+        console.log(`HTTPS failed, trying HTTP: ${httpUrl}`);
+        return await fetch(httpUrl, options);
       }
     }
+
     throw err;
   }
+}
+
+async function updateDevicePollStatus(supabase: any, deviceId: string, lastError: string | null) {
+  await supabase
+    .from("mikrotik_devices")
+    .update({ last_error: lastError, last_polled_at: new Date().toISOString() })
+    .eq("id", deviceId);
 }
 
 async function fetchDeviceData(supabase: any, device: any) {
   const auth = btoa(`${device.username}:${device.password}`);
   const headers: Record<string, string> = {
-    "Authorization": `Basic ${auth}`,
+    Authorization: `Basic ${auth}`,
     "Content-Type": "application/json",
   };
 
-  // Try HTTPS first, then HTTP as fallback
   const protocols = device.use_ssl ? ["https", "http"] : ["http", "https"];
   let baseUrl = "";
   let connected = false;
+  const connectionAttempts: string[] = [];
 
   for (const proto of protocols) {
-    baseUrl = `${proto}://${device.host}:${device.port}/rest`;
+    const candidateBaseUrl = `${proto}://${device.host}:${device.port}/rest`;
+
     try {
-      const testRes = await safeFetch(`${baseUrl}/system/identity`, { headers });
-      if (testRes.ok || testRes.status === 401) {
-        await testRes.text();
+      const testRes = await safeFetch(`${candidateBaseUrl}/system/identity`, {
+        headers,
+        redirect: "manual",
+      });
+      const testBody = await testRes.text();
+      const contentType = (testRes.headers.get("content-type") || "").toLowerCase();
+      const looksLikeHtml =
+        contentType.includes("text/html") || testBody.toLowerCase().includes("<html");
+
+      if (testRes.status >= 200 && testRes.status < 500 && !looksLikeHtml) {
+        baseUrl = candidateBaseUrl;
         connected = true;
         break;
       }
-      await testRes.text();
-    } catch (_) {
+
+      connectionAttempts.push(
+        `${proto.toUpperCase()} respondeu ${testRes.status}${looksLikeHtml ? " (HTML)" : ""}`
+      );
+    } catch (err: any) {
+      connectionAttempts.push(`${proto.toUpperCase()} erro: ${err?.message || "desconhecido"}`);
       console.log(`${proto}://${device.host}:${device.port} failed, trying next...`);
     }
   }
 
   if (!connected) {
-    throw new Error(`Não foi possível conectar à Mikrotik ${device.host}:${device.port}. Verifique se a API REST está habilitada (RouterOS 7.1+), o IP/porta está acessível e as credenciais estão corretas.`);
+    const details = connectionAttempts.length
+      ? ` Detalhes: ${connectionAttempts.join(" | ")}`
+      : "";
+    const connectionError = `Não foi possível conectar à Mikrotik ${device.host}:${device.port}. Verifique se a API REST está habilitada (RouterOS 7.1+), o IP/porta está acessível e as credenciais estão corretas.${details}`;
+
+    await updateDevicePollStatus(supabase, device.id, connectionError);
+    return { success: false, error: connectionError };
   }
 
   let interfacesData: any[] = [];
   let ipAddresses: any[] = [];
   let pppoeInterfaces: any[] = [];
-  let lastError: string | null = null;
 
   try {
-    // Fetch interfaces
     const ifRes = await safeFetch(`${baseUrl}/interface`, { headers });
+
     if (!ifRes.ok) {
       const body = await ifRes.text();
+      if (ifRes.status === 401 || ifRes.status === 403) {
+        throw new Error("Falha de autenticação na Mikrotik: usuário ou senha inválidos para API REST.");
+      }
+
+      if (ifRes.status === 404) {
+        const looksLikeHtml = body.toLowerCase().includes("<html");
+        throw new Error(
+          looksLikeHtml
+            ? `A porta ${device.port} respondeu, mas não é a API REST da Mikrotik (retornou página HTML). Ajuste porta/protocolo do serviço REST em /ip service.`
+            : "API REST não encontrada. Verifique se o serviço REST está habilitado no RouterOS (7.1+)."
+        );
+      }
+
       throw new Error(`Interface API failed: ${ifRes.status} - ${body}`);
     }
-    interfacesData = await ifRes.json();
+
+    const interfacesPayload = await ifRes.json();
+    interfacesData = Array.isArray(interfacesPayload) ? interfacesPayload : [];
 
     // Fetch IP addresses
     try {
       const ipRes = await safeFetch(`${baseUrl}/ip/address`, { headers });
       if (ipRes.ok) ipAddresses = await ipRes.json();
       else await ipRes.text();
-    } catch (_) { /* optional */ }
+    } catch (_) {
+      /* optional */
+    }
 
     // Fetch PPPoE client interfaces
     try {
       const pppoeRes = await safeFetch(`${baseUrl}/interface/pppoe-client`, { headers });
       if (pppoeRes.ok) pppoeInterfaces = await pppoeRes.json();
       else await pppoeRes.text();
-    } catch (_) { /* optional */ }
+    } catch (_) {
+      /* optional */
+    }
 
     // Build IP map: interface -> ip
     const ipMap = new Map<string, string>();
@@ -280,21 +333,14 @@ async function fetchDeviceData(supabase: any, device: any) {
       }
     }
 
-    // Update device last_polled_at
-    await supabase
-      .from("mikrotik_devices")
-      .update({ last_polled_at: new Date().toISOString(), last_error: null })
-      .eq("id", device.id);
+    await updateDevicePollStatus(supabase, device.id, null);
 
     return { success: true, interfaces: interfacesData.length };
   } catch (err: any) {
-    lastError = err.message;
+    const lastError = err?.message || "Erro desconhecido ao coletar dados da Mikrotik.";
     console.error(`Error polling device ${device.name}:`, err);
 
-    await supabase
-      .from("mikrotik_devices")
-      .update({ last_error: lastError, last_polled_at: new Date().toISOString() })
-      .eq("id", device.id);
+    await updateDevicePollStatus(supabase, device.id, lastError);
 
     return { success: false, error: lastError };
   }
