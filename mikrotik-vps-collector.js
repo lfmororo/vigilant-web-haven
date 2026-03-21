@@ -120,22 +120,87 @@ async function collectDeviceData(device) {
       (i.disabled !== 'true' && i.disabled !== true)
     );
     const trafficRates = new Map();
-    for (const iface of runningIfaces) {
-      const ifName = iface.name;
-      if (!ifName) continue;
-      try {
-        const monitor = await client.menu('/interface').exec('monitor-traffic', {
-          interface: ifName,
-          once: '',
-        });
+    
+    // Tentar coletar banda via monitor-traffic (múltiplas abordagens)
+    // Abordagem 1: Todas as interfaces de uma vez
+    try {
+      const allIfNames = runningIfaces.map(i => i.name).filter(Boolean).join(',');
+      if (allIfNames) {
+        const monitor = await client.menu('/interface/monitor-traffic')
+          .where('interface', allIfNames)
+          .where('once', '')
+          .getAll();
         if (monitor && monitor.length > 0) {
-          trafficRates.set(ifName, {
-            'tx-bits-per-second': parseInt(monitor[0]['tx-bits-per-second'] || '0') || 0,
-            'rx-bits-per-second': parseInt(monitor[0]['rx-bits-per-second'] || '0') || 0,
-          });
+          for (const entry of monitor) {
+            const name = entry.name || entry.interface;
+            if (name) {
+              trafficRates.set(name, {
+                'tx-bits-per-second': parseInt(entry['tx-bits-per-second'] || '0') || 0,
+                'rx-bits-per-second': parseInt(entry['rx-bits-per-second'] || '0') || 0,
+              });
+            }
+          }
+          console.log(`  📊 Banda coletada para ${trafficRates.size} interfaces`);
         }
-      } catch (_) {
-        // Alguns tipos de interface podem não suportar monitor-traffic
+      }
+    } catch (e1) {
+      // Abordagem 2: Uma interface por vez via exec
+      for (const iface of runningIfaces) {
+        const ifName = iface.name;
+        if (!ifName) continue;
+        try {
+          const monitor = await client.menu('/interface').exec('monitor-traffic', {
+            interface: ifName,
+            once: '',
+          });
+          if (monitor && Array.isArray(monitor) && monitor.length > 0) {
+            trafficRates.set(ifName, {
+              'tx-bits-per-second': parseInt(monitor[0]['tx-bits-per-second'] || monitor[0]['txBitsPerSecond'] || '0') || 0,
+              'rx-bits-per-second': parseInt(monitor[0]['rx-bits-per-second'] || monitor[0]['rxBitsPerSecond'] || '0') || 0,
+            });
+          }
+        } catch (_) {}
+      }
+      if (trafficRates.size > 0) {
+        console.log(`  📊 Banda coletada (fallback) para ${trafficRates.size} interfaces`);
+      }
+    }
+    
+    // Abordagem 3: Se nenhuma funcionou, usar tx-byte/rx-byte delta como estimativa
+    if (trafficRates.size === 0) {
+      console.log(`  ⚠️ monitor-traffic não suportado, usando estimativa via contadores`);
+      const stateKey = device.device_id + '_bytes';
+      const prevBytes = previousStates.get(stateKey) || {};
+      const now = Date.now();
+      const prevTime = prevBytes._timestamp || now;
+      const elapsed = Math.max(1, (now - prevTime) / 1000); // segundos
+      
+      const newBytes = {};
+      for (const iface of runningIfaces) {
+        const ifName = iface.name;
+        if (!ifName) continue;
+        const txBytes = parseInt(iface['tx-byte'] || '0') || 0;
+        const rxBytes = parseInt(iface['rx-byte'] || '0') || 0;
+        newBytes[ifName] = { tx: txBytes, rx: rxBytes };
+        
+        if (prevBytes[ifName]) {
+          const txDelta = Math.max(0, txBytes - prevBytes[ifName].tx);
+          const rxDelta = Math.max(0, rxBytes - prevBytes[ifName].rx);
+          // Converter bytes/s para bits/s
+          const txBps = Math.round((txDelta / elapsed) * 8);
+          const rxBps = Math.round((rxDelta / elapsed) * 8);
+          if (txBps > 0 || rxBps > 0) {
+            trafficRates.set(ifName, {
+              'tx-bits-per-second': txBps,
+              'rx-bits-per-second': rxBps,
+            });
+          }
+        }
+      }
+      newBytes._timestamp = now;
+      previousStates.set(stateKey, newBytes);
+      if (trafficRates.size > 0) {
+        console.log(`  📊 Banda estimada para ${trafficRates.size} interfaces`);
       }
     }
 
