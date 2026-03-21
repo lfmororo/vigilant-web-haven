@@ -314,13 +314,12 @@ async function collectDeviceData(device) {
 
 /**
  * Coleta dados de um dispositivo via SNMP (ex: TP-Link ER605)
- * OIDs padrão do IF-MIB e HOST-RESOURCES-MIB
+ * OIDs padrão do IF-MIB (ifTable + ifXTable para contadores de 64 bits)
  */
 async function collectSnmpData(device) {
   let session;
 
   if (device.snmp_version === '3') {
-    // SNMPv3 com autenticação e privacidade
     const secLevelMap = {
       'noAuthNoPriv': snmp.SecurityLevel.noAuthNoPriv,
       'authNoPriv': snmp.SecurityLevel.authNoPriv,
@@ -353,10 +352,10 @@ async function collectSnmpData(device) {
       user.privKey = device.snmp_priv_passphrase || '';
     }
 
-    session = snmp.createV3Session(device.host, user, { timeout: 30000, retries: 2 });
+    session = snmp.createV3Session(device.host, user, { timeout: 30000, retries: 2, port: device.port || 161 });
   } else {
     const version = device.snmp_version === '1' ? snmp.Version1 : snmp.Version2c;
-    session = snmp.createSession(device.host, device.snmp_community || 'public', { version, timeout: 30000, retries: 2 });
+    session = snmp.createSession(device.host, device.snmp_community || 'public', { version, timeout: 30000, retries: 2, port: device.port || 161 });
   }
 
   return new Promise((resolve) => {
@@ -375,10 +374,10 @@ async function collectSnmpData(device) {
       dhcpServers: [],
     };
 
-    // Coletar uptime do sistema
+    // Coletar informações do sistema
     const sysOids = [
       '1.3.6.1.2.1.1.1.0',  // sysDescr
-      '1.3.6.1.2.1.1.3.0',  // sysUpTime (em centésimos de segundo)
+      '1.3.6.1.2.1.1.3.0',  // sysUpTime (centésimos de segundo)
       '1.3.6.1.2.1.1.5.0',  // sysName
     ];
 
@@ -394,61 +393,101 @@ async function collectSnmpData(device) {
         const oidStr = vb.oid;
         if (oidStr === '1.3.6.1.2.1.1.1.0') {
           result.resource.version = vb.value.toString();
+          // Tentar extrair board-name do sysDescr
+          result.resource['board-name'] = vb.value.toString().split('\n')[0].substring(0, 60);
         } else if (oidStr === '1.3.6.1.2.1.1.3.0') {
-          // sysUpTime em centésimos de segundo → converter para formato legível
           const centiseconds = Number(vb.value);
           const totalSecs = Math.floor(centiseconds / 100);
           const days = Math.floor(totalSecs / 86400);
           const hours = Math.floor((totalSecs % 86400) / 3600);
           const mins = Math.floor((totalSecs % 3600) / 60);
-          result.resource.uptime = `${days}d${hours}h${mins}m`;
+          const secs = totalSecs % 60;
+          result.resource.uptime = `${days}d${hours}h${mins}m${secs}s`;
         } else if (oidStr === '1.3.6.1.2.1.1.5.0') {
           result.identity = vb.value.toString() || device.name;
         }
       }
 
-      // Coletar tabela de interfaces via subtree
+      // Interface map: ifIndex -> interface data
+      const ifMap = new Map();
+
+      const getOrCreate = (ifIndex) => {
+        if (!ifMap.has(ifIndex)) {
+          ifMap.set(ifIndex, {
+            name: `if${ifIndex}`,
+            running: false,
+            disabled: false,
+            type: 'unknown',
+            'rx-byte': '0',
+            'tx-byte': '0',
+            'rx-packet': '0',
+            'tx-packet': '0',
+            'rx-error': '0',
+            'tx-error': '0',
+            'rx-drop': '0',
+            'tx-drop': '0',
+          });
+        }
+        return ifMap.get(ifIndex);
+      };
+
+      // Coletar ifTable (contadores de 32 bits)
       const ifTableOid = '1.3.6.1.2.1.2.2.1';
       session.subtree(ifTableOid, 20, (varbinds2) => {
         for (const vb of varbinds2) {
           if (snmp.isVarbindError(vb)) continue;
           const parts = vb.oid.split('.');
-          const column = parseInt(parts[9]); // coluna na tabela
-          const ifIndex = parts[10]; // índice da interface
-
-          // Encontrar ou criar entrada da interface
-          let iface = result.interfaces.find(i => i._ifIndex === ifIndex);
-          if (!iface) {
-            iface = { _ifIndex: ifIndex, name: `if${ifIndex}`, running: false, disabled: false, type: 'unknown' };
-            result.interfaces.push(iface);
-          }
+          const column = parseInt(parts[9]);
+          const ifIndex = parts[10];
+          const iface = getOrCreate(ifIndex);
 
           switch (column) {
             case 2: // ifDescr
               iface.name = vb.value.toString();
               break;
-            case 3: // ifType
-              iface.type = `snmp-type-${vb.value}`;
+            case 3: // ifType (6=ethernetCsmacd, 24=softwareLoopback, 53=propVirtual, 131=tunnel, 161=ieee8023adLag)
+              const ifTypeNum = Number(vb.value);
+              const typeNames = { 6: 'ether', 24: 'loopback', 53: 'vlan', 131: 'tunnel', 161: 'lag', 71: 'ieee80211' };
+              iface.type = typeNames[ifTypeNum] || `snmp-type-${ifTypeNum}`;
+              iface._ifType = ifTypeNum;
               break;
             case 5: // ifSpeed (bps)
               iface.speed = String(Number(vb.value));
               break;
             case 6: // ifPhysAddress (MAC)
-              if (vb.value && vb.value.length >= 6) {
-                iface['mac-address'] = Buffer.from(vb.value).toString('hex').match(/.{2}/g)?.join(':') || '';
-              }
+              try {
+                if (vb.value && vb.value.length >= 6) {
+                  const macBytes = Buffer.isBuffer(vb.value) ? vb.value : Buffer.from(vb.value);
+                  iface['mac-address'] = Array.from(macBytes.slice(0, 6)).map(b => b.toString(16).padStart(2, '0')).join(':');
+                }
+              } catch (_) {}
+              break;
+            case 7: // ifAdminStatus: 1=up, 2=down, 3=testing
+              iface.disabled = (Number(vb.value) !== 1);
               break;
             case 8: // ifOperStatus: 1=up, 2=down
               iface.running = (Number(vb.value) === 1);
               break;
-            case 10: // ifInOctets
+            case 10: // ifInOctets (32-bit)
               iface['rx-byte'] = String(Number(vb.value));
+              break;
+            case 11: // ifInUcastPkts
+              iface['rx-packet'] = String(Number(vb.value));
+              break;
+            case 13: // ifInDiscards
+              iface['rx-drop'] = String(Number(vb.value));
               break;
             case 14: // ifInErrors
               iface['rx-error'] = String(Number(vb.value));
               break;
-            case 16: // ifOutOctets
+            case 16: // ifOutOctets (32-bit)
               iface['tx-byte'] = String(Number(vb.value));
+              break;
+            case 17: // ifOutUcastPkts
+              iface['tx-packet'] = String(Number(vb.value));
+              break;
+            case 19: // ifOutDiscards
+              iface['tx-drop'] = String(Number(vb.value));
               break;
             case 20: // ifOutErrors
               iface['tx-error'] = String(Number(vb.value));
@@ -456,19 +495,108 @@ async function collectSnmpData(device) {
           }
         }
       }, (error2) => {
-        session.close();
-
-        // Limpar campos internos
-        for (const iface of result.interfaces) {
-          delete iface._ifIndex;
-          iface.running = iface.running ? 'true' : 'false';
-        }
-
         if (error2) {
-          console.log(`  ⚠️ SNMP subtree warning: ${error2.message}`);
+          console.log(`  ⚠️ ifTable warning: ${error2.message}`);
         }
 
-        resolve(result);
+        // Tentar coletar ifXTable (contadores de 64 bits - mais precisos para interfaces gigabit)
+        const ifXTableOid = '1.3.6.1.2.1.31.1.1.1';
+        session.subtree(ifXTableOid, 20, (varbinds3) => {
+          for (const vb of varbinds3) {
+            if (snmp.isVarbindError(vb)) continue;
+            const parts = vb.oid.split('.');
+            const column = parseInt(parts[10]);
+            const ifIndex = parts[11];
+            const iface = getOrCreate(ifIndex);
+
+            switch (column) {
+              case 1: // ifName (nome curto, ex: "eth0")
+                iface.name = vb.value.toString() || iface.name;
+                break;
+              case 6: // ifHCInOctets (64-bit) - substitui ifInOctets
+                iface['rx-byte'] = String(Number(vb.value));
+                iface._hc = true;
+                break;
+              case 10: // ifHCOutOctets (64-bit) - substitui ifOutOctets
+                iface['tx-byte'] = String(Number(vb.value));
+                iface._hc = true;
+                break;
+              case 15: // ifHighSpeed (Mbps)
+                const highSpeed = Number(vb.value);
+                if (highSpeed > 0) {
+                  iface.speed = String(highSpeed * 1000000); // converter Mbps -> bps
+                }
+                break;
+              case 18: // ifAlias (nome amigável/descrição)
+                const alias = vb.value.toString();
+                if (alias && alias.length > 0) {
+                  iface._alias = alias;
+                }
+                break;
+            }
+          }
+        }, (error3) => {
+          if (error3) {
+            console.log(`  ⚠️ ifXTable não suportado (normal para alguns devices): ${error3.message}`);
+          }
+
+          session.close();
+
+          // Processar e limpar interfaces
+          for (const [ifIndex, iface] of ifMap) {
+            // Filtrar loopback e interfaces sem nome útil
+            if (iface._ifType === 24) continue; // loopback
+            if (iface.name === `if${ifIndex}` && iface._alias) {
+              iface.name = iface._alias;
+            }
+            // Limpar campos internos
+            delete iface._ifIndex;
+            delete iface._ifType;
+            delete iface._hc;
+            delete iface._alias;
+            // Converter running para string (padrão do sistema)
+            iface.running = iface.running ? 'true' : 'false';
+            result.interfaces.push(iface);
+          }
+
+          // Estimativa de banda via delta de bytes (mesmo método do MikroTik fallback)
+          const stateKey = device.device_id + '_snmp_bytes';
+          const prevBytes = previousStates.get(stateKey) || {};
+          const now = Date.now();
+          const prevTime = prevBytes._timestamp || now;
+          const elapsed = Math.max(1, (now - prevTime) / 1000);
+
+          const newBytes = {};
+          for (const iface of result.interfaces) {
+            if (iface.running !== 'true') continue;
+            const ifName = iface.name;
+            const txBytes = parseInt(iface['tx-byte'] || '0') || 0;
+            const rxBytes = parseInt(iface['rx-byte'] || '0') || 0;
+            newBytes[ifName] = { tx: txBytes, rx: rxBytes };
+
+            if (prevBytes[ifName]) {
+              const txDelta = Math.max(0, txBytes - prevBytes[ifName].tx);
+              const rxDelta = Math.max(0, rxBytes - prevBytes[ifName].rx);
+              // Detectar counter wrap (32-bit: 4294967295)
+              if (txDelta < 0 || rxDelta < 0) continue;
+              const txBps = Math.round((txDelta / elapsed) * 8);
+              const rxBps = Math.round((rxDelta / elapsed) * 8);
+              if (txBps >= 0 || rxBps >= 0) {
+                iface['tx-bits-per-second'] = txBps;
+                iface['rx-bits-per-second'] = rxBps;
+              }
+            }
+          }
+          newBytes._timestamp = now;
+          previousStates.set(stateKey, newBytes);
+
+          const rateCount = result.interfaces.filter(i => i['tx-bits-per-second'] !== undefined).length;
+          if (rateCount > 0) {
+            console.log(`  📊 Banda estimada (delta) para ${rateCount} interfaces SNMP`);
+          }
+
+          resolve(result);
+        });
       });
     });
   });
