@@ -389,9 +389,9 @@ async function mainLoop() {
     const data = await collectDeviceData(device);
     if (data.success) {
       detectChanges(device.device_id, device.name, data.interfaces, device.watch_interfaces);
-      console.log(`  ✅ ${device.name}: ${data.interfaces.length} interfaces`);
-      // Envia dados iniciais sem mudanças de status
-      await sendToSystem(config, device.device_id, data, [], []);
+      const dhcp = analyzeDhcpLeases(data.dhcpLeases);
+      console.log(`  ✅ ${device.name}: ${data.interfaces.length} interfaces, ${dhcp.total_leases} DHCP leases`);
+      await sendToSystem(config, device.device_id, data, [], [], dhcp);
     } else {
       console.error(`  ❌ ${device.name}: ${data.error}`);
     }
