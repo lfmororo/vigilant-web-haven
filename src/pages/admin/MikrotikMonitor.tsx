@@ -459,6 +459,7 @@ const MikrotikMonitor = () => {
   useEffect(() => {
     if (selectedDevice) {
       fetchInterfaces(selectedDevice.id);
+      fetchInterfaceEvents(selectedDevice.id);
       fetchPingTargets(selectedDevice.id);
       fetchDhcpHistory(selectedDevice.id);
       fetchTrafficHistory(selectedDevice.id);
