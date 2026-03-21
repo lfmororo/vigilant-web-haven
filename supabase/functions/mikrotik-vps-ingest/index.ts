@@ -286,7 +286,8 @@ async function sendWhatsAppAlert(
   logAlerts: any[],
   dhcpSummary?: any,
   dhcpAlerts?: string[],
-  rebootInfo?: any
+  rebootInfo?: any,
+  tempAlerts?: string[]
 ): Promise<boolean> {
   // Carregar configurações WhatsApp
   const { data: settings } = await supabase
