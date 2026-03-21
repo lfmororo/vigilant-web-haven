@@ -1435,7 +1435,7 @@ const MikrotikMonitor = () => {
                       {interfaces.length === 0 ? (
                         <p className="text-center text-muted-foreground py-4">Nenhuma interface. Clique em Atualizar para coletar.</p>
                       ) : (
-                        <div className="overflow-x-auto">
+                         <div className="overflow-x-auto">
                           <Table>
                           <TableHeader>
                             <TableRow>
@@ -1444,28 +1444,73 @@ const MikrotikMonitor = () => {
                               <TableHead>Status</TableHead>
                               <TableHead>IP</TableHead>
                               <TableHead>MAC</TableHead>
-                              <TableHead>PPPoE</TableHead>
+                              <TableHead>Velocidade</TableHead>
+                              {selectedDevice.device_type !== 'snmp' && <TableHead>PPPoE</TableHead>}
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {interfaces.map((iface) => (
-                              <TableRow key={iface.id} className={iface.disabled ? "opacity-50" : ""}>
-                                <TableCell className="font-medium text-sm">{iface.interface_name}</TableCell>
-                                <TableCell className="text-xs">{iface.interface_type || "-"}</TableCell>
-                                <TableCell>
-                                  <Badge variant={iface.running ? "default" : "destructive"} className="text-xs">
-                                    {iface.running ? "UP" : "DOWN"}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-xs">{iface.ip_address || "-"}</TableCell>
-                                <TableCell className="text-xs font-mono">{iface.mac_address || "-"}</TableCell>
-                                <TableCell className="text-xs">
-                                  {iface.pppoe_user ? (
-                                    <span>{iface.pppoe_user}{iface.uptime ? ` (${iface.uptime})` : ""}</span>
-                                  ) : "-"}
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                            {interfaces
+                              .filter(iface => {
+                                // Filtrar interfaces fantasma/irrelevantes no display
+                                const name = (iface.interface_name || '').toLowerCase();
+                                if (/^(lo|null|dummy|sit\d|virbr|docker|veth|br-)/.test(name)) return false;
+                                // Filtrar tipos irrelevantes
+                                const type = (iface.interface_type || '').toLowerCase();
+                                if (type === 'loopback' || type === 'snmp-type-24' || type === 'snmp-type-1') return false;
+                                return true;
+                              })
+                              .map((iface) => {
+                                // Formatar tipo para exibição
+                                const formatType = (t: string | null) => {
+                                  if (!t) return '-';
+                                  const typeMap: Record<string, string> = {
+                                    'ether': 'Ethernet', 'vlan': 'VLAN', 'lag': 'LAG/Bond', 'wifi': 'Wi-Fi',
+                                    'tunnel': 'Túnel', 'loopback': 'Loopback', 'bridge': 'Bridge', 'pppoe-out': 'PPPoE',
+                                  };
+                                  if (typeMap[t]) return typeMap[t];
+                                  if (t.startsWith('snmp-type-')) {
+                                    const typeNum = t.replace('snmp-type-', '');
+                                    const snmpTypes: Record<string, string> = {
+                                      '6': 'Ethernet', '53': 'VLAN', '131': 'Túnel', '161': 'LAG/Bond',
+                                      '71': 'Wi-Fi', '22': 'Prop P2P', '23': 'PPP', '117': 'GigEth',
+                                    };
+                                    return snmpTypes[typeNum] || `Tipo ${typeNum}`;
+                                  }
+                                  return t;
+                                };
+                                // Formatar velocidade
+                                const formatSpeed = (s: string | null) => {
+                                  if (!s) return '-';
+                                  const bps = Number(s);
+                                  if (isNaN(bps) || bps === 0) return s;
+                                  if (bps >= 1000000000) return `${(bps / 1000000000).toFixed(0)} Gbps`;
+                                  if (bps >= 1000000) return `${(bps / 1000000).toFixed(0)} Mbps`;
+                                  if (bps >= 1000) return `${(bps / 1000).toFixed(0)} Kbps`;
+                                  return `${bps} bps`;
+                                };
+
+                                return (
+                                  <TableRow key={iface.id} className={iface.disabled ? "opacity-50" : ""}>
+                                    <TableCell className="font-medium text-sm">{iface.interface_name}</TableCell>
+                                    <TableCell className="text-xs">{formatType(iface.interface_type)}</TableCell>
+                                    <TableCell>
+                                      <Badge variant={iface.running ? "default" : "destructive"} className="text-xs">
+                                        {iface.disabled ? "DISABLED" : iface.running ? "UP" : "DOWN"}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-xs">{iface.ip_address || "-"}</TableCell>
+                                    <TableCell className="text-xs font-mono">{iface.mac_address || "-"}</TableCell>
+                                    <TableCell className="text-xs">{formatSpeed(iface.speed)}</TableCell>
+                                    {selectedDevice.device_type !== 'snmp' && (
+                                      <TableCell className="text-xs">
+                                        {iface.pppoe_user ? (
+                                          <span>{iface.pppoe_user}{iface.uptime ? ` (${iface.uptime})` : ""}</span>
+                                        ) : "-"}
+                                      </TableCell>
+                                    )}
+                                  </TableRow>
+                                );
+                              })}
                           </TableBody>
                         </Table>
                         </div>
