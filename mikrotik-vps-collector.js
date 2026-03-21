@@ -291,7 +291,7 @@ function postJSON(url, data, headers) {
   });
 }
 
-async function sendToSystem(config, deviceId, collectedData, changes, logAlerts) {
+async function sendToSystem(config, deviceId, collectedData, changes, logAlerts, dhcpSummary) {
   const functionUrl = `${config.supabase_url}/functions/v1/mikrotik-vps-ingest`;
 
   const payload = {
@@ -299,6 +299,7 @@ async function sendToSystem(config, deviceId, collectedData, changes, logAlerts)
     collected_data: collectedData,
     status_changes: changes,
     log_alerts: logAlerts,
+    dhcp_summary: dhcpSummary || null,
   };
 
   try {
