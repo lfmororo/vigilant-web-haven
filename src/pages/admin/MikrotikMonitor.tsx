@@ -941,6 +941,7 @@ const MikrotikMonitor = () => {
                             ))}
                           </TableBody>
                         </Table>
+                        </div>
                       )}
                     </CardContent>
                   </Card>
