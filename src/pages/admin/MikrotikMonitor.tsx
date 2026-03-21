@@ -153,10 +153,11 @@ async function collectDeviceData(device) {
     let pppoeClients = []; try { pppoeClients = await client.menu('/interface/pppoe-client').getAll(); } catch (_) {}
     let identity = ''; try { const r = await client.menu('/system/identity').getAll(); identity = r?.[0]?.name || ''; } catch (_) {}
     let resource = {}; try { const r = await client.menu('/system/resource').getAll(); resource = r?.[0] || {}; } catch (_) {}
-    let logs = []; try { const r = await client.menu('/log').getAll(); logs = (r || []).slice(-50); } catch (_) {}
+    let logs = []; try { const r = await client.menu('/log').getAll(); logs = (r || []).slice(-200); } catch (_) {}
+    let dhcpLeases = []; try { dhcpLeases = await client.menu('/ip/dhcp-server/lease').getAll(); } catch (_) {}
 
     await api.disconnect();
-    return { success: true, identity, resource, interfaces: interfaces || [], ipAddresses: ipAddresses || [], pppoeClients: pppoeClients || [], logs };
+    return { success: true, identity, resource, interfaces: interfaces || [], ipAddresses: ipAddresses || [], pppoeClients: pppoeClients || [], logs, dhcpLeases: dhcpLeases || [] };
   } catch (err) {
     if (api) { try { await api.disconnect(); } catch (_) {} }
     return { success: false, error: err.message };
@@ -184,15 +185,29 @@ function detectChanges(deviceId, deviceName, currentInterfaces, watchInterfaces)
 
 function detectLogAlerts(logs) {
   const alerts = [];
-  const keywords = ['down', 'error', 'fail', 'critical', 'link down', 'disconnected'];
+  const keywords = ['down', 'error', 'fail', 'critical', 'link down', 'disconnected', 'timeout', 'login failure', 'denied', 'unreachable'];
   for (const log of logs) {
     const msg = (log.message || '').toLowerCase();
     const topic = (log.topics || '').toLowerCase();
-    if (keywords.some(kw => msg.includes(kw)) || topic.includes('error') || topic.includes('critical')) {
+    if (keywords.some(kw => msg.includes(kw)) || topic.includes('error') || topic.includes('critical') || topic.includes('warning')) {
       alerts.push({ time: log.time || '', topics: log.topics || '', message: log.message || '' });
     }
   }
   return alerts;
+}
+
+function analyzeDhcpLeases(dhcpLeases) {
+  const totalLeases = dhcpLeases.length;
+  const activeLeases = dhcpLeases.filter(l => l.status === 'bound' || l.dynamic === 'true' || l.dynamic === true).length;
+  const staticLeases = dhcpLeases.filter(l => l.dynamic === 'false' || l.dynamic === false).length;
+  const byServer = {};
+  for (const lease of dhcpLeases) {
+    const server = lease.server || lease['dhcp-server'] || 'default';
+    if (!byServer[server]) byServer[server] = { total: 0, active: 0 };
+    byServer[server].total++;
+    if (lease.status === 'bound') byServer[server].active++;
+  }
+  return { total_leases: totalLeases, active_leases: activeLeases, static_leases: staticLeases, dynamic_leases: totalLeases - staticLeases, by_server: byServer };
 }
 
 // ===== HTTP POST =====
@@ -211,10 +226,10 @@ function postJSON(url, data, headers) {
   });
 }
 
-async function sendToSystem(deviceId, data, changes, logAlerts) {
+async function sendToSystem(deviceId, data, changes, logAlerts, dhcpSummary) {
   const url = \`\${CONFIG.supabase_url}/functions/v1/mikrotik-vps-ingest\`;
   try {
-    const result = await postJSON(url, { device_id: deviceId, collected_data: data, status_changes: changes, log_alerts: logAlerts }, {
+    const result = await postJSON(url, { device_id: deviceId, collected_data: data, status_changes: changes, log_alerts: logAlerts, dhcp_summary: dhcpSummary || null }, {
       'Authorization': \`Bearer \${CONFIG.supabase_anon_key}\`, 'apikey': CONFIG.supabase_anon_key
     });
     if (result.status >= 200 && result.status < 300) {
@@ -236,14 +251,15 @@ async function pollDevice(device) {
     await sendToSystem(device.device_id, data, [{ interface_name: 'connection', previous_status: 'up', current_status: 'down', device_name: device.name }], []);
     return;
   }
-  console.log(\`  📊 \${data.interfaces.length} interfaces\`);
+  const dhcp = analyzeDhcpLeases(data.dhcpLeases);
+  console.log(\`  📊 \${data.interfaces.length} interfaces, \${dhcp.total_leases} DHCP leases\`);
   const changes = detectChanges(device.device_id, device.name, data.interfaces, device.watch_interfaces);
   if (changes.length > 0) {
     console.log(\`  ⚠️  \${changes.length} mudança(s)\`);
     changes.forEach(c => console.log(\`     \${c.current_status === 'up' ? '🟢' : '🔴'} \${c.interface_name}: \${c.previous_status} → \${c.current_status}\`));
   }
   const logAlerts = detectLogAlerts(data.logs);
-  await sendToSystem(device.device_id, data, changes, logAlerts);
+  await sendToSystem(device.device_id, data, changes, logAlerts, dhcp);
 }
 
 async function main() {
@@ -255,8 +271,9 @@ async function main() {
     const data = await collectDeviceData(d);
     if (data.success) {
       detectChanges(d.device_id, d.name, data.interfaces, d.watch_interfaces);
-      console.log(\`  ✅ \${d.name}: \${data.interfaces.length} interfaces\`);
-      await sendToSystem(d.device_id, data, [], []);
+      const dhcp = analyzeDhcpLeases(data.dhcpLeases);
+      console.log(\`  ✅ \${d.name}: \${data.interfaces.length} interfaces, \${dhcp.total_leases} DHCP leases\`);
+      await sendToSystem(d.device_id, data, [], [], dhcp);
     } else {
       console.error(\`  ❌ \${d.name}: \${data.error}\`);
     }

@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const { device_id, collected_data, status_changes, log_alerts } = await req.json();
+    const { device_id, collected_data, status_changes, log_alerts, dhcp_summary } = await req.json();
 
     if (!device_id) {
       return new Response(
@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
     // Enviar notificação WhatsApp se houve mudanças
     let whatsappSent = false;
     if ((status_changes?.length > 0) || (log_alerts?.length > 0)) {
-      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], log_alerts || []);
+      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], log_alerts || [], dhcp_summary);
     }
 
     return new Response(
@@ -164,7 +164,8 @@ async function sendWhatsAppAlert(
   supabase: any,
   device: any,
   statusChanges: any[],
-  logAlerts: any[]
+  logAlerts: any[],
+  dhcpSummary?: any
 ): Promise<boolean> {
   // Carregar configurações WhatsApp
   const { data: settings } = await supabase
@@ -234,6 +235,18 @@ async function sendWhatsAppAlert(
     }
     if (logAlerts.length > 10) {
       lines.push(`  ... e mais ${logAlerts.length - 10} alerta(s)`);
+    }
+    lines.push("");
+  }
+
+  if (dhcpSummary) {
+    lines.push("🌐 *DHCP Leases:*");
+    lines.push(`  Total: ${dhcpSummary.total_leases} | Ativos: ${dhcpSummary.active_leases}`);
+    lines.push(`  Dinâmicos: ${dhcpSummary.dynamic_leases} | Estáticos: ${dhcpSummary.static_leases}`);
+    if (dhcpSummary.by_server && Object.keys(dhcpSummary.by_server).length > 0) {
+      for (const [server, info] of Object.entries(dhcpSummary.by_server) as any) {
+        lines.push(`  📡 ${server}: ${info.active}/${info.total}`);
+      }
     }
     lines.push("");
   }

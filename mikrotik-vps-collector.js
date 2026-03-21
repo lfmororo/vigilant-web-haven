@@ -140,11 +140,17 @@ async function collectDeviceData(device) {
       resource = resData?.[0] || {};
     } catch (_) {}
 
-    // Coletar logs recentes (últimos 50)
+    // Coletar logs recentes (últimos 200 para análise de 24h)
     let logs = [];
     try {
       const logData = await client.menu('/log').getAll();
-      logs = (logData || []).slice(-50);
+      logs = (logData || []).slice(-200);
+    } catch (_) {}
+
+    // Coletar leases DHCP
+    let dhcpLeases = [];
+    try {
+      dhcpLeases = await client.menu('/ip/dhcp-server/lease').getAll();
     } catch (_) {}
 
     await api.disconnect();
@@ -157,6 +163,7 @@ async function collectDeviceData(device) {
       ipAddresses: ipAddresses || [],
       pppoeClients: pppoeClients || [],
       logs,
+      dhcpLeases: dhcpLeases || [],
     };
   } catch (err) {
     if (api) {
@@ -201,13 +208,13 @@ function detectChanges(deviceId, deviceName, currentInterfaces, watchInterfaces)
 
 function detectLogAlerts(logs) {
   const alerts = [];
-  const keywords = ['down', 'error', 'fail', 'critical', 'link down', 'disconnected', 'ppp'];
+  const keywords = ['down', 'error', 'fail', 'critical', 'link down', 'disconnected', 'ppp', 'timeout', 'login failure', 'denied', 'unreachable', 'duplicate'];
   
   for (const log of logs) {
     const msg = (log.message || '').toLowerCase();
     const topic = (log.topics || '').toLowerCase();
     
-    if (keywords.some(kw => msg.includes(kw)) || topic.includes('error') || topic.includes('critical')) {
+    if (keywords.some(kw => msg.includes(kw)) || topic.includes('error') || topic.includes('critical') || topic.includes('warning')) {
       alerts.push({
         time: log.time || '',
         topics: log.topics || '',
@@ -219,7 +226,37 @@ function detectLogAlerts(logs) {
   return alerts;
 }
 
-// ==================== SEND TO SYSTEM ====================
+// ==================== DHCP ANALYSIS ====================
+
+function analyzeDhcpLeases(dhcpLeases) {
+  const now = Date.now();
+  const oneDayAgo = now - (24 * 60 * 60 * 1000);
+
+  const totalLeases = dhcpLeases.length;
+  const activeLeases = dhcpLeases.filter(l => 
+    l.status === 'bound' || l.dynamic === 'true' || l.dynamic === true
+  ).length;
+  const staticLeases = dhcpLeases.filter(l => 
+    l.dynamic === 'false' || l.dynamic === false
+  ).length;
+
+  // Agrupar por servidor DHCP
+  const byServer = {};
+  for (const lease of dhcpLeases) {
+    const server = lease.server || lease['dhcp-server'] || 'default';
+    if (!byServer[server]) byServer[server] = { total: 0, active: 0 };
+    byServer[server].total++;
+    if (lease.status === 'bound') byServer[server].active++;
+  }
+
+  return {
+    total_leases: totalLeases,
+    active_leases: activeLeases,
+    static_leases: staticLeases,
+    dynamic_leases: totalLeases - staticLeases,
+    by_server: byServer,
+  };
+}
 
 function postJSON(url, data, headers) {
   return new Promise((resolve, reject) => {
@@ -254,7 +291,7 @@ function postJSON(url, data, headers) {
   });
 }
 
-async function sendToSystem(config, deviceId, collectedData, changes, logAlerts) {
+async function sendToSystem(config, deviceId, collectedData, changes, logAlerts, dhcpSummary) {
   const functionUrl = `${config.supabase_url}/functions/v1/mikrotik-vps-ingest`;
 
   const payload = {
@@ -262,6 +299,7 @@ async function sendToSystem(config, deviceId, collectedData, changes, logAlerts)
     collected_data: collectedData,
     status_changes: changes,
     log_alerts: logAlerts,
+    dhcp_summary: dhcpSummary || null,
   };
 
   try {
@@ -302,9 +340,18 @@ async function pollDevice(config, device) {
     return;
   }
 
-  console.log(`  📊 ${data.interfaces.length} interfaces, ${data.ipAddresses.length} IPs, ${data.pppoeClients.length} PPPoE`);
+  console.log(`  📊 ${data.interfaces.length} interfaces, ${data.ipAddresses.length} IPs, ${data.pppoeClients.length} PPPoE, ${data.dhcpLeases.length} DHCP leases`);
   if (data.resource.version) {
     console.log(`  ℹ️  RouterOS ${data.resource.version}, Uptime: ${data.resource.uptime || 'N/A'}`);
+  }
+
+  // Analisar DHCP leases
+  const dhcpSummary = analyzeDhcpLeases(data.dhcpLeases);
+  console.log(`  🌐 DHCP: ${dhcpSummary.active_leases} ativos / ${dhcpSummary.total_leases} total (${dhcpSummary.dynamic_leases} dinâmicos, ${dhcpSummary.static_leases} estáticos)`);
+  if (Object.keys(dhcpSummary.by_server).length > 0) {
+    for (const [server, info] of Object.entries(dhcpSummary.by_server)) {
+      console.log(`     📡 ${server}: ${info.active}/${info.total} leases`);
+    }
   }
 
   // Detectar mudanças de status
@@ -324,7 +371,7 @@ async function pollDevice(config, device) {
   }
 
   // Enviar ao sistema
-  await sendToSystem(config, device.device_id, data, changes, logAlerts);
+  await sendToSystem(config, device.device_id, data, changes, logAlerts, dhcpSummary);
 }
 
 async function mainLoop() {
@@ -342,9 +389,9 @@ async function mainLoop() {
     const data = await collectDeviceData(device);
     if (data.success) {
       detectChanges(device.device_id, device.name, data.interfaces, device.watch_interfaces);
-      console.log(`  ✅ ${device.name}: ${data.interfaces.length} interfaces`);
-      // Envia dados iniciais sem mudanças de status
-      await sendToSystem(config, device.device_id, data, [], []);
+      const dhcp = analyzeDhcpLeases(data.dhcpLeases);
+      console.log(`  ✅ ${device.name}: ${data.interfaces.length} interfaces, ${dhcp.total_leases} DHCP leases`);
+      await sendToSystem(config, device.device_id, data, [], [], dhcp);
     } else {
       console.error(`  ❌ ${device.name}: ${data.error}`);
     }
