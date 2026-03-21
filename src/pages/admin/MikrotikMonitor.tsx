@@ -86,7 +86,7 @@ interface Client {
 }
 
 const emptyDevice = {
-  name: "", host: "", port: 443, username: "admin", password: "", use_ssl: true, client_id: "", proxy_url: "", api_port: 8728,
+  name: "", host: "", port: 443, username: "admin", password: "", use_ssl: true, client_id: "", proxy_url: "", api_port: 8728, device_type: "mikrotik", snmp_community: "public", snmp_version: "2c",
 };
 
 const formatBytes = (bytes: number) => {
