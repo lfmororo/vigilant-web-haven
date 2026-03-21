@@ -523,52 +523,20 @@ const MikrotikMonitor = () => {
     setPolling(null);
   };
 
-  const handleTestAlert = async (deviceId: string) => {
+  const handleSendSummary = async (deviceId: string) => {
     setPolling(deviceId);
     try {
-      const device = devices.find(d => d.id === deviceId);
-      if (!device) throw new Error("Dispositivo não encontrado");
-
-      const { data, error } = await supabase.functions.invoke("mikrotik-vps-ingest", {
-        body: {
-          device_id: deviceId,
-          collected_data: { success: true, interfaces: [], ipAddresses: [], pppoeClients: [] },
-          status_changes: [
-            {
-              interface_name: "ether1-test",
-              previous_status: "up",
-              current_status: "down",
-            },
-            {
-              interface_name: "ether2-test",
-              previous_status: "down",
-              current_status: "up",
-            },
-          ],
-          log_alerts: [
-            { time: new Date().toLocaleTimeString("pt-BR"), message: "[TESTE] Simulação de alerta de log para validação do sistema" },
-          ],
-          dhcp_summary: {
-            total_leases: 100,
-            active_leases: 95,
-            dynamic_leases: 80,
-            static_leases: 15,
-            by_server: {
-              "dhcp-server1": { total: 60, active: 57 },
-              "dhcp-server2": { total: 40, active: 38 },
-            },
-          },
-        },
+      const { data, error } = await supabase.functions.invoke("mikrotik-daily-summary", {
+        body: { device_id: deviceId },
       });
       if (error) throw error;
       if (data?.whatsapp_sent) {
-        toast.success("Alerta de teste enviado via WhatsApp!");
+        toast.success("Resumo enviado via WhatsApp!");
       } else {
-        toast.info("Teste processado, mas WhatsApp não foi enviado (verifique configurações)");
+        toast.info(data?.error || "Resumo processado, mas WhatsApp não foi enviado");
       }
-      fetchDevices();
     } catch (err: any) {
-      toast.error(err.message || "Erro ao enviar teste");
+      toast.error(err.message || "Erro ao enviar resumo");
     }
     setPolling(null);
   };
@@ -721,11 +689,11 @@ const MikrotikMonitor = () => {
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleTestAlert(device.id); }} disabled={!!polling}>
-                                <AlertTriangle className="w-3 h-3 text-orange-500" />
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleSendSummary(device.id); }} disabled={!!polling}>
+                                <ScrollText className="w-3 h-3 text-primary" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Enviar alerta de teste</TooltipContent>
+                            <TooltipContent>Enviar resumo WhatsApp</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                         <TooltipProvider>
