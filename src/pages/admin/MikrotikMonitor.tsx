@@ -1884,7 +1884,7 @@ const MikrotikMonitor = () => {
       {/* Create Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Novo Dispositivo Mikrotik</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Novo Dispositivo de Rede</DialogTitle></DialogHeader>
           <form onSubmit={handleCreateDevice}>
             {renderDeviceForm(deviceForm, setDeviceForm)}
             <DialogFooter className="mt-4"><Button type="submit">Adicionar</Button></DialogFooter>
