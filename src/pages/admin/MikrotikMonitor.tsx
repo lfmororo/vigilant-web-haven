@@ -226,10 +226,10 @@ function postJSON(url, data, headers) {
   });
 }
 
-async function sendToSystem(deviceId, data, changes, logAlerts) {
+async function sendToSystem(deviceId, data, changes, logAlerts, dhcpSummary) {
   const url = \`\${CONFIG.supabase_url}/functions/v1/mikrotik-vps-ingest\`;
   try {
-    const result = await postJSON(url, { device_id: deviceId, collected_data: data, status_changes: changes, log_alerts: logAlerts }, {
+    const result = await postJSON(url, { device_id: deviceId, collected_data: data, status_changes: changes, log_alerts: logAlerts, dhcp_summary: dhcpSummary || null }, {
       'Authorization': \`Bearer \${CONFIG.supabase_anon_key}\`, 'apikey': CONFIG.supabase_anon_key
     });
     if (result.status >= 200 && result.status < 300) {
@@ -251,14 +251,15 @@ async function pollDevice(device) {
     await sendToSystem(device.device_id, data, [{ interface_name: 'connection', previous_status: 'up', current_status: 'down', device_name: device.name }], []);
     return;
   }
-  console.log(\`  📊 \${data.interfaces.length} interfaces\`);
+  const dhcp = analyzeDhcpLeases(data.dhcpLeases);
+  console.log(\`  📊 \${data.interfaces.length} interfaces, \${dhcp.total_leases} DHCP leases\`);
   const changes = detectChanges(device.device_id, device.name, data.interfaces, device.watch_interfaces);
   if (changes.length > 0) {
     console.log(\`  ⚠️  \${changes.length} mudança(s)\`);
     changes.forEach(c => console.log(\`     \${c.current_status === 'up' ? '🟢' : '🔴'} \${c.interface_name}: \${c.previous_status} → \${c.current_status}\`));
   }
   const logAlerts = detectLogAlerts(data.logs);
-  await sendToSystem(device.device_id, data, changes, logAlerts);
+  await sendToSystem(device.device_id, data, changes, logAlerts, dhcp);
 }
 
 async function main() {
@@ -270,8 +271,9 @@ async function main() {
     const data = await collectDeviceData(d);
     if (data.success) {
       detectChanges(d.device_id, d.name, data.interfaces, d.watch_interfaces);
-      console.log(\`  ✅ \${d.name}: \${data.interfaces.length} interfaces\`);
-      await sendToSystem(d.device_id, data, [], []);
+      const dhcp = analyzeDhcpLeases(data.dhcpLeases);
+      console.log(\`  ✅ \${d.name}: \${data.interfaces.length} interfaces, \${dhcp.total_leases} DHCP leases\`);
+      await sendToSystem(d.device_id, data, [], [], dhcp);
     } else {
       console.error(\`  ❌ \${d.name}: \${data.error}\`);
     }
