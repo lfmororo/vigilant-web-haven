@@ -173,10 +173,29 @@ Deno.serve(async (req) => {
       .update(deviceUpdate)
       .eq("id", device_id);
 
-    // Enviar notificação WhatsApp se houve mudanças
+    // Verificar DHCP alto uso (>90%) e adicionar como alerta
+    const dhcpAlerts: string[] = [];
+    if (dhcp_summary?.by_server) {
+      for (const [server, info] of Object.entries(dhcp_summary.by_server) as any) {
+        if (info.total > 0) {
+          const pct = Math.round((info.active / info.total) * 100);
+          if (pct >= 90) {
+            dhcpAlerts.push(`⚠️ DHCP ${server}: ${pct}% utilizado (${info.active}/${info.total})`);
+          }
+        }
+      }
+    }
+    if (dhcp_summary?.total_leases > 0) {
+      const totalPct = Math.round((dhcp_summary.active_leases / dhcp_summary.total_leases) * 100);
+      if (totalPct >= 90) {
+        dhcpAlerts.push(`🔴 DHCP Geral: ${totalPct}% utilizado (${dhcp_summary.active_leases}/${dhcp_summary.total_leases})`);
+      }
+    }
+
+    // Enviar notificação WhatsApp se houve mudanças, alertas de log ou DHCP alto
     let whatsappSent = false;
-    if ((status_changes?.length > 0) || (log_alerts?.length > 0)) {
-      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], log_alerts || [], dhcp_summary);
+    if ((status_changes?.length > 0) || (log_alerts?.length > 0) || (dhcpAlerts.length > 0)) {
+      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], log_alerts || [], dhcp_summary, dhcpAlerts);
     }
 
     return new Response(
@@ -209,7 +228,8 @@ async function sendWhatsAppAlert(
   device: any,
   statusChanges: any[],
   logAlerts: any[],
-  dhcpSummary?: any
+  dhcpSummary?: any,
+  dhcpAlerts?: string[]
 ): Promise<boolean> {
   // Carregar configurações WhatsApp
   const { data: settings } = await supabase
@@ -284,13 +304,23 @@ async function sendWhatsAppAlert(
     lines.push("");
   }
 
+  if (dhcpAlerts && dhcpAlerts.length > 0) {
+    lines.push("🚨 *DHCP - Utilização Alta (>90%):*");
+    for (const alert of dhcpAlerts) {
+      lines.push(`  ${alert}`);
+    }
+    lines.push("");
+  }
+
   if (dhcpSummary) {
     lines.push("🌐 *DHCP Leases:*");
     lines.push(`  Total: ${dhcpSummary.total_leases} | Ativos: ${dhcpSummary.active_leases}`);
     lines.push(`  Dinâmicos: ${dhcpSummary.dynamic_leases} | Estáticos: ${dhcpSummary.static_leases}`);
     if (dhcpSummary.by_server && Object.keys(dhcpSummary.by_server).length > 0) {
       for (const [server, info] of Object.entries(dhcpSummary.by_server) as any) {
-        lines.push(`  📡 ${server}: ${info.active}/${info.total}`);
+        const pct = info.total > 0 ? Math.round((info.active / info.total) * 100) : 0;
+        const icon = pct >= 90 ? "🔴" : pct >= 70 ? "🟡" : "🟢";
+        lines.push(`  ${icon} ${server}: ${info.active}/${info.total} (${pct}%)`);
       }
     }
     lines.push("");
