@@ -33,6 +33,9 @@ interface MikrotikDevice {
   created_at: string;
   proxy_url: string | null;
   api_port: number | null;
+  device_type: string;
+  snmp_community: string | null;
+  snmp_version: string | null;
   client?: { full_name: string };
   last_dhcp_summary?: any;
   last_log_alerts?: any[];
