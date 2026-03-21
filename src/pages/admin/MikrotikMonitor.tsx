@@ -365,10 +365,24 @@ const MikrotikMonitor = () => {
     }
   }, [devices]);
 
+  const fetchDhcpHistory = async (deviceId: string) => {
+    const { data } = await supabase
+      .from("mikrotik_dhcp_history")
+      .select("*")
+      .eq("device_id", deviceId)
+      .order("recorded_at", { ascending: true })
+      .limit(100);
+    setDhcpHistory((data || []).map((d: any) => ({
+      ...d,
+      time: new Date(d.recorded_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+    })));
+  };
+
   useEffect(() => {
     if (selectedDevice) {
       fetchInterfaces(selectedDevice.id);
       fetchPingTargets(selectedDevice.id);
+      fetchDhcpHistory(selectedDevice.id);
     }
   }, [selectedDevice]);
 
