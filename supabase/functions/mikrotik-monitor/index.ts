@@ -89,14 +89,55 @@ async function pollAllDevices(supabase: any) {
   );
 }
 
+async function safeFetch(url: string, options: RequestInit): Promise<Response> {
+  // Try with default fetch first, then fallback with no TLS verification
+  try {
+    return await fetch(url, options);
+  } catch (err: any) {
+    const msg = err?.message || "";
+    // If SSL/TLS error, retry without certificate verification
+    if (msg.includes("certificate") || msg.includes("Connection reset") || msg.includes("ssl") || msg.includes("tls") || msg.includes("CERTIFICATE")) {
+      try {
+        const client = Deno.createHttpClient({ caCerts: [] });
+        return await fetch(url, { ...options, client } as any);
+      } catch (_) {
+        // createHttpClient may not be available, try HTTP fallback
+      }
+    }
+    throw err;
+  }
+}
+
 async function fetchDeviceData(supabase: any, device: any) {
-  const protocol = device.use_ssl ? "https" : "http";
-  const baseUrl = `${protocol}://${device.host}:${device.port}/rest`;
   const auth = btoa(`${device.username}:${device.password}`);
-  const headers = {
+  const headers: Record<string, string> = {
     "Authorization": `Basic ${auth}`,
     "Content-Type": "application/json",
   };
+
+  // Try HTTPS first, then HTTP as fallback
+  const protocols = device.use_ssl ? ["https", "http"] : ["http", "https"];
+  let baseUrl = "";
+  let connected = false;
+
+  for (const proto of protocols) {
+    baseUrl = `${proto}://${device.host}:${device.port}/rest`;
+    try {
+      const testRes = await safeFetch(`${baseUrl}/system/identity`, { headers });
+      if (testRes.ok || testRes.status === 401) {
+        await testRes.text(); // consume body
+        connected = true;
+        break;
+      }
+      await testRes.text();
+    } catch (_) {
+      console.log(`${proto}://${device.host}:${device.port} failed, trying next...`);
+    }
+  }
+
+  if (!connected) {
+    throw new Error(`Não foi possível conectar à Mikrotik ${device.host}:${device.port}. Verifique se a API REST está habilitada (RouterOS 7.1+), o IP/porta está acessível e as credenciais estão corretas.`);
+  }
 
   let interfacesData: any[] = [];
   let ipAddresses: any[] = [];
@@ -105,21 +146,24 @@ async function fetchDeviceData(supabase: any, device: any) {
 
   try {
     // Fetch interfaces
-    const ifRes = await fetch(`${baseUrl}/interface`, { headers });
-    if (!ifRes.ok) throw new Error(`Interface API failed: ${ifRes.status}`);
+    const ifRes = await safeFetch(`${baseUrl}/interface`, { headers });
+    if (!ifRes.ok) {
+      const body = await ifRes.text();
+      throw new Error(`Interface API failed: ${ifRes.status} - ${body}`);
+    }
     interfacesData = await ifRes.json();
 
     // Fetch IP addresses
     try {
-      const ipRes = await fetch(`${baseUrl}/ip/address`, { headers });
+      const ipRes = await safeFetch(`${baseUrl}/ip/address`, { headers });
       if (ipRes.ok) ipAddresses = await ipRes.json();
-    } catch (_) { /* optional */ }
+      else await ipRes.text();
 
     // Fetch PPPoE client interfaces
     try {
-      const pppoeRes = await fetch(`${baseUrl}/interface/pppoe-client`, { headers });
+      const pppoeRes = await safeFetch(`${baseUrl}/interface/pppoe-client`, { headers });
       if (pppoeRes.ok) pppoeInterfaces = await pppoeRes.json();
-    } catch (_) { /* optional */ }
+      else await pppoeRes.text();
 
     // Build IP map: interface -> ip
     const ipMap = new Map<string, string>();
@@ -192,7 +236,7 @@ async function fetchDeviceData(supabase: any, device: any) {
     if (pingTargets?.length) {
       for (const target of pingTargets) {
         try {
-          const pingRes = await fetch(`${baseUrl}/ping`, {
+          const pingRes = await safeFetch(`${baseUrl}/ping`, {
             method: "POST",
             headers,
             body: JSON.stringify({
