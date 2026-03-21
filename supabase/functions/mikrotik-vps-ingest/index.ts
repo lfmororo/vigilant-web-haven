@@ -239,6 +239,18 @@ async function sendWhatsAppAlert(
     lines.push("");
   }
 
+  if (dhcpSummary) {
+    lines.push("🌐 *DHCP Leases:*");
+    lines.push(`  Total: ${dhcpSummary.total_leases} | Ativos: ${dhcpSummary.active_leases}`);
+    lines.push(`  Dinâmicos: ${dhcpSummary.dynamic_leases} | Estáticos: ${dhcpSummary.static_leases}`);
+    if (dhcpSummary.by_server && Object.keys(dhcpSummary.by_server).length > 0) {
+      for (const [server, info] of Object.entries(dhcpSummary.by_server) as any) {
+        lines.push(`  📡 ${server}: ${info.active}/${info.total}`);
+      }
+    }
+    lines.push("");
+  }
+
   const now = new Date();
   const brTime = new Intl.DateTimeFormat("pt-BR", {
     timeZone: "America/Sao_Paulo",
