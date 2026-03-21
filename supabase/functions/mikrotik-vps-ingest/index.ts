@@ -349,6 +349,15 @@ async function sendWhatsAppAlert(
     lines.push("");
   }
 
+  if (tempAlerts && tempAlerts.length > 0) {
+    lines.push("🌡️ *TEMPERATURA ALTA:*");
+    for (const alert of tempAlerts) {
+      lines.push(`  ${alert}`);
+    }
+    lines.push("");
+  }
+
+  if (statusChanges.length > 0) {
     lines.push("📊 *Mudanças de Status:*");
     for (const change of statusChanges) {
       const emoji = change.current_status === "up" ? "🟢" : "🔴";
