@@ -619,6 +619,12 @@ const MikrotikMonitor = () => {
       device_type: deviceForm.device_type || 'mikrotik',
       snmp_community: deviceForm.snmp_community || 'public',
       snmp_version: deviceForm.snmp_version || '2c',
+      snmp_security_level: deviceForm.snmp_security_level || 'noAuthNoPriv',
+      snmp_user: deviceForm.snmp_user || null,
+      snmp_auth_protocol: deviceForm.snmp_auth_protocol || 'MD5',
+      snmp_auth_passphrase: deviceForm.snmp_auth_passphrase || null,
+      snmp_priv_protocol: deviceForm.snmp_priv_protocol || 'DES',
+      snmp_priv_passphrase: deviceForm.snmp_priv_passphrase || null,
     };
     const { error } = await supabase.from("mikrotik_devices").insert(insertData);
     if (error) { toast.error(error.message); return; }
