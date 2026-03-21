@@ -322,7 +322,7 @@ async function main() {
     const data = await collectDeviceData(d);
     if (data.success) {
       detectChanges(d.device_id, d.name, data.interfaces, d.watch_interfaces);
-      const dhcp = analyzeDhcpLeases(data.dhcpLeases);
+      const dhcp = analyzeDhcpLeases(data.dhcpLeases, data.dhcpPools, data.dhcpServers);
       console.log(\`  ✅ \${d.name}: \${data.interfaces.length} interfaces, \${dhcp.total_leases} DHCP leases\`);
       await sendToSystem(d.device_id, data, [], [], dhcp);
     } else {
