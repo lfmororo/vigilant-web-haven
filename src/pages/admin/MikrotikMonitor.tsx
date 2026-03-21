@@ -94,6 +94,14 @@ const formatBytes = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 };
 
+const formatBitsPerSec = (bps: number) => {
+  if (!bps || bps === 0) return "0 bps";
+  if (bps >= 1_000_000_000) return (bps / 1_000_000_000).toFixed(2) + " Gbps";
+  if (bps >= 1_000_000) return (bps / 1_000_000).toFixed(2) + " Mbps";
+  if (bps >= 1_000) return (bps / 1_000).toFixed(1) + " Kbps";
+  return bps + " bps";
+};
+
 const generateCollectorScript = (device: MikrotikDevice) => {
   const script = `#!/usr/bin/env node
 /**
