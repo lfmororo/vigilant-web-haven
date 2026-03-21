@@ -304,13 +304,23 @@ async function sendWhatsAppAlert(
     lines.push("");
   }
 
+  if (dhcpAlerts && dhcpAlerts.length > 0) {
+    lines.push("🚨 *DHCP - Utilização Alta (>90%):*");
+    for (const alert of dhcpAlerts) {
+      lines.push(`  ${alert}`);
+    }
+    lines.push("");
+  }
+
   if (dhcpSummary) {
     lines.push("🌐 *DHCP Leases:*");
     lines.push(`  Total: ${dhcpSummary.total_leases} | Ativos: ${dhcpSummary.active_leases}`);
     lines.push(`  Dinâmicos: ${dhcpSummary.dynamic_leases} | Estáticos: ${dhcpSummary.static_leases}`);
     if (dhcpSummary.by_server && Object.keys(dhcpSummary.by_server).length > 0) {
       for (const [server, info] of Object.entries(dhcpSummary.by_server) as any) {
-        lines.push(`  📡 ${server}: ${info.active}/${info.total}`);
+        const pct = info.total > 0 ? Math.round((info.active / info.total) * 100) : 0;
+        const icon = pct >= 90 ? "🔴" : pct >= 70 ? "🟡" : "🟢";
+        lines.push(`  ${icon} ${server}: ${info.active}/${info.total} (${pct}%)`);
       }
     }
     lines.push("");
