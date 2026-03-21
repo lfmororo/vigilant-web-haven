@@ -167,9 +167,11 @@ async function collectDeviceData(device) {
     } catch (_) {}
     let logs = []; try { const r = await client.menu('/log').getAll(); logs = (r || []).slice(-200); } catch (_) {}
     let dhcpLeases = []; try { dhcpLeases = await client.menu('/ip/dhcp-server/lease').getAll(); } catch (_) {}
+    let dhcpPools = []; try { dhcpPools = await client.menu('/ip/pool').getAll(); } catch (_) {}
+    let dhcpServers = []; try { dhcpServers = await client.menu('/ip/dhcp-server').getAll(); } catch (_) {}
 
     await api.disconnect();
-    return { success: true, identity, resource, health, interfaces: interfaces || [], ipAddresses: ipAddresses || [], pppoeClients: pppoeClients || [], logs, dhcpLeases: dhcpLeases || [] };
+    return { success: true, identity, resource, health, interfaces: interfaces || [], ipAddresses: ipAddresses || [], pppoeClients: pppoeClients || [], logs, dhcpLeases: dhcpLeases || [], dhcpPools: dhcpPools || [], dhcpServers: dhcpServers || [] };
   } catch (err) {
     if (api) { try { await api.disconnect(); } catch (_) {} }
     return { success: false, error: err.message };
@@ -212,18 +214,50 @@ function detectLogAlerts(logs) {
   return alerts;
 }
 
-function analyzeDhcpLeases(dhcpLeases) {
+function ipToNumber(ip) {
+  const parts = ip.trim().split('.');
+  return ((parseInt(parts[0]) << 24) + (parseInt(parts[1]) << 16) + (parseInt(parts[2]) << 8) + parseInt(parts[3])) >>> 0;
+}
+
+function countPoolCapacity(ranges) {
+  if (!ranges) return 0;
+  let total = 0;
+  for (const part of ranges.split(',')) {
+    const t = part.trim();
+    if (t.includes('-')) {
+      const [s, e] = t.split('-');
+      const sn = ipToNumber(s), en = ipToNumber(e);
+      if (en >= sn) total += (en - sn + 1);
+    }
+  }
+  return total;
+}
+
+function analyzeDhcpLeases(dhcpLeases, dhcpPools, dhcpServers) {
   const totalLeases = dhcpLeases.length;
   const activeLeases = dhcpLeases.filter(l => l.status === 'bound' || l.dynamic === 'true' || l.dynamic === true).length;
   const staticLeases = dhcpLeases.filter(l => l.dynamic === 'false' || l.dynamic === false).length;
+  const poolCap = {};
+  for (const p of (dhcpPools || [])) { poolCap[p.name || p['.id']] = countPoolCapacity(p.ranges || ''); }
+  const srvPool = {};
+  for (const s of (dhcpServers || [])) { srvPool[s.name || s['.id']] = s['address-pool'] || s.addressPool || ''; }
   const byServer = {};
-  for (const lease of dhcpLeases) {
-    const server = lease.server || lease['dhcp-server'] || 'default';
-    if (!byServer[server]) byServer[server] = { total: 0, active: 0 };
-    byServer[server].total++;
-    if (lease.status === 'bound') byServer[server].active++;
+  let totalCap = 0;
+  for (const s of (dhcpServers || [])) {
+    const n = s.name || s['.id'], pn = srvPool[n] || '', cap = poolCap[pn] || 0;
+    totalCap += cap;
+    byServer[n] = { total: 0, active: 0, capacity: cap, pool: pn };
   }
-  return { total_leases: totalLeases, active_leases: activeLeases, static_leases: staticLeases, dynamic_leases: totalLeases - staticLeases, by_server: byServer };
+  for (const l of dhcpLeases) {
+    const srv = l.server || l['dhcp-server'] || 'default';
+    if (!byServer[srv]) byServer[srv] = { total: 0, active: 0, capacity: 0, pool: '' };
+    byServer[srv].total++;
+    if (l.status === 'bound') byServer[srv].active++;
+  }
+  for (const [, info] of Object.entries(byServer)) {
+    info.usage_pct = info.capacity > 0 ? Math.round((info.active / info.capacity) * 1000) / 10 : null;
+  }
+  return { total_leases: totalLeases, active_leases: activeLeases, static_leases: staticLeases, dynamic_leases: totalLeases - staticLeases, total_capacity: totalCap, usage_pct: totalCap > 0 ? Math.round((activeLeases / totalCap) * 1000) / 10 : null, by_server: byServer };
 }
 
 // ===== HTTP POST =====
@@ -267,8 +301,9 @@ async function pollDevice(device) {
     await sendToSystem(device.device_id, data, [{ interface_name: 'connection', previous_status: 'up', current_status: 'down', device_name: device.name }], []);
     return;
   }
-  const dhcp = analyzeDhcpLeases(data.dhcpLeases);
-  console.log(\`  📊 \${data.interfaces.length} interfaces, \${dhcp.total_leases} DHCP leases\`);
+  const dhcp = analyzeDhcpLeases(data.dhcpLeases, data.dhcpPools, data.dhcpServers);
+  const capInfo = dhcp.total_capacity > 0 ? \` | Capacidade: \${dhcp.total_capacity} IPs (\${dhcp.usage_pct}% uso)\` : '';
+  console.log(\`  📊 \${data.interfaces.length} interfaces, \${dhcp.total_leases} DHCP leases\${capInfo}\`);
   const changes = detectChanges(device.device_id, device.name, data.interfaces, device.watch_interfaces);
   if (changes.length > 0) {
     console.log(\`  ⚠️  \${changes.length} mudança(s)\`);
@@ -287,7 +322,7 @@ async function main() {
     const data = await collectDeviceData(d);
     if (data.success) {
       detectChanges(d.device_id, d.name, data.interfaces, d.watch_interfaces);
-      const dhcp = analyzeDhcpLeases(data.dhcpLeases);
+      const dhcp = analyzeDhcpLeases(data.dhcpLeases, data.dhcpPools, data.dhcpServers);
       console.log(\`  ✅ \${d.name}: \${data.interfaces.length} interfaces, \${dhcp.total_leases} DHCP leases\`);
       await sendToSystem(d.device_id, data, [], [], dhcp);
     } else {
