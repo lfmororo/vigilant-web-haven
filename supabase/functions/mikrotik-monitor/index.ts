@@ -90,33 +90,46 @@ async function pollAllDevices(supabase: any) {
 }
 
 async function safeFetch(url: string, options: RequestInit): Promise<Response> {
+  const doFetch = async (targetUrl: string, extraOpts?: Record<string, unknown>) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch(targetUrl, { ...options, ...extraOpts, signal: controller.signal } as any);
+      clearTimeout(timeout);
+      return res;
+    } catch (err: any) {
+      clearTimeout(timeout);
+      if (err?.name === "AbortError") {
+        throw new Error(`Timeout ao conectar em ${targetUrl} (15s)`);
+      }
+      throw err;
+    }
+  };
+
   try {
-    return await fetch(url, options);
+    return await doFetch(url);
   } catch (err: any) {
     const msg = (err?.message || "").toLowerCase();
     const isTlsLikeError = [
-      "certificate",
-      "connection reset",
-      "ssl",
-      "tls",
-      "invalidcontenttype",
-      "corrupt message",
-      "handshake",
-      "wrong version number",
-      "eof",
-    ].some((fragment) => msg.includes(fragment));
+      "certificate", "connection reset", "ssl", "tls",
+      "invalidcontenttype", "corrupt message", "handshake",
+      "wrong version number", "eof",
+    ].some((f) => msg.includes(f));
 
     if (url.startsWith("https://") && isTlsLikeError) {
+      console.log(`TLS error for ${url}: ${err.message}. Retrying without cert verification...`);
       try {
         const client = Deno.createHttpClient({ caCerts: [] });
-        return await fetch(url, { ...options, client } as any);
-      } catch (_) {
+        return await doFetch(url, { client });
+      } catch (retryErr: any) {
         const httpUrl = url.replace("https://", "http://");
-        console.log(`HTTPS failed, trying HTTP: ${httpUrl}`);
-        return await fetch(httpUrl, options);
+        console.log(`HTTPS failed completely, trying HTTP: ${httpUrl}`);
+        return await doFetch(httpUrl);
       }
     }
 
+    // For non-TLS errors (connection refused, DNS, timeout), log and rethrow
+    console.log(`Connection error for ${url}: ${err.message}`);
     throw err;
   }
 }
