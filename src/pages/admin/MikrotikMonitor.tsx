@@ -651,6 +651,12 @@ const MikrotikMonitor = () => {
       device_type: editDevice.device_type || 'mikrotik',
       snmp_community: editDevice.snmp_community || 'public',
       snmp_version: editDevice.snmp_version || '2c',
+      snmp_security_level: editDevice.snmp_security_level || 'noAuthNoPriv',
+      snmp_user: editDevice.snmp_user || null,
+      snmp_auth_protocol: editDevice.snmp_auth_protocol || 'MD5',
+      snmp_auth_passphrase: editDevice.snmp_auth_passphrase || null,
+      snmp_priv_protocol: editDevice.snmp_priv_protocol || 'DES',
+      snmp_priv_passphrase: editDevice.snmp_priv_passphrase || null,
     }).eq("id", editDevice.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Dispositivo atualizado");
