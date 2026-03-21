@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const { device_id, collected_data, status_changes, log_alerts } = await req.json();
+    const { device_id, collected_data, status_changes, log_alerts, dhcp_summary } = await req.json();
 
     if (!device_id) {
       return new Response(
