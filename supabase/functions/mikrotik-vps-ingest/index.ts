@@ -306,7 +306,7 @@ async function sendWhatsAppAlert(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiToken}`,
+          token: apiToken,
         },
         body: JSON.stringify({
           number: phone,
@@ -354,7 +354,7 @@ async function sendWhatsAppAlert(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${apiToken}`,
+            token: apiToken,
           },
           body: JSON.stringify({
             number: fullClient.whatsapp_group_id,
