@@ -1021,36 +1021,38 @@ const MikrotikMonitor = () => {
                       {interfaces.length === 0 ? (
                         <p className="text-center text-muted-foreground py-4">Nenhuma interface coletada.</p>
                       ) : (
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Interface</TableHead>
-                              <TableHead>TX Bytes</TableHead>
-                              <TableHead>RX Bytes</TableHead>
-                              <TableHead>TX Pkts</TableHead>
-                              <TableHead>RX Pkts</TableHead>
-                              <TableHead>TX Erros</TableHead>
-                              <TableHead>RX Erros</TableHead>
-                              <TableHead>TX Drops</TableHead>
-                              <TableHead>RX Drops</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {interfaces.filter(i => !i.disabled).map((iface) => (
-                              <TableRow key={iface.id}>
-                                <TableCell className="font-medium text-sm">{iface.interface_name}</TableCell>
-                                <TableCell className="text-xs">{formatBytes(iface.tx_bytes)}</TableCell>
-                                <TableCell className="text-xs">{formatBytes(iface.rx_bytes)}</TableCell>
-                                <TableCell className="text-xs">{iface.tx_packets.toLocaleString()}</TableCell>
-                                <TableCell className="text-xs">{iface.rx_packets.toLocaleString()}</TableCell>
-                                <TableCell className={`text-xs ${iface.tx_errors > 0 ? "text-destructive font-bold" : ""}`}>{iface.tx_errors}</TableCell>
-                                <TableCell className={`text-xs ${iface.rx_errors > 0 ? "text-destructive font-bold" : ""}`}>{iface.rx_errors}</TableCell>
-                                <TableCell className={`text-xs ${iface.tx_drops > 0 ? "text-destructive font-bold" : ""}`}>{iface.tx_drops}</TableCell>
-                                <TableCell className={`text-xs ${iface.rx_drops > 0 ? "text-destructive font-bold" : ""}`}>{iface.rx_drops}</TableCell>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Interface</TableHead>
+                                <TableHead>TX Bytes</TableHead>
+                                <TableHead>RX Bytes</TableHead>
+                                <TableHead>TX Pkts</TableHead>
+                                <TableHead>RX Pkts</TableHead>
+                                <TableHead>TX Erros</TableHead>
+                                <TableHead>RX Erros</TableHead>
+                                <TableHead>TX Drops</TableHead>
+                                <TableHead>RX Drops</TableHead>
                               </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
+                            </TableHeader>
+                            <TableBody>
+                              {interfaces.filter(i => !i.disabled).map((iface) => (
+                                <TableRow key={iface.id}>
+                                  <TableCell className="font-medium text-sm">{iface.interface_name}</TableCell>
+                                  <TableCell className="text-xs">{formatBytes(iface.tx_bytes)}</TableCell>
+                                  <TableCell className="text-xs">{formatBytes(iface.rx_bytes)}</TableCell>
+                                  <TableCell className="text-xs">{iface.tx_packets.toLocaleString()}</TableCell>
+                                  <TableCell className="text-xs">{iface.rx_packets.toLocaleString()}</TableCell>
+                                  <TableCell className={`text-xs ${iface.tx_errors > 0 ? "text-destructive font-bold" : ""}`}>{iface.tx_errors}</TableCell>
+                                  <TableCell className={`text-xs ${iface.rx_errors > 0 ? "text-destructive font-bold" : ""}`}>{iface.rx_errors}</TableCell>
+                                  <TableCell className={`text-xs ${iface.tx_drops > 0 ? "text-destructive font-bold" : ""}`}>{iface.tx_drops}</TableCell>
+                                  <TableCell className={`text-xs ${iface.rx_drops > 0 ? "text-destructive font-bold" : ""}`}>{iface.rx_drops}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
                       )}
                     </CardContent>
                   </Card>
