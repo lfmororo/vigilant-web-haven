@@ -861,6 +861,71 @@ const MikrotikMonitor = () => {
                       )}
                     </CardContent>
                   </Card>
+
+                  {/* Timeline de eventos de interface */}
+                  {interfaceEvents.length > 0 && (
+                    <Card className="mt-4">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Clock className="w-4 h-4" />
+                          Histórico de Eventos (últimos 7 dias)
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {(() => {
+                          const groupedByIface: Record<string, any[]> = {};
+                          for (const evt of interfaceEvents) {
+                            if (!groupedByIface[evt.interface_name]) groupedByIface[evt.interface_name] = [];
+                            groupedByIface[evt.interface_name].push(evt);
+                          }
+                          return (
+                            <div className="space-y-4">
+                              {Object.entries(groupedByIface).map(([ifaceName, events]) => (
+                                <div key={ifaceName}>
+                                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                    <Activity className="w-3.5 h-3.5" />
+                                    {ifaceName}
+                                    <Badge variant="outline" className="text-xs">{events.length} eventos</Badge>
+                                  </h4>
+                                  <div className="relative border-l-2 border-border ml-2 pl-4 space-y-2">
+                                    {events.slice(0, 20).map((evt: any) => {
+                                      const isDown = evt.event_type === "down";
+                                      const time = new Date(evt.recorded_at);
+                                      const timeStr = time.toLocaleString("pt-BR", {
+                                        day: "2-digit", month: "2-digit",
+                                        hour: "2-digit", minute: "2-digit", second: "2-digit",
+                                        timeZone: "America/Sao_Paulo",
+                                      });
+                                      return (
+                                        <div key={evt.id} className="relative flex items-start gap-3">
+                                          <div className={`absolute -left-[1.35rem] top-1 w-3 h-3 rounded-full border-2 border-background ${isDown ? "bg-destructive" : "bg-green-500"}`} />
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                              <Badge variant={isDown ? "destructive" : "default"} className="text-xs">
+                                                {isDown ? (
+                                                  <><WifiOff className="w-3 h-3 mr-1" /> DOWN</>
+                                                ) : (
+                                                  <><Wifi className="w-3 h-3 mr-1" /> UP</>
+                                                )}
+                                              </Badge>
+                                              <span className="text-xs text-muted-foreground">{timeStr}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                    {events.length > 20 && (
+                                      <p className="text-xs text-muted-foreground">... e mais {events.length - 20} eventos</p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </CardContent>
+                    </Card>
+                  )}
                 </TabsContent>
 
                 <TabsContent value="traffic" className="mt-4">
