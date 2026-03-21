@@ -925,7 +925,12 @@ const MikrotikMonitor = () => {
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isOnline ? "bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.5)]" : device.last_error ? "bg-destructive" : "bg-muted-foreground/40"}`} />
                           <div className="min-w-0">
-                            <p className="font-semibold text-sm truncate">{device.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-semibold text-sm truncate">{device.name}</p>
+                              {(device as any).device_type === 'snmp' && (
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 shrink-0">SNMP</Badge>
+                              )}
+                            </div>
                             <p className="text-xs text-muted-foreground truncate">{device.client?.full_name}</p>
                           </div>
                         </div>
