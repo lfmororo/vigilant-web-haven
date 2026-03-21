@@ -391,6 +391,7 @@ const MikrotikMonitor = () => {
       fetchDevices();
       if (selectedDevice) {
         fetchInterfaces(selectedDevice.id);
+        fetchInterfaceEvents(selectedDevice.id);
         fetchDhcpHistory(selectedDevice.id);
         fetchTrafficHistory(selectedDevice.id);
         fetchSystemHistory(selectedDevice.id);
