@@ -29,6 +29,8 @@ interface MikrotikDevice {
   last_polled_at: string | null;
   last_error: string | null;
   created_at: string;
+  proxy_url: string | null;
+  api_port: number | null;
   client?: { full_name: string };
 }
 
