@@ -207,6 +207,7 @@ async function sendWhatsAppAlert(
   }
 
   if (settingsMap.whatsapp_enabled !== "true") return false;
+  if (settingsMap.notif_mikrotik_alert === "false") return false;
 
   const apiUrl = settingsMap.whatsapp_api_url;
   const apiToken = settingsMap.whatsapp_api_token;
