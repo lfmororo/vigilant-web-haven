@@ -332,6 +332,7 @@ const MikrotikMonitor = () => {
   const [trafficHistory, setTrafficHistory] = useState<any[]>([]);
   const [selectedTrafficIface, setSelectedTrafficIface] = useState<string>("");
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [systemHistory, setSystemHistory] = useState<any[]>([]);
 
   const fetchDevices = useCallback(async () => {
     const { data } = await supabase
