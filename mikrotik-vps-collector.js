@@ -106,42 +106,44 @@ async function connectToDevice(device) {
 async function collectDeviceData(device) {
   let api;
   try {
-    api = await connectToDevice(device);
+    const conn = await connectToDevice(device);
+    api = conn.api;
+    const client = conn.client;
     console.log(`✅ Conectado a ${device.name} (${device.host})`);
 
     // Coletar interfaces
-    const interfaces = await api.menu('/interface').getAll();
+    const interfaces = await client.menu('/interface').getAll();
 
     // Coletar endereços IP
     let ipAddresses = [];
     try {
-      ipAddresses = await api.menu('/ip/address').getAll();
+      ipAddresses = await client.menu('/ip/address').getAll();
     } catch (_) {}
 
     // Coletar clientes PPPoE
     let pppoeClients = [];
     try {
-      pppoeClients = await api.menu('/interface/pppoe-client').getAll();
+      pppoeClients = await client.menu('/interface/pppoe-client').getAll();
     } catch (_) {}
 
     // Coletar identidade do sistema
     let identity = '';
     try {
-      const identityRes = await api.menu('/system/identity').getAll();
+      const identityRes = await client.menu('/system/identity').getAll();
       identity = identityRes?.[0]?.name || '';
     } catch (_) {}
 
     // Coletar resource (uptime, version)
     let resource = {};
     try {
-      const resData = await api.menu('/system/resource').getAll();
+      const resData = await client.menu('/system/resource').getAll();
       resource = resData?.[0] || {};
     } catch (_) {}
 
     // Coletar logs recentes (últimos 50)
     let logs = [];
     try {
-      const logData = await api.menu('/log').getAll();
+      const logData = await client.menu('/log').getAll();
       logs = (logData || []).slice(-50);
     } catch (_) {}
 
