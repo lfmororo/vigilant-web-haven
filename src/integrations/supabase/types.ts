@@ -561,6 +561,47 @@ export type Database = {
           },
         ]
       }
+      mikrotik_dhcp_history: {
+        Row: {
+          active_leases: number
+          by_server: Json | null
+          device_id: string
+          dynamic_leases: number
+          id: string
+          recorded_at: string
+          static_leases: number
+          total_leases: number
+        }
+        Insert: {
+          active_leases?: number
+          by_server?: Json | null
+          device_id: string
+          dynamic_leases?: number
+          id?: string
+          recorded_at?: string
+          static_leases?: number
+          total_leases?: number
+        }
+        Update: {
+          active_leases?: number
+          by_server?: Json | null
+          device_id?: string
+          dynamic_leases?: number
+          id?: string
+          recorded_at?: string
+          static_leases?: number
+          total_leases?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mikrotik_dhcp_history_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "mikrotik_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mikrotik_interfaces: {
         Row: {
           device_id: string
