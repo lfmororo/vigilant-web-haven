@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
     // Enviar notificação WhatsApp se houve mudanças
     let whatsappSent = false;
     if ((status_changes?.length > 0) || (log_alerts?.length > 0)) {
-      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], log_alerts || []);
+      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], log_alerts || [], dhcp_summary);
     }
 
     return new Response(
