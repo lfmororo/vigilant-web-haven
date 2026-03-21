@@ -173,10 +173,29 @@ Deno.serve(async (req) => {
       .update(deviceUpdate)
       .eq("id", device_id);
 
-    // Enviar notificação WhatsApp se houve mudanças
+    // Verificar DHCP alto uso (>90%) e adicionar como alerta
+    const dhcpAlerts: string[] = [];
+    if (dhcp_summary?.by_server) {
+      for (const [server, info] of Object.entries(dhcp_summary.by_server) as any) {
+        if (info.total > 0) {
+          const pct = Math.round((info.active / info.total) * 100);
+          if (pct >= 90) {
+            dhcpAlerts.push(`⚠️ DHCP ${server}: ${pct}% utilizado (${info.active}/${info.total})`);
+          }
+        }
+      }
+    }
+    if (dhcp_summary?.total_leases > 0) {
+      const totalPct = Math.round((dhcp_summary.active_leases / dhcp_summary.total_leases) * 100);
+      if (totalPct >= 90) {
+        dhcpAlerts.push(`🔴 DHCP Geral: ${totalPct}% utilizado (${dhcp_summary.active_leases}/${dhcp_summary.total_leases})`);
+      }
+    }
+
+    // Enviar notificação WhatsApp se houve mudanças, alertas de log ou DHCP alto
     let whatsappSent = false;
-    if ((status_changes?.length > 0) || (log_alerts?.length > 0)) {
-      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], log_alerts || [], dhcp_summary);
+    if ((status_changes?.length > 0) || (log_alerts?.length > 0) || (dhcpAlerts.length > 0)) {
+      whatsappSent = await sendWhatsAppAlert(supabase, device, status_changes || [], log_alerts || [], dhcp_summary, dhcpAlerts);
     }
 
     return new Response(
