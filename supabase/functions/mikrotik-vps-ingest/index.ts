@@ -120,6 +120,23 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Salvar histórico de tráfego das interfaces ativas
+    const trafficRecords = interfaces
+      .filter((iface: any) => iface.running === true || iface.running === "true")
+      .map((iface: any) => ({
+        device_id,
+        interface_name: iface.name || "unknown",
+        tx_bytes: parseInt(iface["tx-byte"] || iface.txByte || "0") || 0,
+        rx_bytes: parseInt(iface["rx-byte"] || iface.rxByte || "0") || 0,
+        tx_packets: parseInt(iface["tx-packet"] || iface.txPacket || "0") || 0,
+        rx_packets: parseInt(iface["rx-packet"] || iface.rxPacket || "0") || 0,
+        tx_errors: parseInt(iface["tx-error"] || iface.txError || "0") || 0,
+        rx_errors: parseInt(iface["rx-error"] || iface.rxError || "0") || 0,
+      }));
+    if (trafficRecords.length > 0) {
+      await supabase.from("mikrotik_traffic_history").insert(trafficRecords);
+    }
+
     // Atualizar status do device com dados extras
     const deviceUpdate: any = {
       last_error: null,

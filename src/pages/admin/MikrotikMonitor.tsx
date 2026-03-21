@@ -317,6 +317,8 @@ const MikrotikMonitor = () => {
   const [pingForm, setPingForm] = useState({ target_ip: "", label: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [dhcpHistory, setDhcpHistory] = useState<any[]>([]);
+  const [trafficHistory, setTrafficHistory] = useState<any[]>([]);
+  const [selectedTrafficIface, setSelectedTrafficIface] = useState<string>("");
 
   const fetchDevices = useCallback(async () => {
     const { data } = await supabase
@@ -378,11 +380,34 @@ const MikrotikMonitor = () => {
     })));
   };
 
+  const fetchTrafficHistory = async (deviceId: string) => {
+    const { data } = await supabase
+      .from("mikrotik_traffic_history")
+      .select("*")
+      .eq("device_id", deviceId)
+      .order("recorded_at", { ascending: true })
+      .limit(500);
+    const records = data || [];
+    // Get unique interface names
+    const ifaceNames = [...new Set(records.map((r: any) => r.interface_name))];
+    if (ifaceNames.length > 0 && !selectedTrafficIface) {
+      setSelectedTrafficIface(ifaceNames[0]);
+    }
+    setTrafficHistory(records.map((d: any) => ({
+      ...d,
+      time: new Date(d.recorded_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+      tx_mb: Number((d.tx_bytes / (1024 * 1024)).toFixed(2)),
+      rx_mb: Number((d.rx_bytes / (1024 * 1024)).toFixed(2)),
+    })));
+  };
+
   useEffect(() => {
     if (selectedDevice) {
       fetchInterfaces(selectedDevice.id);
       fetchPingTargets(selectedDevice.id);
       fetchDhcpHistory(selectedDevice.id);
+      fetchTrafficHistory(selectedDevice.id);
+      setSelectedTrafficIface("");
     }
   }, [selectedDevice]);
 
@@ -811,6 +836,48 @@ const MikrotikMonitor = () => {
                       )}
                     </CardContent>
                   </Card>
+
+                  {/* Gráfico de histórico de tráfego */}
+                  {trafficHistory.length > 1 && (() => {
+                    const ifaceNames = [...new Set(trafficHistory.map(r => r.interface_name))];
+                    const activeIface = selectedTrafficIface || ifaceNames[0] || "";
+                    const filtered = trafficHistory.filter(r => r.interface_name === activeIface);
+                    return (
+                      <Card className="mt-4">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <TrendingUp className="w-4 h-4" />
+                              Histórico de Tráfego
+                            </CardTitle>
+                            <Select value={activeIface} onValueChange={setSelectedTrafficIface}>
+                              <SelectTrigger className="w-48">
+                                <SelectValue placeholder="Interface" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {ifaceNames.map(name => (
+                                  <SelectItem key={name} value={name}>{name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={300}>
+                            <LineChart data={filtered}>
+                              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                              <XAxis dataKey="time" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} unit=" MB" />
+                              <RechartsTooltip formatter={(value: number) => `${value} MB`} />
+                              <Legend />
+                              <Line type="monotone" dataKey="tx_mb" name="TX (MB)" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                              <Line type="monotone" dataKey="rx_mb" name="RX (MB)" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+                    );
+                  })()}
                 </TabsContent>
 
                 <TabsContent value="dhcp" className="mt-4">
