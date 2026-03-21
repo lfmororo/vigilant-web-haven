@@ -869,7 +869,7 @@ const MikrotikMonitor = () => {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Server className="w-6 h-6 text-primary" />
-              Monitoramento Mikrotik
+              Monitoramento de Rede
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {devices.length} dispositivo{devices.length !== 1 ? "s" : ""} cadastrado{devices.length !== 1 ? "s" : ""}
