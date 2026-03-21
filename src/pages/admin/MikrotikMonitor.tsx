@@ -1411,8 +1411,17 @@ const MikrotikMonitor = () => {
                     <TabsTrigger value="interfaces"><Activity className="w-4 h-4 mr-1" /> Interfaces</TabsTrigger>
                     <TabsTrigger value="bandwidth"><Zap className="w-4 h-4 mr-1" /> Banda</TabsTrigger>
                     <TabsTrigger value="traffic"><ArrowUpDown className="w-4 h-4 mr-1" /> Tráfego</TabsTrigger>
-                    <TabsTrigger value="dhcp"><Globe className="w-4 h-4 mr-1" /> DHCP</TabsTrigger>
-                    <TabsTrigger value="logs"><ScrollText className="w-4 h-4 mr-1" /> Logs</TabsTrigger>
+                    {selectedDevice.device_type !== 'snmp' && (
+                      <TabsTrigger value="dhcp"><Globe className="w-4 h-4 mr-1" /> DHCP</TabsTrigger>
+                    )}
+                    {selectedDevice.device_type !== 'snmp' && (
+                      <TabsTrigger value="logs">
+                        <ScrollText className="w-4 h-4 mr-1" /> Logs
+                        {selectedDevice.last_log_alerts && selectedDevice.last_log_alerts.length > 0 && (
+                          <Badge variant="destructive" className="text-[10px] ml-1 px-1 py-0">{selectedDevice.last_log_alerts.length}</Badge>
+                        )}
+                      </TabsTrigger>
+                    )}
                     <TabsTrigger value="system"><Server className="w-4 h-4 mr-1" /> Sistema</TabsTrigger>
                     <TabsTrigger value="ping"><Target className="w-4 h-4 mr-1" /> Ping</TabsTrigger>
                   </TabsList>
