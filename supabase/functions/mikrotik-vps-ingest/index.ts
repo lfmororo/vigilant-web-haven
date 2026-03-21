@@ -425,9 +425,10 @@ async function sendWhatsAppAlert(
     lines.push(`  Dinâmicos: ${dhcpSummary.dynamic_leases} | Estáticos: ${dhcpSummary.static_leases}`);
     if (dhcpSummary.by_server && Object.keys(dhcpSummary.by_server).length > 0) {
       for (const [server, info] of Object.entries(dhcpSummary.by_server) as any) {
-        const pct = info.total > 0 ? Math.round((info.active / info.total) * 100) : 0;
+        const capacity = info.capacity || info.total || 0;
+        const pct = capacity > 0 ? Math.round((info.active / capacity) * 100) : 0;
         const icon = pct >= 90 ? "🔴" : pct >= 70 ? "🟡" : "🟢";
-        lines.push(`  ${icon} ${server}: ${info.active}/${info.total} (${pct}%)`);
+        lines.push(`  ${icon} ${server}: ${info.active}/${capacity} IPs (${pct}%)`);
       }
     }
     lines.push("");
