@@ -78,7 +78,7 @@ interface Client {
 }
 
 const emptyDevice = {
-  name: "", host: "", port: 443, username: "admin", password: "", use_ssl: true, client_id: "",
+  name: "", host: "", port: 443, username: "admin", password: "", use_ssl: true, client_id: "", proxy_url: "", api_port: 8728,
 };
 
 const formatBytes = (bytes: number) => {
