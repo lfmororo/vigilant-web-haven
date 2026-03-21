@@ -744,6 +744,53 @@ export type Database = {
           },
         ]
       }
+      mikrotik_traffic_history: {
+        Row: {
+          device_id: string
+          id: string
+          interface_name: string
+          recorded_at: string
+          rx_bytes: number
+          rx_errors: number
+          rx_packets: number
+          tx_bytes: number
+          tx_errors: number
+          tx_packets: number
+        }
+        Insert: {
+          device_id: string
+          id?: string
+          interface_name: string
+          recorded_at?: string
+          rx_bytes?: number
+          rx_errors?: number
+          rx_packets?: number
+          tx_bytes?: number
+          tx_errors?: number
+          tx_packets?: number
+        }
+        Update: {
+          device_id?: string
+          id?: string
+          interface_name?: string
+          recorded_at?: string
+          rx_bytes?: number
+          rx_errors?: number
+          rx_packets?: number
+          tx_bytes?: number
+          tx_errors?: number
+          tx_packets?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mikrotik_traffic_history_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "mikrotik_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           address: string | null
