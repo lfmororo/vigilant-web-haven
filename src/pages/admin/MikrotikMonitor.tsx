@@ -380,6 +380,7 @@ const MikrotikMonitor = () => {
         fetchInterfaces(selectedDevice.id);
         fetchDhcpHistory(selectedDevice.id);
         fetchTrafficHistory(selectedDevice.id);
+        fetchSystemHistory(selectedDevice.id);
       }
     }, 30000);
     return () => clearInterval(interval);
