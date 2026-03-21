@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle } from "lucide-react";
 
 interface MikrotikDevice {
   id: string;
@@ -372,7 +372,35 @@ const MikrotikMonitor = () => {
                       <span className="text-xs text-muted-foreground">{device.client?.full_name}</span>
                     </div>
                     {device.last_error && (
-                      <p className="mt-1 text-xs text-destructive truncate">{device.last_error}</p>
+                      device.last_error.includes("ROUTEROS 6.x DETECTADO") ? (
+                        <div className="mt-2 p-2 rounded bg-accent border border-border">
+                          <div className="flex items-start gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 text-orange-500 mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-xs font-medium text-orange-600 dark:text-orange-400">RouterOS 6.x detectado</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Sem API REST. Configure um proxy para monitorar.
+                              </p>
+                              {!device.proxy_url && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="mt-1.5 h-6 text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditDevice({ ...device });
+                                    setShowEditDialog(true);
+                                  }}
+                                >
+                                  Configurar Proxy
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-xs text-destructive truncate">{device.last_error}</p>
+                      )
                     )}
                   </CardContent>
                 </Card>
