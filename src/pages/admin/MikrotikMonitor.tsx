@@ -94,6 +94,14 @@ const formatBytes = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 };
 
+const formatBitsPerSec = (bps: number) => {
+  if (!bps || bps === 0) return "0 bps";
+  if (bps >= 1_000_000_000) return (bps / 1_000_000_000).toFixed(2) + " Gbps";
+  if (bps >= 1_000_000) return (bps / 1_000_000).toFixed(2) + " Mbps";
+  if (bps >= 1_000) return (bps / 1_000).toFixed(1) + " Kbps";
+  return bps + " bps";
+};
+
 const generateCollectorScript = (device: MikrotikDevice) => {
   const script = `#!/usr/bin/env node
 /**
@@ -927,6 +935,7 @@ const MikrotikMonitor = () => {
                 <Tabs defaultValue="interfaces">
                   <TabsList className="flex-wrap h-auto gap-1 w-full justify-start">
                     <TabsTrigger value="interfaces"><Activity className="w-4 h-4 mr-1" /> Interfaces</TabsTrigger>
+                    <TabsTrigger value="bandwidth"><Zap className="w-4 h-4 mr-1" /> Banda</TabsTrigger>
                     <TabsTrigger value="traffic"><ArrowUpDown className="w-4 h-4 mr-1" /> Tráfego</TabsTrigger>
                     <TabsTrigger value="dhcp"><Globe className="w-4 h-4 mr-1" /> DHCP</TabsTrigger>
                     <TabsTrigger value="logs"><ScrollText className="w-4 h-4 mr-1" /> Logs</TabsTrigger>
@@ -1045,6 +1054,119 @@ const MikrotikMonitor = () => {
                       </CardContent>
                     </Card>
                   )}
+                </TabsContent>
+
+                <TabsContent value="bandwidth" className="mt-4">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Zap className="w-4 h-4" />
+                        Consumo de Banda em Tempo Real
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {(() => {
+                        const runningIfaces = interfaces.filter(i => i.running && !i.disabled);
+                        if (runningIfaces.length === 0) return (
+                          <p className="text-center text-muted-foreground py-4">Nenhuma interface ativa. Clique em Atualizar para coletar.</p>
+                        );
+                        return (
+                          <div className="space-y-4">
+                            {/* Summary cards */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                              {runningIfaces.map((iface) => (
+                                <div key={iface.id} className="p-3 rounded-lg border bg-card space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-sm font-semibold truncate">{iface.interface_name}</p>
+                                    <Badge variant="default" className="text-[10px]">UP</Badge>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <div className="flex items-center justify-between text-xs">
+                                      <span className="text-muted-foreground">↑ TX</span>
+                                      <span className="font-mono font-medium text-primary">{formatBitsPerSec(iface.tx_rate)}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs">
+                                      <span className="text-muted-foreground">↓ RX</span>
+                                      <span className="font-mono font-medium text-chart-2">{formatBitsPerSec(iface.rx_rate)}</span>
+                                    </div>
+                                  </div>
+                                  {iface.speed && (
+                                    <p className="text-[10px] text-muted-foreground">Link: {iface.speed}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Table view */}
+                            <div className="overflow-x-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Interface</TableHead>
+                                    <TableHead>Tipo</TableHead>
+                                    <TableHead>↑ TX Rate</TableHead>
+                                    <TableHead>↓ RX Rate</TableHead>
+                                    <TableHead>TX Total</TableHead>
+                                    <TableHead>RX Total</TableHead>
+                                    <TableHead>Velocidade</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {runningIfaces.map((iface) => (
+                                    <TableRow key={iface.id}>
+                                      <TableCell className="font-medium text-sm">{iface.interface_name}</TableCell>
+                                      <TableCell className="text-xs">{iface.interface_type || "-"}</TableCell>
+                                      <TableCell className="text-xs font-mono text-primary">{formatBitsPerSec(iface.tx_rate)}</TableCell>
+                                      <TableCell className="text-xs font-mono text-chart-2">{formatBitsPerSec(iface.rx_rate)}</TableCell>
+                                      <TableCell className="text-xs">{formatBytes(iface.tx_bytes)}</TableCell>
+                                      <TableCell className="text-xs">{formatBytes(iface.rx_bytes)}</TableCell>
+                                      <TableCell className="text-xs">{iface.speed || "-"}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
+
+                  {/* Gráficos de banda por interface */}
+                  {trafficHistory.length > 1 && (() => {
+                    const ifaceNames = [...new Set(trafficHistory.map(r => r.interface_name))];
+                    return (
+                      <div className="space-y-4 mt-4">
+                        {ifaceNames.map((ifaceName) => {
+                          const filtered = trafficHistory.filter(r => r.interface_name === ifaceName);
+                          if (filtered.length < 2) return null;
+                          return (
+                            <Card key={ifaceName}>
+                              <CardHeader className="pb-3">
+                                <CardTitle className="text-sm flex items-center gap-2">
+                                  <TrendingUp className="w-4 h-4" />
+                                  Histórico de Banda - {ifaceName}
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <ResponsiveContainer width="100%" height={220}>
+                                  <LineChart data={filtered}>
+                                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                                    <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                                    <YAxis tick={{ fontSize: 10 }} unit=" MB" />
+                                    <RechartsTooltip formatter={(value: number) => `${value} MB`} />
+                                    <Legend />
+                                    <Line type="monotone" dataKey="tx_mb" name="TX (MB)" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                                    <Line type="monotone" dataKey="rx_mb" name="RX (MB)" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} />
+                                  </LineChart>
+                                </ResponsiveContainer>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </TabsContent>
 
                 <TabsContent value="traffic" className="mt-4">
