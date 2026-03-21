@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download, Server, ScrollText, Globe, TrendingUp, Thermometer, Cpu } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download, Server, ScrollText, Globe, TrendingUp, Thermometer, Cpu, CalendarDays } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
 
@@ -541,6 +541,22 @@ const MikrotikMonitor = () => {
     setPolling(null);
   };
 
+  const handleSendWeeklyReport = async () => {
+    setPolling("weekly");
+    try {
+      const { data, error } = await supabase.functions.invoke("mikrotik-weekly-report");
+      if (error) throw error;
+      if (data?.whatsapp_sent) {
+        toast.success("Relatório semanal enviado via WhatsApp!");
+      } else {
+        toast.info(data?.error || "Relatório processado, mas WhatsApp não foi enviado");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao enviar relatório semanal");
+    }
+    setPolling(null);
+  };
+
   const handleAddPingTarget = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDevice || !pingForm.target_ip) return;
@@ -694,6 +710,16 @@ const MikrotikMonitor = () => {
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>Enviar resumo WhatsApp</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleSendWeeklyReport(); }} disabled={!!polling}>
+                                {polling === "weekly" ? <Loader2 className="w-3 h-3 animate-spin" /> : <CalendarDays className="w-3 h-3 text-accent-foreground" />}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Enviar relatório semanal</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                         <TooltipProvider>
