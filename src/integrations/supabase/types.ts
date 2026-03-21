@@ -744,6 +744,44 @@ export type Database = {
           },
         ]
       }
+      mikrotik_system_history: {
+        Row: {
+          cpu_load: number | null
+          cpu_temp: number | null
+          device_id: string
+          id: string
+          memory_used_pct: number | null
+          recorded_at: string
+          voltage: number | null
+        }
+        Insert: {
+          cpu_load?: number | null
+          cpu_temp?: number | null
+          device_id: string
+          id?: string
+          memory_used_pct?: number | null
+          recorded_at?: string
+          voltage?: number | null
+        }
+        Update: {
+          cpu_load?: number | null
+          cpu_temp?: number | null
+          device_id?: string
+          id?: string
+          memory_used_pct?: number | null
+          recorded_at?: string
+          voltage?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mikrotik_system_history_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "mikrotik_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mikrotik_traffic_history: {
         Row: {
           device_id: string

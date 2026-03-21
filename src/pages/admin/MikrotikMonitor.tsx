@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download, Server, ScrollText, Globe, TrendingUp } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download, Server, ScrollText, Globe, TrendingUp, Thermometer, Cpu } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
 
@@ -332,6 +332,7 @@ const MikrotikMonitor = () => {
   const [trafficHistory, setTrafficHistory] = useState<any[]>([]);
   const [selectedTrafficIface, setSelectedTrafficIface] = useState<string>("");
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [systemHistory, setSystemHistory] = useState<any[]>([]);
 
   const fetchDevices = useCallback(async () => {
     const { data } = await supabase
@@ -379,6 +380,7 @@ const MikrotikMonitor = () => {
         fetchInterfaces(selectedDevice.id);
         fetchDhcpHistory(selectedDevice.id);
         fetchTrafficHistory(selectedDevice.id);
+        fetchSystemHistory(selectedDevice.id);
       }
     }, 30000);
     return () => clearInterval(interval);
@@ -428,12 +430,26 @@ const MikrotikMonitor = () => {
     })));
   };
 
+  const fetchSystemHistory = async (deviceId: string) => {
+    const { data } = await supabase
+      .from("mikrotik_system_history")
+      .select("*")
+      .eq("device_id", deviceId)
+      .order("recorded_at", { ascending: true })
+      .limit(200);
+    setSystemHistory((data || []).map((d: any) => ({
+      ...d,
+      time: new Date(d.recorded_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+    })));
+  };
+
   useEffect(() => {
     if (selectedDevice) {
       fetchInterfaces(selectedDevice.id);
       fetchPingTargets(selectedDevice.id);
       fetchDhcpHistory(selectedDevice.id);
       fetchTrafficHistory(selectedDevice.id);
+      fetchSystemHistory(selectedDevice.id);
       setSelectedTrafficIface("");
     }
   }, [selectedDevice]);
@@ -1224,6 +1240,57 @@ const MikrotikMonitor = () => {
                       )}
                     </CardContent>
                   </Card>
+
+                  {/* Gráficos históricos de temperatura e CPU */}
+                  {systemHistory.length > 1 && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Thermometer className="w-4 h-4" />
+                            Histórico de Temperatura
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={250}>
+                            <LineChart data={systemHistory.filter(d => d.cpu_temp != null)}>
+                              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                              <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                              <YAxis tick={{ fontSize: 11 }} unit="°C" domain={['dataMin - 5', 'dataMax + 5']} />
+                              <RechartsTooltip formatter={(value: number) => [`${value}°C`, 'Temperatura']} />
+                              <Line type="monotone" dataKey="cpu_temp" name="Temp CPU" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
+                              {/* Linha de referência 70°C */}
+                              <Line type="monotone" dataKey={() => 70} name="Limite (70°C)" stroke="hsl(var(--muted-foreground))" strokeWidth={1} strokeDasharray="5 5" dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Cpu className="w-4 h-4" />
+                            Histórico de CPU Load
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={250}>
+                            <LineChart data={systemHistory.filter(d => d.cpu_load != null)}>
+                              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                              <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                              <YAxis tick={{ fontSize: 11 }} unit="%" domain={[0, 100]} />
+                              <RechartsTooltip formatter={(value: number) => [`${value}%`, 'CPU Load']} />
+                              <Legend />
+                              <Line type="monotone" dataKey="cpu_load" name="CPU Load" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                              {systemHistory.some(d => d.memory_used_pct != null) && (
+                                <Line type="monotone" dataKey="memory_used_pct" name="Memória %" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} />
+                              )}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
                 </TabsContent>
 
                 <TabsContent value="ping" className="mt-4">

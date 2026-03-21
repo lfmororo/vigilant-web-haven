@@ -193,6 +193,25 @@ Deno.serve(async (req) => {
         }
       }
       deviceUpdate.last_system_info = sysInfo;
+
+      // Save system history (temperature, CPU load, memory, voltage)
+      const healthData = sysInfo.health || {};
+      const cpuTemp = parseFloat(healthData['cpu-temperature'] || healthData.temperature || healthData['board-temperature1'] || '0') || null;
+      const cpuLoad = parseFloat(sysInfo['cpu-load'] || '0') || null;
+      const voltageVal = parseFloat(healthData.voltage || healthData['input-voltage'] || '0') || null;
+      const totalMem = parseInt(sysInfo['total-memory'] || '0') || 0;
+      const freeMem = parseInt(sysInfo['free-memory'] || '0') || 0;
+      const memUsedPct = totalMem > 0 ? Math.round(((totalMem - freeMem) / totalMem) * 100) : null;
+
+      if (cpuTemp || cpuLoad || voltageVal || memUsedPct) {
+        await supabase.from("mikrotik_system_history").insert({
+          device_id,
+          cpu_temp: cpuTemp,
+          cpu_load: cpuLoad,
+          voltage: voltageVal,
+          memory_used_pct: memUsedPct,
+        });
+      }
     }
     await supabase
       .from("mikrotik_devices")
