@@ -553,12 +553,28 @@ const MikrotikMonitor = () => {
     if (ifaceNames.length > 0 && !selectedTrafficIface) {
       setSelectedTrafficIface(ifaceNames[0]);
     }
-    setTrafficHistory(records.map((d: any) => ({
-      ...d,
-      time: new Date(d.recorded_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
-      tx_mb: Number((d.tx_bytes / (1024 * 1024)).toFixed(2)),
-      rx_mb: Number((d.rx_bytes / (1024 * 1024)).toFixed(2)),
-    })));
+    // Calculate deltas between consecutive records per interface
+    const prevByIface: Record<string, { tx: number; rx: number }> = {};
+    const processed = records.map((d: any) => {
+      const prev = prevByIface[d.interface_name];
+      let tx_mb = 0;
+      let rx_mb = 0;
+      if (prev) {
+        const txDelta = d.tx_bytes - prev.tx;
+        const rxDelta = d.rx_bytes - prev.rx;
+        // Only use positive deltas (counter resets on reboot)
+        tx_mb = txDelta > 0 ? Number((txDelta / (1024 * 1024)).toFixed(2)) : 0;
+        rx_mb = rxDelta > 0 ? Number((rxDelta / (1024 * 1024)).toFixed(2)) : 0;
+      }
+      prevByIface[d.interface_name] = { tx: d.tx_bytes, rx: d.rx_bytes };
+      return {
+        ...d,
+        time: new Date(d.recorded_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+        tx_mb,
+        rx_mb,
+      };
+    });
+    setTrafficHistory(processed);
   };
 
   const fetchSystemHistory = async (deviceId: string) => {
