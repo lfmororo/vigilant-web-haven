@@ -636,6 +636,16 @@ const MikrotikMonitor = () => {
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleTestAlert(device.id); }} disabled={!!polling}>
+                                <AlertTriangle className="w-3 h-3 text-orange-500" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Enviar alerta de teste</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
                               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); generateCollectorScript(device); }}>
                                 <Download className="w-3 h-3" />
                               </Button>
