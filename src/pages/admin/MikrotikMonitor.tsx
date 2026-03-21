@@ -118,7 +118,7 @@ const generateCollectorScript = (device: MikrotikDevice) => {
   const snmpScript = `#!/usr/bin/env node
 /**
  * SNMP Collector - ${device.name}
- * Script pré-configurado para coleta via SNMP.
+ * Script pré-configurado para coleta via SNMP (ifTable + ifXTable 64-bit).
  *
  * Instalação na VPS:
  *   npm init -y
@@ -148,14 +148,6 @@ const CONFIG = {
     snmp_priv_protocol: '${device.snmp_priv_protocol || 'DES'}',
     snmp_priv_passphrase: '${device.snmp_priv_passphrase || ''}',
   }]
-};
-
-const OID = {
-  sysDescr: '1.3.6.1.2.1.1.1.0', sysUpTime: '1.3.6.1.2.1.1.3.0', sysName: '1.3.6.1.2.1.1.5.0',
-  ifDescr: '1.3.6.1.2.1.2.2.1.2', ifOperStatus: '1.3.6.1.2.1.2.2.1.8',
-  ifInOctets: '1.3.6.1.2.1.2.2.1.10', ifOutOctets: '1.3.6.1.2.1.2.2.1.16',
-  ifSpeed: '1.3.6.1.2.1.2.2.1.5', ifInErrors: '1.3.6.1.2.1.2.2.1.14',
-  ifOutErrors: '1.3.6.1.2.1.2.2.1.20', ifPhysAddress: '1.3.6.1.2.1.2.2.1.6',
 };
 
 const previousStates = new Map();
@@ -192,45 +184,89 @@ async function collectDeviceData(device) {
   let session;
   try {
     session = createSession(device);
-    const sys = await snmpGet(session, [OID.sysDescr, OID.sysUpTime, OID.sysName]);
-    const identity = (sys[OID.sysName] || '').toString();
-    const resource = { 'board-name': identity, platform: (sys[OID.sysDescr] || '').toString(),
-      uptime: sys[OID.sysUpTime] ? Math.floor(Number(sys[OID.sysUpTime]) / 100) + 's' : '' };
-    const [ifDescrs, ifStats, ifIn, ifOut, ifSpeeds, ifInErr, ifOutErr, ifMacs] = await Promise.all([
-      snmpSubtree(session, OID.ifDescr), snmpSubtree(session, OID.ifOperStatus),
-      snmpSubtree(session, OID.ifInOctets), snmpSubtree(session, OID.ifOutOctets),
-      snmpSubtree(session, OID.ifSpeed),
-      snmpSubtree(session, OID.ifInErrors).catch(() => []), snmpSubtree(session, OID.ifOutErrors).catch(() => []),
-      snmpSubtree(session, OID.ifPhysAddress).catch(() => []),
-    ]);
-    const idx = (oid) => oid.split('.').pop();
+    const sys = await snmpGet(session, ['1.3.6.1.2.1.1.1.0', '1.3.6.1.2.1.1.3.0', '1.3.6.1.2.1.1.5.0']);
+    const sysDescr = (sys['1.3.6.1.2.1.1.1.0'] || '').toString();
+    const sysName = (sys['1.3.6.1.2.1.1.5.0'] || '').toString();
+    const uptimeCenti = Number(sys['1.3.6.1.2.1.1.3.0'] || 0);
+    const totalSecs = Math.floor(uptimeCenti / 100);
+    const dd = Math.floor(totalSecs / 86400), hh = Math.floor((totalSecs % 86400) / 3600), mm = Math.floor((totalSecs % 3600) / 60), ss = totalSecs % 60;
+    const resource = { version: sysDescr, 'board-name': sysDescr.split('\\n')[0].substring(0, 60), uptime: dd + 'd' + hh + 'h' + mm + 'm' + ss + 's' };
+    const identity = sysName || device.name;
+
+    // Coletar ifTable completa
+    const ifTableVbs = await snmpSubtree(session, '1.3.6.1.2.1.2.2.1');
     const ifMap = {};
-    ifDescrs.forEach(v => { ifMap[idx(v.oid)] = { name: v.value.toString() }; });
-    ifStats.forEach(v => { if (ifMap[idx(v.oid)]) ifMap[idx(v.oid)].running = Number(v.value) === 1; });
-    ifIn.forEach(v => { if (ifMap[idx(v.oid)]) ifMap[idx(v.oid)]['rx-byte'] = Number(v.value); });
-    ifOut.forEach(v => { if (ifMap[idx(v.oid)]) ifMap[idx(v.oid)]['tx-byte'] = Number(v.value); });
-    ifSpeeds.forEach(v => { if (ifMap[idx(v.oid)]) ifMap[idx(v.oid)].speed = Number(v.value); });
-    ifInErr.forEach(v => { if (ifMap[idx(v.oid)]) ifMap[idx(v.oid)]['rx-error'] = Number(v.value); });
-    ifOutErr.forEach(v => { if (ifMap[idx(v.oid)]) ifMap[idx(v.oid)]['tx-error'] = Number(v.value); });
-    ifMacs.forEach(v => { if (ifMap[idx(v.oid)] && Buffer.isBuffer(v.value))
-      ifMap[idx(v.oid)]['mac-address'] = Array.from(v.value).map(b => b.toString(16).padStart(2,'0')).join(':'); });
-    // Calcular banda via delta
+    const getIf = (idx) => { if (!ifMap[idx]) ifMap[idx] = { name: 'if' + idx, running: false, disabled: false, type: 'unknown',
+      'rx-byte': '0', 'tx-byte': '0', 'rx-packet': '0', 'tx-packet': '0', 'rx-error': '0', 'tx-error': '0', 'rx-drop': '0', 'tx-drop': '0' }; return ifMap[idx]; };
+
+    for (const vb of ifTableVbs) {
+      const parts = vb.oid.split('.'), col = parseInt(parts[9]), idx = parts[10];
+      const iface = getIf(idx);
+      switch (col) {
+        case 2: iface.name = vb.value.toString(); break;
+        case 3: { const t = Number(vb.value); const tn = { 6:'ether', 24:'loopback', 53:'vlan', 131:'tunnel', 161:'lag', 71:'wifi' };
+          iface.type = tn[t] || 'snmp-type-' + t; iface._ifType = t; break; }
+        case 5: iface.speed = String(Number(vb.value)); break;
+        case 6: try { if (vb.value && vb.value.length >= 6) { const buf = Buffer.isBuffer(vb.value) ? vb.value : Buffer.from(vb.value);
+          iface['mac-address'] = Array.from(buf.slice(0,6)).map(b => b.toString(16).padStart(2,'0')).join(':'); } } catch(_){} break;
+        case 7: iface.disabled = (Number(vb.value) !== 1); break;
+        case 8: iface.running = (Number(vb.value) === 1); break;
+        case 10: iface['rx-byte'] = String(Number(vb.value)); break;
+        case 11: iface['rx-packet'] = String(Number(vb.value)); break;
+        case 13: iface['rx-drop'] = String(Number(vb.value)); break;
+        case 14: iface['rx-error'] = String(Number(vb.value)); break;
+        case 16: iface['tx-byte'] = String(Number(vb.value)); break;
+        case 17: iface['tx-packet'] = String(Number(vb.value)); break;
+        case 19: iface['tx-drop'] = String(Number(vb.value)); break;
+        case 20: iface['tx-error'] = String(Number(vb.value)); break;
+      }
+    }
+
+    // Tentar ifXTable (contadores 64-bit)
+    try {
+      const ifXVbs = await snmpSubtree(session, '1.3.6.1.2.1.31.1.1.1');
+      for (const vb of ifXVbs) {
+        const parts = vb.oid.split('.'), col = parseInt(parts[10]), idx = parts[11];
+        const iface = getIf(idx);
+        switch (col) {
+          case 1: iface.name = vb.value.toString() || iface.name; break;
+          case 6: iface['rx-byte'] = String(Number(vb.value)); break;
+          case 10: iface['tx-byte'] = String(Number(vb.value)); break;
+          case 15: { const hs = Number(vb.value); if (hs > 0) iface.speed = String(hs * 1000000); break; }
+          case 18: { const alias = vb.value.toString(); if (alias) iface._alias = alias; break; }
+        }
+      }
+      console.log('  📊 ifXTable (64-bit counters) coletado');
+    } catch (_) { console.log('  ⚠️ ifXTable não suportado'); }
+
+    // Montar interfaces finais
+    const interfaces = [];
+    for (const [idx, iface] of Object.entries(ifMap)) {
+      if (iface._ifType === 24) continue;
+      if (iface.name === 'if' + idx && iface._alias) iface.name = iface._alias;
+      delete iface._ifType; delete iface._alias;
+      iface.running = iface.running ? 'true' : 'false';
+      interfaces.push(iface);
+    }
+
+    // Banda via delta
     const stateKey = device.device_id + '_bytes';
     const prev = previousStates.get(stateKey) || {};
     const now = Date.now(), elapsed = Math.max(1, (now - (prev._timestamp || now)) / 1000);
     const nb = { _timestamp: now };
-    for (const [, iface] of Object.entries(ifMap)) {
-      const tx = iface['tx-byte'] || 0, rx = iface['rx-byte'] || 0;
+    for (const iface of interfaces) {
+      if (iface.running !== 'true') continue;
+      const tx = parseInt(iface['tx-byte'] || '0') || 0, rx = parseInt(iface['rx-byte'] || '0') || 0;
       nb[iface.name] = { tx, rx };
       if (prev[iface.name]) {
-        iface['tx-bits-per-second'] = Math.round((Math.max(0, tx - prev[iface.name].tx) / elapsed) * 8);
-        iface['rx-bits-per-second'] = Math.round((Math.max(0, rx - prev[iface.name].rx) / elapsed) * 8);
+        const txD = Math.max(0, tx - prev[iface.name].tx), rxD = Math.max(0, rx - prev[iface.name].rx);
+        iface['tx-bits-per-second'] = Math.round((txD / elapsed) * 8);
+        iface['rx-bits-per-second'] = Math.round((rxD / elapsed) * 8);
       }
     }
     previousStates.set(stateKey, nb);
     session.close();
-    return { success: true, identity, resource, health: {}, interfaces: Object.values(ifMap),
-      ipAddresses: [], pppoeClients: [], logs: [], dhcpLeases: [], dhcpPools: [], dhcpServers: [] };
+    return { success: true, identity, resource, health: {}, interfaces, ipAddresses: [], pppoeClients: [], logs: [], dhcpLeases: [], dhcpPools: [], dhcpServers: [] };
   } catch (err) {
     if (session) try { session.close(); } catch (_) {}
     return { success: false, error: err.message };
@@ -238,15 +274,15 @@ async function collectDeviceData(device) {
 }
 
 function detectChanges(deviceId, deviceName, ifaces) {
-  const changes = [], prev = previousStates.get(deviceId) || {};
+  const changes = [], prev = previousStates.get(deviceId + '_status') || {};
   for (const iface of ifaces) {
     if (!iface.name) continue;
-    const isUp = iface.running === true, wasUp = prev[iface.name];
+    const isUp = iface.running === 'true', wasUp = prev[iface.name];
     if (wasUp !== undefined && wasUp !== isUp)
       changes.push({ interface_name: iface.name, previous_status: wasUp ? 'up' : 'down', current_status: isUp ? 'up' : 'down', device_name: deviceName });
     prev[iface.name] = isUp;
   }
-  previousStates.set(deviceId, prev);
+  previousStates.set(deviceId + '_status', prev);
   return changes;
 }
 
@@ -267,7 +303,7 @@ async function sendToSystem(deviceId, data, changes, logAlerts, dhcp) {
     const result = await postJSON(CONFIG.supabase_url + '/functions/v1/mikrotik-vps-ingest',
       { device_id: deviceId, collected_data: data, status_changes: changes, log_alerts: logAlerts || [], dhcp_summary: dhcp || null },
       { 'Authorization': 'Bearer ' + CONFIG.supabase_anon_key, 'apikey': CONFIG.supabase_anon_key });
-    if (result.status >= 200 && result.status < 300) console.log('  📤 Dados enviados (' + (data.interfaces?.length || 0) + ' interfaces)');
+    if (result.status >= 200 && result.status < 300) console.log('  📤 Dados enviados (' + (data.interfaces?.length || 0) + ' interfaces, ' + changes.length + ' mudanças)');
     else console.error('  ❌ Erro: ' + result.status, result.data);
   } catch (err) { console.error('  ❌ Falha: ' + err.message); }
 }
@@ -280,9 +316,19 @@ async function pollDevice(device) {
     await sendToSystem(device.device_id, data, [{ interface_name: 'connection', previous_status: 'up', current_status: 'down', device_name: device.name }], []);
     return;
   }
-  console.log('  📊 ' + (data.interfaces?.length || 0) + ' interfaces');
+  const upIfaces = data.interfaces.filter(i => i.running === 'true' && i['tx-bits-per-second'] !== undefined);
+  console.log('  📊 ' + data.interfaces.length + ' interfaces (' + upIfaces.length + ' com banda)');
+  if (upIfaces.length > 0) {
+    for (const iface of upIfaces) {
+      const fmt = (bps) => { if (bps >= 1000000) return (bps/1000000).toFixed(2) + ' Mbps'; if (bps >= 1000) return (bps/1000).toFixed(1) + ' Kbps'; return bps + ' bps'; };
+      console.log('     📡 ' + iface.name + ': ↑ ' + fmt(iface['tx-bits-per-second']) + ' | ↓ ' + fmt(iface['rx-bits-per-second']));
+    }
+  }
   const changes = detectChanges(device.device_id, device.name, data.interfaces);
-  if (changes.length > 0) console.log('  ⚠️  ' + changes.length + ' mudança(s)');
+  if (changes.length > 0) {
+    console.log('  ⚠️  ' + changes.length + ' mudança(s) de status:');
+    changes.forEach(c => console.log('     ' + (c.current_status === 'up' ? '🟢' : '🔴') + ' ' + c.interface_name + ': ' + c.previous_status + ' → ' + c.current_status));
+  }
   await sendToSystem(device.device_id, data, changes, []);
 }
 
