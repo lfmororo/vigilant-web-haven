@@ -153,10 +153,11 @@ async function collectDeviceData(device) {
     let pppoeClients = []; try { pppoeClients = await client.menu('/interface/pppoe-client').getAll(); } catch (_) {}
     let identity = ''; try { const r = await client.menu('/system/identity').getAll(); identity = r?.[0]?.name || ''; } catch (_) {}
     let resource = {}; try { const r = await client.menu('/system/resource').getAll(); resource = r?.[0] || {}; } catch (_) {}
-    let logs = []; try { const r = await client.menu('/log').getAll(); logs = (r || []).slice(-50); } catch (_) {}
+    let logs = []; try { const r = await client.menu('/log').getAll(); logs = (r || []).slice(-200); } catch (_) {}
+    let dhcpLeases = []; try { dhcpLeases = await client.menu('/ip/dhcp-server/lease').getAll(); } catch (_) {}
 
     await api.disconnect();
-    return { success: true, identity, resource, interfaces: interfaces || [], ipAddresses: ipAddresses || [], pppoeClients: pppoeClients || [], logs };
+    return { success: true, identity, resource, interfaces: interfaces || [], ipAddresses: ipAddresses || [], pppoeClients: pppoeClients || [], logs, dhcpLeases: dhcpLeases || [] };
   } catch (err) {
     if (api) { try { await api.disconnect(); } catch (_) {} }
     return { success: false, error: err.message };
