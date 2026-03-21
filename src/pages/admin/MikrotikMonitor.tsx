@@ -541,6 +541,22 @@ const MikrotikMonitor = () => {
     setPolling(null);
   };
 
+  const handleSendWeeklyReport = async () => {
+    setPolling("weekly");
+    try {
+      const { data, error } = await supabase.functions.invoke("mikrotik-weekly-report");
+      if (error) throw error;
+      if (data?.whatsapp_sent) {
+        toast.success("Relatório semanal enviado via WhatsApp!");
+      } else {
+        toast.info(data?.error || "Relatório processado, mas WhatsApp não foi enviado");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao enviar relatório semanal");
+    }
+    setPolling(null);
+  };
+
   const handleAddPingTarget = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDevice || !pingForm.target_ip) return;
