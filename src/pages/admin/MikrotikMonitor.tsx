@@ -168,10 +168,10 @@ function createSession(device) {
     const user = { name: device.snmp_user, level: secMap[device.snmp_security_level] || snmp.SecurityLevel.noAuthNoPriv,
       authProtocol: authMap[device.snmp_auth_protocol] || snmp.AuthProtocols.md5, authKey: device.snmp_auth_passphrase,
       privProtocol: privMap[device.snmp_priv_protocol] || snmp.PrivProtocols.des, privKey: device.snmp_priv_passphrase };
-    return snmp.createV3Session(device.host, user, { port: device.port || 161, timeout: 10000 });
+    return snmp.createV3Session(device.host, user, { port: device.port || 161, timeout: 30000, retries: 2 });
   }
   return snmp.createSession(device.host, device.snmp_community || 'public', {
-    port: device.port || 161, version: device.snmp_version === '1' ? snmp.Version1 : snmp.Version2c, timeout: 10000 });
+    port: device.port || 161, version: device.snmp_version === '1' ? snmp.Version1 : snmp.Version2c, timeout: 30000, retries: 2 });
 }
 
 function snmpGet(session, oids) {
