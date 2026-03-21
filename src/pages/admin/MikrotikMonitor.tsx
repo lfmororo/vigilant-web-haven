@@ -520,7 +520,16 @@ const MikrotikMonitor = () => {
           log_alerts: [
             { time: new Date().toLocaleTimeString("pt-BR"), message: "[TESTE] Simulação de alerta de log para validação do sistema" },
           ],
-          dhcp_summary: device.last_dhcp_summary || { total_leases: 10, active_leases: 8, dynamic_leases: 6, static_leases: 2, by_server: {} },
+          dhcp_summary: {
+            total_leases: 100,
+            active_leases: 95,
+            dynamic_leases: 80,
+            static_leases: 15,
+            by_server: {
+              "dhcp-server1": { total: 60, active: 57 },
+              "dhcp-server2": { total: 40, active: 38 },
+            },
+          },
         },
       });
       if (error) throw error;
