@@ -96,8 +96,8 @@ async function connectToDevice(device) {
   });
 
   try {
-    await api.connect();
-    return api;
+    const client = await api.connect();
+    return { api, client };
   } catch (err) {
     throw new Error(`Falha ao conectar em ${device.host}:${device.port}: ${err.message}`);
   }
