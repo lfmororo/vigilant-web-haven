@@ -329,7 +329,13 @@ async function sendWhatsAppAlert(
   lines.push(`🌐 IP: ${device.host}`);
   lines.push("");
 
-  if (statusChanges.length > 0) {
+  if (rebootInfo?.reboot_detected) {
+    lines.push("🔄 *REINICIALIZAÇÃO DETECTADA!*");
+    lines.push(`  Uptime anterior: ${rebootInfo.previous_uptime}`);
+    lines.push(`  Uptime atual: ${rebootInfo.uptime}`);
+    lines.push("");
+  }
+
     lines.push("📊 *Mudanças de Status:*");
     for (const change of statusChanges) {
       const emoji = change.current_status === "up" ? "🟢" : "🔴";
