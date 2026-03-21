@@ -502,8 +502,9 @@ async function mainLoop() {
     const data = await collectDeviceData(device);
     if (data.success) {
       detectChanges(device.device_id, device.name, data.interfaces, device.watch_interfaces);
-      const dhcp = analyzeDhcpLeases(data.dhcpLeases);
-      console.log(`  ✅ ${device.name}: ${data.interfaces.length} interfaces, ${dhcp.total_leases} DHCP leases`);
+      const dhcp = analyzeDhcpLeases(data.dhcpLeases, data.dhcpPools, data.dhcpServers);
+      const capInfo = dhcp.total_capacity > 0 ? `, ${dhcp.total_capacity} IPs no pool (${dhcp.usage_pct}% uso)` : '';
+      console.log(`  ✅ ${device.name}: ${data.interfaces.length} interfaces, ${dhcp.total_leases} DHCP leases${capInfo}`);
       await sendToSystem(config, device.device_id, data, [], [], dhcp);
     } else {
       console.error(`  ❌ ${device.name}: ${data.error}`);
