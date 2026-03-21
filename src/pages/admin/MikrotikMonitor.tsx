@@ -161,6 +161,80 @@ async function collectDeviceData(device) {
     console.log(\`✅ Conectado a \${device.name} (\${device.host})\`);
 
     const interfaces = await client.menu('/interface').getAll();
+    
+    // Coletar taxa de banda em tempo real
+    const runningIfaces = (interfaces || []).filter(i => 
+      (i.running === 'true' || i.running === true) && 
+      (i.disabled !== 'true' && i.disabled !== true)
+    );
+    const trafficRates = new Map();
+    
+    // Tentar monitor-traffic
+    try {
+      const allIfNames = runningIfaces.map(i => i.name).filter(Boolean).join(',');
+      if (allIfNames) {
+        const monitor = await client.menu('/interface/monitor-traffic')
+          .where('interface', allIfNames).where('once', '').getAll();
+        if (monitor && monitor.length > 0) {
+          for (const entry of monitor) {
+            const name = entry.name || entry.interface;
+            if (name) {
+              trafficRates.set(name, {
+                'tx-bits-per-second': parseInt(entry['tx-bits-per-second'] || '0') || 0,
+                'rx-bits-per-second': parseInt(entry['rx-bits-per-second'] || '0') || 0,
+              });
+            }
+          }
+        }
+      }
+    } catch (e1) {
+      for (const iface of runningIfaces) {
+        const ifName = iface.name;
+        if (!ifName) continue;
+        try {
+          const monitor = await client.menu('/interface').exec('monitor-traffic', { interface: ifName, once: '' });
+          if (monitor && Array.isArray(monitor) && monitor.length > 0) {
+            trafficRates.set(ifName, {
+              'tx-bits-per-second': parseInt(monitor[0]['tx-bits-per-second'] || monitor[0]['txBitsPerSecond'] || '0') || 0,
+              'rx-bits-per-second': parseInt(monitor[0]['rx-bits-per-second'] || monitor[0]['rxBitsPerSecond'] || '0') || 0,
+            });
+          }
+        } catch (_) {}
+      }
+    }
+    // Fallback: estimativa via contadores
+    if (trafficRates.size === 0) {
+      const stateKey = device.device_id + '_bytes';
+      const prevBytes = previousStates.get(stateKey) || {};
+      const now = Date.now();
+      const elapsed = Math.max(1, (now - (prevBytes._timestamp || now)) / 1000);
+      const newBytes = {};
+      for (const iface of runningIfaces) {
+        const ifName = iface.name;
+        if (!ifName) continue;
+        const txB = parseInt(iface['tx-byte'] || '0') || 0;
+        const rxB = parseInt(iface['rx-byte'] || '0') || 0;
+        newBytes[ifName] = { tx: txB, rx: rxB };
+        if (prevBytes[ifName]) {
+          const txBps = Math.round((Math.max(0, txB - prevBytes[ifName].tx) / elapsed) * 8);
+          const rxBps = Math.round((Math.max(0, rxB - prevBytes[ifName].rx) / elapsed) * 8);
+          if (txBps > 0 || rxBps > 0) trafficRates.set(ifName, { 'tx-bits-per-second': txBps, 'rx-bits-per-second': rxBps });
+        }
+      }
+      newBytes._timestamp = now;
+      previousStates.set(stateKey, newBytes);
+    }
+    if (trafficRates.size > 0) console.log(\`  📊 Banda: \${trafficRates.size} interfaces\`);
+    
+    // Enriquecer interfaces com dados de banda
+    for (const iface of (interfaces || [])) {
+      const rates = trafficRates.get(iface.name);
+      if (rates) {
+        iface['tx-bits-per-second'] = rates['tx-bits-per-second'];
+        iface['rx-bits-per-second'] = rates['rx-bits-per-second'];
+      }
+    }
+
     let ipAddresses = []; try { ipAddresses = await client.menu('/ip/address').getAll(); } catch (_) {}
     let pppoeClients = []; try { pppoeClients = await client.menu('/interface/pppoe-client').getAll(); } catch (_) {}
     let identity = ''; try { const r = await client.menu('/system/identity').getAll(); identity = r?.[0]?.name || ''; } catch (_) {}
