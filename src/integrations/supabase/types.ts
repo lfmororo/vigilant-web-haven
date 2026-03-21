@@ -602,6 +602,38 @@ export type Database = {
           },
         ]
       }
+      mikrotik_interface_events: {
+        Row: {
+          device_id: string
+          event_type: string
+          id: string
+          interface_name: string
+          recorded_at: string
+        }
+        Insert: {
+          device_id: string
+          event_type: string
+          id?: string
+          interface_name: string
+          recorded_at?: string
+        }
+        Update: {
+          device_id?: string
+          event_type?: string
+          id?: string
+          interface_name?: string
+          recorded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mikrotik_interface_events_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "mikrotik_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mikrotik_interfaces: {
         Row: {
           device_id: string
