@@ -94,14 +94,12 @@ async function safeFetch(url: string, options: RequestInit): Promise<Response> {
     return await fetch(url, options);
   } catch (err: any) {
     const msg = (err?.message || "").toLowerCase();
-    // If SSL/TLS related error, retry without certificate verification
     if (msg.includes("certificate") || msg.includes("connection reset") || msg.includes("ssl") || msg.includes("tls") || msg.includes("invalidcontenttype") || msg.includes("corrupt message")) {
       try {
         const client = Deno.createHttpClient({ caCerts: [] });
         return await fetch(url, { ...options, client } as any);
       } catch (innerErr: any) {
         const innerMsg = (innerErr?.message || "").toLowerCase();
-        // If still failing with TLS error, try switching protocol
         if (url.startsWith("https://") && (innerMsg.includes("corrupt") || innerMsg.includes("invalidcontent") || innerMsg.includes("connection reset"))) {
           const httpUrl = url.replace("https://", "http://");
           console.log(`HTTPS failed, trying HTTP: ${httpUrl}`);
@@ -131,7 +129,7 @@ async function fetchDeviceData(supabase: any, device: any) {
     try {
       const testRes = await safeFetch(`${baseUrl}/system/identity`, { headers });
       if (testRes.ok || testRes.status === 401) {
-        await testRes.text(); // consume body
+        await testRes.text();
         connected = true;
         break;
       }
@@ -164,12 +162,14 @@ async function fetchDeviceData(supabase: any, device: any) {
       const ipRes = await safeFetch(`${baseUrl}/ip/address`, { headers });
       if (ipRes.ok) ipAddresses = await ipRes.json();
       else await ipRes.text();
+    } catch (_) { /* optional */ }
 
     // Fetch PPPoE client interfaces
     try {
       const pppoeRes = await safeFetch(`${baseUrl}/interface/pppoe-client`, { headers });
       if (pppoeRes.ok) pppoeInterfaces = await pppoeRes.json();
       else await pppoeRes.text();
+    } catch (_) { /* optional */ }
 
     // Build IP map: interface -> ip
     const ipMap = new Map<string, string>();
@@ -253,7 +253,6 @@ async function fetchDeviceData(supabase: any, device: any) {
 
           if (pingRes.ok) {
             const pingData = await pingRes.json();
-            // RouterOS returns array of ping results
             const results = Array.isArray(pingData) ? pingData : [];
             const lastResult = results[results.length - 1];
 
@@ -272,6 +271,8 @@ async function fetchDeviceData(supabase: any, device: any) {
                 })
                 .eq("id", target.id);
             }
+          } else {
+            await pingRes.text();
           }
         } catch (pingErr) {
           console.error(`Ping to ${target.target_ip} failed:`, pingErr);
