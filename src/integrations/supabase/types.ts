@@ -490,6 +490,204 @@ export type Database = {
         }
         Relationships: []
       }
+      mikrotik_devices: {
+        Row: {
+          client_id: string
+          created_at: string
+          host: string
+          id: string
+          is_active: boolean
+          last_error: string | null
+          last_polled_at: string | null
+          name: string
+          password: string
+          port: number
+          updated_at: string
+          use_ssl: boolean
+          username: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          host: string
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_polled_at?: string | null
+          name: string
+          password?: string
+          port?: number
+          updated_at?: string
+          use_ssl?: boolean
+          username?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          host?: string
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_polled_at?: string | null
+          name?: string
+          password?: string
+          port?: number
+          updated_at?: string
+          use_ssl?: boolean
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mikrotik_devices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mikrotik_interfaces: {
+        Row: {
+          device_id: string
+          disabled: boolean
+          dns_servers: string | null
+          gateway: string | null
+          id: string
+          interface_name: string
+          interface_type: string | null
+          ip_address: string | null
+          last_link_up: string | null
+          mac_address: string | null
+          pppoe_service: string | null
+          pppoe_user: string | null
+          running: boolean
+          rx_bytes: number | null
+          rx_drops: number | null
+          rx_errors: number | null
+          rx_packets: number | null
+          rx_rate: number | null
+          speed: string | null
+          status: string
+          tx_bytes: number | null
+          tx_drops: number | null
+          tx_errors: number | null
+          tx_packets: number | null
+          tx_rate: number | null
+          updated_at: string
+          uptime: string | null
+        }
+        Insert: {
+          device_id: string
+          disabled?: boolean
+          dns_servers?: string | null
+          gateway?: string | null
+          id?: string
+          interface_name: string
+          interface_type?: string | null
+          ip_address?: string | null
+          last_link_up?: string | null
+          mac_address?: string | null
+          pppoe_service?: string | null
+          pppoe_user?: string | null
+          running?: boolean
+          rx_bytes?: number | null
+          rx_drops?: number | null
+          rx_errors?: number | null
+          rx_packets?: number | null
+          rx_rate?: number | null
+          speed?: string | null
+          status?: string
+          tx_bytes?: number | null
+          tx_drops?: number | null
+          tx_errors?: number | null
+          tx_packets?: number | null
+          tx_rate?: number | null
+          updated_at?: string
+          uptime?: string | null
+        }
+        Update: {
+          device_id?: string
+          disabled?: boolean
+          dns_servers?: string | null
+          gateway?: string | null
+          id?: string
+          interface_name?: string
+          interface_type?: string | null
+          ip_address?: string | null
+          last_link_up?: string | null
+          mac_address?: string | null
+          pppoe_service?: string | null
+          pppoe_user?: string | null
+          running?: boolean
+          rx_bytes?: number | null
+          rx_drops?: number | null
+          rx_errors?: number | null
+          rx_packets?: number | null
+          rx_rate?: number | null
+          speed?: string | null
+          status?: string
+          tx_bytes?: number | null
+          tx_drops?: number | null
+          tx_errors?: number | null
+          tx_packets?: number | null
+          tx_rate?: number | null
+          updated_at?: string
+          uptime?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mikrotik_interfaces_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "mikrotik_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mikrotik_ping_targets: {
+        Row: {
+          created_at: string
+          device_id: string
+          id: string
+          is_active: boolean
+          label: string
+          last_checked_at: string | null
+          latency_ms: number | null
+          packet_loss_pct: number | null
+          target_ip: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          last_checked_at?: string | null
+          latency_ms?: number | null
+          packet_loss_pct?: number | null
+          target_ip: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          last_checked_at?: string | null
+          latency_ms?: number | null
+          packet_loss_pct?: number | null
+          target_ip?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mikrotik_ping_targets_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "mikrotik_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           address: string | null
