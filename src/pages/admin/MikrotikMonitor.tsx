@@ -752,8 +752,18 @@ const MikrotikMonitor = () => {
         </Select>
       </div>
       <div>
+        <Label>Tipo de Dispositivo *</Label>
+        <Select value={form.device_type || 'mikrotik'} onValueChange={(v) => setForm({ ...form, device_type: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="mikrotik">Mikrotik (RouterOS)</SelectItem>
+            <SelectItem value="snmp">SNMP (TP-Link, Ubiquiti, etc.)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
         <Label>Nome do dispositivo *</Label>
-        <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="RB 750 - Matriz" />
+        <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={form.device_type === 'snmp' ? 'TP-Link ER605 - Matriz' : 'RB 750 - Matriz'} />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -765,40 +775,65 @@ const MikrotikMonitor = () => {
           <Input type="number" value={form.port} onChange={(e) => setForm({ ...form, port: parseInt(e.target.value) || 443 })} />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Usuário</Label>
-          <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
-        </div>
-        <div>
-          <Label>Senha</Label>
-          <Input type={showPassword ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-        </div>
-      </div>
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Switch checked={form.use_ssl} onCheckedChange={(v) => setForm({ ...form, use_ssl: v })} />
-          <Label>Usar SSL (HTTPS)</Label>
-        </div>
-        <div className="flex items-center gap-2">
-          <Switch checked={showPassword} onCheckedChange={setShowPassword} />
-          <Label>Mostrar senha</Label>
-        </div>
-      </div>
-      <div className="border-t pt-4 mt-2">
-        <p className="text-sm font-medium mb-2 text-muted-foreground">Proxy (para RouterOS 6.x sem API REST)</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label>URL do Proxy</Label>
-            <Input value={form.proxy_url || ""} onChange={(e) => setForm({ ...form, proxy_url: e.target.value })} placeholder="http://seu-vps:3700" />
+
+      {form.device_type === 'snmp' ? (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Comunidade SNMP</Label>
+              <Input value={form.snmp_community || 'public'} onChange={(e) => setForm({ ...form, snmp_community: e.target.value })} placeholder="public" />
+            </div>
+            <div>
+              <Label>Versão SNMP</Label>
+              <Select value={form.snmp_version || '2c'} onValueChange={(v) => setForm({ ...form, snmp_version: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">v1</SelectItem>
+                  <SelectItem value="2c">v2c</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div>
-            <Label>Porta API (8728)</Label>
-            <Input type="number" value={form.api_port || 8728} onChange={(e) => setForm({ ...form, api_port: parseInt(e.target.value) || 8728 })} />
+          <p className="text-xs text-muted-foreground">Coleta via SNMP (IF-MIB). Certifique-se de que o SNMP está habilitado no dispositivo.</p>
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Usuário</Label>
+              <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+            </div>
+            <div>
+              <Label>Senha</Label>
+              <Input type={showPassword ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            </div>
           </div>
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">Preencha apenas se o equipamento não suporta API REST (RouterOS &lt; 7.1)</p>
-      </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Switch checked={form.use_ssl} onCheckedChange={(v) => setForm({ ...form, use_ssl: v })} />
+              <Label>Usar SSL (HTTPS)</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={showPassword} onCheckedChange={setShowPassword} />
+              <Label>Mostrar senha</Label>
+            </div>
+          </div>
+          <div className="border-t pt-4 mt-2">
+            <p className="text-sm font-medium mb-2 text-muted-foreground">Proxy (para RouterOS 6.x sem API REST)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>URL do Proxy</Label>
+                <Input value={form.proxy_url || ""} onChange={(e) => setForm({ ...form, proxy_url: e.target.value })} placeholder="http://seu-vps:3700" />
+              </div>
+              <div>
+                <Label>Porta API (8728)</Label>
+                <Input type="number" value={form.api_port || 8728} onChange={(e) => setForm({ ...form, api_port: parseInt(e.target.value) || 8728 })} />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Preencha apenas se o equipamento não suporta API REST (RouterOS &lt; 7.1)</p>
+          </div>
+        </>
+      )}
       {isEdit && (
         <div className="flex items-center gap-2">
           <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
