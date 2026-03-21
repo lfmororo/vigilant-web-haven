@@ -218,22 +218,27 @@ Deno.serve(async (req) => {
       .update(deviceUpdate)
       .eq("id", device_id);
 
-    // Verificar DHCP alto uso (>90%) e adicionar como alerta
+    // Verificar DHCP alto uso (>90%) comparando com capacidade real dos pools
     const dhcpAlerts: string[] = [];
     if (dhcp_summary?.by_server) {
       for (const [server, info] of Object.entries(dhcp_summary.by_server) as any) {
-        if (info.total > 0) {
-          const pct = Math.round((info.active / info.total) * 100);
+        const capacity = info.capacity || 0;
+        const active = info.active || 0;
+        if (capacity > 0) {
+          const pct = Math.round((active / capacity) * 100);
           if (pct >= 90) {
-            dhcpAlerts.push(`⚠️ DHCP ${server}: ${pct}% utilizado (${info.active}/${info.total})`);
+            const available = capacity - active;
+            dhcpAlerts.push(`⚠️ Pool *${server}*: ${pct}% utilizado (${active}/${capacity} IPs, apenas ${available} disponíveis)`);
           }
         }
       }
     }
-    if (dhcp_summary?.total_leases > 0) {
-      const totalPct = Math.round((dhcp_summary.active_leases / dhcp_summary.total_leases) * 100);
+    // Verificar uso geral
+    if (dhcp_summary?.total_capacity > 0) {
+      const totalPct = Math.round((dhcp_summary.active_leases / dhcp_summary.total_capacity) * 100);
       if (totalPct >= 90) {
-        dhcpAlerts.push(`🔴 DHCP Geral: ${totalPct}% utilizado (${dhcp_summary.active_leases}/${dhcp_summary.total_leases})`);
+        const available = dhcp_summary.total_capacity - dhcp_summary.active_leases;
+        dhcpAlerts.push(`🔴 DHCP Geral: ${totalPct}% utilizado (${dhcp_summary.active_leases}/${dhcp_summary.total_capacity} IPs, ${available} disponíveis)`);
       }
     }
 
