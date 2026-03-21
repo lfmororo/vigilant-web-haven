@@ -27,6 +27,7 @@ import WhatsAppNotificationsLog from "./pages/admin/WhatsAppNotificationsLog";
 import QuoteSenderProfiles from "./pages/admin/QuoteSenderProfiles";
 import CreateQuote from "./pages/admin/CreateQuote";
 import QuoteDetail from "./pages/admin/QuoteDetail";
+import MikrotikMonitor from "./pages/admin/MikrotikMonitor";
 import HelpdeskDashboard from "./pages/helpdesk/HelpdeskDashboard";
 import ClientTicketsList from "./pages/helpdesk/ClientTicketsList";
 import NewTicket from "./pages/helpdesk/NewTicket";
