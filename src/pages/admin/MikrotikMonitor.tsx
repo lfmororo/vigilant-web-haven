@@ -902,19 +902,14 @@ const MikrotikMonitor = () => {
                 <TabsContent value="interfaces" className="mt-4">
                   <Card>
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center justify-between">
-                        Interfaces - {selectedDevice.name}
-                        <Button size="sm" variant="outline" onClick={() => handlePollDevice(selectedDevice.id)} disabled={polling === selectedDevice.id}>
-                          {polling === selectedDevice.id ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />}
-                          Atualizar
-                        </Button>
-                      </CardTitle>
+                      <CardTitle className="text-base">Interfaces</CardTitle>
                     </CardHeader>
                     <CardContent>
                       {interfaces.length === 0 ? (
                         <p className="text-center text-muted-foreground py-4">Nenhuma interface. Clique em Atualizar para coletar.</p>
                       ) : (
-                        <Table>
+                        <div className="overflow-x-auto">
+                          <Table>
                           <TableHeader>
                             <TableRow>
                               <TableHead>Interface</TableHead>
