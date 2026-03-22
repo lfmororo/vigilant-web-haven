@@ -205,6 +205,56 @@ const DvrMonitor = () => {
   const totalCamerasOnline = cameras.filter(c => c.status === "online").length;
   const totalCamerasOffline = cameras.filter(c => c.status === "offline").length;
 
+  const copyToClipboard = (text: string, stepId: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedStep(stepId);
+    setTimeout(() => setCopiedStep(null), 2000);
+    toast({ title: "Copiado!" });
+  };
+
+  const collectorDownloadUrl = `/dvr-vps-collector.js`;
+
+  const guideSteps = [
+    {
+      id: "requisitos",
+      title: "1. Requisitos da VPS",
+      content: `A VPS precisa ter instalado:\n\n• Node.js 18+ (recomendado: 20 LTS)\n• ffmpeg (para teste de stream RTSP das câmeras)\n• SIMPlay da Intelbras (para acesso remoto aos DVRs)\n• Acesso de rede aos DVRs (portas 80/554)`,
+    },
+    {
+      id: "instalar-node",
+      title: "2. Instalar Node.js e ffmpeg",
+      code: `# Ubuntu/Debian\ncurl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -\nsudo apt install -y nodejs ffmpeg\n\n# Verificar instalação\nnode --version\nffmpeg -version`,
+    },
+    {
+      id: "baixar-coletor",
+      title: "3. Baixar o Coletor",
+      content: "Baixe o arquivo dvr-vps-collector.js e coloque na VPS, ou copie o conteúdo abaixo:",
+      code: `# Criar pasta do projeto\nmkdir -p /opt/dvr-collector && cd /opt/dvr-collector\n\n# Instalar dependências\nnpm init -y\nnpm install axios ping`,
+    },
+    {
+      id: "configurar",
+      title: "4. Configurar o Coletor",
+      content: "O coletor já vem configurado para se conectar ao seu painel. Basta copiar o arquivo dvr-vps-collector.js para /opt/dvr-collector/ e iniciar.",
+      code: `# Copiar o arquivo para a VPS\nscp dvr-vps-collector.js usuario@sua-vps:/opt/dvr-collector/\n\n# Testar execução\ncd /opt/dvr-collector\nnode dvr-vps-collector.js`,
+    },
+    {
+      id: "servico",
+      title: "5. Criar Serviço (systemd)",
+      content: "Para manter o coletor rodando permanentemente:",
+      code: `sudo tee /etc/systemd/system/dvr-collector.service << 'EOF'\n[Unit]\nDescription=DVR VPS Collector\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nWorkingDirectory=/opt/dvr-collector\nExecStart=/usr/bin/node dvr-vps-collector.js\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=multi-user.target\nEOF\n\nsudo systemctl daemon-reload\nsudo systemctl enable dvr-collector\nsudo systemctl start dvr-collector`,
+    },
+    {
+      id: "verificar",
+      title: "6. Verificar Status",
+      code: `# Ver logs em tempo real\nsudo journalctl -u dvr-collector -f\n\n# Verificar status\nsudo systemctl status dvr-collector`,
+    },
+    {
+      id: "simplay",
+      title: "7. Configurar SIMPlay (Intelbras)",
+      content: `O SIMPlay deve ser instalado na VPS para permitir acesso remoto aos DVRs Intelbras.\n\n1. Baixe o SIMPlay no site da Intelbras\n2. Instale na VPS (Windows) ou use Wine (Linux)\n3. Cadastre seus DVRs no SIMPlay com o ID de série\n4. Configure o acesso P2P ou DDNS\n5. Os DVRs ficarão acessíveis pela rede da VPS\n\nCom o SIMPlay configurado, o coletor conseguirá fazer ping e testar RTSP nos DVRs.`,
+    },
+  ];
+
   return (
     <AdminLayout>
       <div className="space-y-6">
