@@ -264,6 +264,9 @@ const DvrMonitor = () => {
             <p className="text-muted-foreground">Monitoramento via SIMPlay Intelbras</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowGuide(true)}>
+              <BookOpen className="w-4 h-4 mr-2" /> Guia VPS
+            </Button>
             <Button variant="outline" onClick={fetchData}>
               <RefreshCw className="w-4 h-4 mr-2" /> Atualizar
             </Button>
