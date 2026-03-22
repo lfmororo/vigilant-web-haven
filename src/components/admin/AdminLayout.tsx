@@ -20,7 +20,8 @@ import {
   BookOpen,
   MessageSquare,
   Receipt,
-  Router } from
+  Router,
+  Video } from
 "lucide-react";
 import fmLogo from "@/assets/fm-techflow-logo.png";
 
