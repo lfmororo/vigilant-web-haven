@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
       timeStyle: "medium",
     }).format(now);
     lines.push(`🕐 ${brTime}`);
-    lines.push("_🤖 Alerta automático do monitoramento Mikrotik_");
+    lines.push("_🤖 Alerta automático do monitoramento de dispositivos_");
 
     const text = lines.join("\n");
 

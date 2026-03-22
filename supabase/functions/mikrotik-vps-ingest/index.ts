@@ -444,7 +444,7 @@ async function sendWhatsAppAlert(
   }).format(now);
   lines.push(`🕐 ${brTime}`);
   lines.push("");
-  lines.push("_🤖 Alerta automático do monitoramento Mikrotik_");
+  lines.push("_🤖 Alerta automático do monitoramento de dispositivos_");
 
   const adminContactPhone = settingsMap.admin_contact_phone;
   if (adminContactPhone) {
