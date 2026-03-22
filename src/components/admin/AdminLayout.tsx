@@ -20,7 +20,8 @@ import {
   BookOpen,
   MessageSquare,
   Receipt,
-  Router } from
+  Router,
+  Video } from
 "lucide-react";
 import fmLogo from "@/assets/fm-techflow-logo.png";
 
@@ -35,6 +36,7 @@ const allNavItems = [
 
 { label: "Inventário", href: "/admin/inventory", icon: Package, roles: ["admin"] },
 { label: "Mikrotik", href: "/admin/mikrotik", icon: Router, roles: ["admin"] },
+{ label: "DVR / CFTV", href: "/admin/dvr", icon: Video, roles: ["admin"] },
 { label: "Dashboard Suporte", href: "/admin/helpdesk", icon: Headphones, roles: ["admin", "technician"] },
 { label: "Chamados", href: "/admin/tickets", icon: TicketCheck, roles: ["admin", "technician"] },
 { label: "Ordens de Serviço", href: "/admin/service-orders", icon: FileText, roles: ["admin", "technician"] },

@@ -171,6 +171,148 @@ export type Database = {
           },
         ]
       }
+      dvr_cameras: {
+        Row: {
+          channel: number
+          created_at: string
+          dvr_id: string
+          id: string
+          last_checked_at: string | null
+          name: string
+          rtsp_url: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          channel?: number
+          created_at?: string
+          dvr_id: string
+          id?: string
+          last_checked_at?: string | null
+          name: string
+          rtsp_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          channel?: number
+          created_at?: string
+          dvr_id?: string
+          id?: string
+          last_checked_at?: string | null
+          name?: string
+          rtsp_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dvr_cameras_dvr_id_fkey"
+            columns: ["dvr_id"]
+            isOneToOne: false
+            referencedRelation: "dvr_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dvr_devices: {
+        Row: {
+          client_id: string
+          created_at: string
+          host: string
+          id: string
+          is_active: boolean
+          last_error: string | null
+          last_polled_at: string | null
+          name: string
+          password: string
+          port: number
+          status: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          host: string
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_polled_at?: string | null
+          name: string
+          password?: string
+          port?: number
+          status?: string
+          updated_at?: string
+          username?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          host?: string
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_polled_at?: string | null
+          name?: string
+          password?: string
+          port?: number
+          status?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dvr_devices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dvr_events: {
+        Row: {
+          camera_id: string | null
+          dvr_id: string
+          event_type: string
+          id: string
+          message: string | null
+          recorded_at: string
+        }
+        Insert: {
+          camera_id?: string | null
+          dvr_id: string
+          event_type: string
+          id?: string
+          message?: string | null
+          recorded_at?: string
+        }
+        Update: {
+          camera_id?: string | null
+          dvr_id?: string
+          event_type?: string
+          id?: string
+          message?: string | null
+          recorded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dvr_events_camera_id_fkey"
+            columns: ["camera_id"]
+            isOneToOne: false
+            referencedRelation: "dvr_cameras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dvr_events_dvr_id_fkey"
+            columns: ["dvr_id"]
+            isOneToOne: false
+            referencedRelation: "dvr_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       equipment_disks: {
         Row: {
           disk_free_gb: number | null
