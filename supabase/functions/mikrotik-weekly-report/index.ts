@@ -294,7 +294,7 @@ Deno.serve(async (req) => {
     }).format(now);
 
     const fullLines: string[] = [];
-    fullLines.push("📈 *RELATÓRIO SEMANAL MIKROTIK*");
+    fullLines.push("📈 *RELATÓRIO SEMANAL DE DISPOSITIVOS*");
     fullLines.push(`📅 Semana encerrada em ${brTime}`);
     fullLines.push("");
 

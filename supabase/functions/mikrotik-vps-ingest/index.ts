@@ -372,7 +372,7 @@ async function sendWhatsAppAlert(
 
   // Montar mensagem
   const lines: string[] = [];
-  lines.push(`🔔 *ALERTA MIKROTIK*`);
+  lines.push(`🔔 *ALERTA DE DISPOSITIVO*`);
   lines.push(`📡 Dispositivo: *${device.name}*`);
   lines.push(`🏢 Cliente: ${clientName}`);
   lines.push(`🌐 IP: ${device.host}`);
