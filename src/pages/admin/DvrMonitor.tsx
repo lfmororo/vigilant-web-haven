@@ -62,6 +62,8 @@ const DvrMonitor = () => {
   const [showCameraDialog, setShowCameraDialog] = useState(false);
   const [editingDvr, setEditingDvr] = useState<DvrDevice | null>(null);
   const [editingCamera, setEditingCamera] = useState<DvrCamera | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
+  const [copiedStep, setCopiedStep] = useState<string | null>(null);
 
   const [dvrForm, setDvrForm] = useState({
     name: "", host: "", port: 80, username: "admin", password: "", client_id: "", is_active: true,
