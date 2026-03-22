@@ -569,7 +569,7 @@ const DvrMonitor = () => {
             </DialogHeader>
             <ScrollArea className="max-h-[65vh] pr-4">
               <div className="space-y-2">
-                <div className="flex gap-2 mb-4">
+                <div className="flex gap-2 mb-4 flex-wrap">
                   <Button
                     variant="outline"
                     size="sm"
@@ -581,6 +581,18 @@ const DvrMonitor = () => {
                     }}
                   >
                     <Download className="w-4 h-4 mr-1" /> Baixar Coletor
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const a = document.createElement("a");
+                      a.href = "/simplay-importer.js";
+                      a.download = "simplay-importer.js";
+                      a.click();
+                    }}
+                  >
+                    <Download className="w-4 h-4 mr-1" /> Baixar Importador SIMPlay
                   </Button>
                 </div>
 
