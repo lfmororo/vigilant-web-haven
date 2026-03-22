@@ -11,8 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Plus, RefreshCw, Video, VideoOff, Wifi, WifiOff, Trash2, Edit, Camera, History } from "lucide-react";
+import { Plus, RefreshCw, Video, VideoOff, Wifi, WifiOff, Trash2, Edit, Camera, History, BookOpen, Download, Copy, Check, ChevronRight } from "lucide-react";
 import { formatTimeAgo } from "@/lib/formatTimeAgo";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 interface DvrDevice {
   id: string;
@@ -60,6 +62,8 @@ const DvrMonitor = () => {
   const [showCameraDialog, setShowCameraDialog] = useState(false);
   const [editingDvr, setEditingDvr] = useState<DvrDevice | null>(null);
   const [editingCamera, setEditingCamera] = useState<DvrCamera | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
+  const [copiedStep, setCopiedStep] = useState<string | null>(null);
 
   const [dvrForm, setDvrForm] = useState({
     name: "", host: "", port: 80, username: "admin", password: "", client_id: "", is_active: true,
@@ -201,6 +205,56 @@ const DvrMonitor = () => {
   const totalCamerasOnline = cameras.filter(c => c.status === "online").length;
   const totalCamerasOffline = cameras.filter(c => c.status === "offline").length;
 
+  const copyToClipboard = (text: string, stepId: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedStep(stepId);
+    setTimeout(() => setCopiedStep(null), 2000);
+    toast({ title: "Copiado!" });
+  };
+
+  const collectorDownloadUrl = `/dvr-vps-collector.js`;
+
+  const guideSteps = [
+    {
+      id: "requisitos",
+      title: "1. Requisitos da VPS",
+      content: `A VPS precisa ter instalado:\n\n• Node.js 18+ (recomendado: 20 LTS)\n• ffmpeg (para teste de stream RTSP das câmeras)\n• SIMPlay da Intelbras (para acesso remoto aos DVRs)\n• Acesso de rede aos DVRs (portas 80/554)`,
+    },
+    {
+      id: "instalar-node",
+      title: "2. Instalar Node.js e ffmpeg",
+      code: `# Ubuntu/Debian\ncurl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -\nsudo apt install -y nodejs ffmpeg\n\n# Verificar instalação\nnode --version\nffmpeg -version`,
+    },
+    {
+      id: "baixar-coletor",
+      title: "3. Baixar o Coletor",
+      content: "Baixe o arquivo dvr-vps-collector.js e coloque na VPS, ou copie o conteúdo abaixo:",
+      code: `# Criar pasta do projeto\nmkdir -p /opt/dvr-collector && cd /opt/dvr-collector\n\n# Instalar dependências\nnpm init -y\nnpm install axios ping`,
+    },
+    {
+      id: "configurar",
+      title: "4. Configurar o Coletor",
+      content: "O coletor já vem configurado para se conectar ao seu painel. Basta copiar o arquivo dvr-vps-collector.js para /opt/dvr-collector/ e iniciar.",
+      code: `# Copiar o arquivo para a VPS\nscp dvr-vps-collector.js usuario@sua-vps:/opt/dvr-collector/\n\n# Testar execução\ncd /opt/dvr-collector\nnode dvr-vps-collector.js`,
+    },
+    {
+      id: "servico",
+      title: "5. Criar Serviço (systemd)",
+      content: "Para manter o coletor rodando permanentemente:",
+      code: `sudo tee /etc/systemd/system/dvr-collector.service << 'EOF'\n[Unit]\nDescription=DVR VPS Collector\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nWorkingDirectory=/opt/dvr-collector\nExecStart=/usr/bin/node dvr-vps-collector.js\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=multi-user.target\nEOF\n\nsudo systemctl daemon-reload\nsudo systemctl enable dvr-collector\nsudo systemctl start dvr-collector`,
+    },
+    {
+      id: "verificar",
+      title: "6. Verificar Status",
+      code: `# Ver logs em tempo real\nsudo journalctl -u dvr-collector -f\n\n# Verificar status\nsudo systemctl status dvr-collector`,
+    },
+    {
+      id: "simplay",
+      title: "7. Configurar SIMPlay (Intelbras)",
+      content: `O SIMPlay deve ser instalado na VPS para permitir acesso remoto aos DVRs Intelbras.\n\n1. Baixe o SIMPlay no site da Intelbras\n2. Instale na VPS (Windows) ou use Wine (Linux)\n3. Cadastre seus DVRs no SIMPlay com o ID de série\n4. Configure o acesso P2P ou DDNS\n5. Os DVRs ficarão acessíveis pela rede da VPS\n\nCom o SIMPlay configurado, o coletor conseguirá fazer ping e testar RTSP nos DVRs.`,
+    },
+  ];
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -210,6 +264,9 @@ const DvrMonitor = () => {
             <p className="text-muted-foreground">Monitoramento via SIMPlay Intelbras</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowGuide(true)}>
+              <BookOpen className="w-4 h-4 mr-2" /> Guia VPS
+            </Button>
             <Button variant="outline" onClick={fetchData}>
               <RefreshCw className="w-4 h-4 mr-2" /> Atualizar
             </Button>
@@ -492,6 +549,88 @@ const DvrMonitor = () => {
                 {editingCamera ? "Salvar Alterações" : "Cadastrar Câmera"}
               </Button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* VPS Guide Dialog */}
+        <Dialog open={showGuide} onOpenChange={setShowGuide}>
+          <DialogContent className="max-w-2xl max-h-[85vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5" />
+                Guia de Configuração da VPS - DVR Collector
+              </DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="max-h-[65vh] pr-4">
+              <div className="space-y-2">
+                <div className="flex gap-2 mb-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const a = document.createElement("a");
+                      a.href = collectorDownloadUrl;
+                      a.download = "dvr-vps-collector.js";
+                      a.click();
+                    }}
+                  >
+                    <Download className="w-4 h-4 mr-1" /> Baixar Coletor
+                  </Button>
+                </div>
+
+                <Accordion type="single" collapsible className="w-full">
+                  {guideSteps.map((step) => (
+                    <AccordionItem key={step.id} value={step.id}>
+                      <AccordionTrigger className="text-sm font-medium">
+                        {step.title}
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-3">
+                          {step.content && (
+                            <p className="text-sm text-muted-foreground whitespace-pre-line">
+                              {step.content}
+                            </p>
+                          )}
+                          {step.code && (
+                            <div className="relative">
+                              <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto whitespace-pre-wrap font-mono">
+                                {step.code}
+                              </pre>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="absolute top-2 right-2 h-7 w-7 p-0"
+                                onClick={() => copyToClipboard(step.code!, step.id)}
+                              >
+                                {copiedStep === step.id ? (
+                                  <Check className="w-3 h-3 text-green-600" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+
+                <Card className="mt-4">
+                  <CardContent className="pt-4">
+                    <h4 className="font-medium text-sm mb-2">📋 Resumo do Fluxo</h4>
+                    <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                      <li>Instale Node.js e ffmpeg na VPS</li>
+                      <li>Configure o SIMPlay da Intelbras para acesso remoto aos DVRs</li>
+                      <li>Cadastre os DVRs e câmeras neste painel</li>
+                      <li>Baixe e configure o coletor na VPS</li>
+                      <li>Crie o serviço systemd para execução permanente</li>
+                      <li>O coletor verificará os DVRs a cada 60s e enviará os dados automaticamente</li>
+                    </ol>
+                  </CardContent>
+                </Card>
+              </div>
+            </ScrollArea>
           </DialogContent>
         </Dialog>
       </div>
