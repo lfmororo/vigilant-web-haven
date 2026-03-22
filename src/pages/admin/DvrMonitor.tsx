@@ -551,6 +551,88 @@ const DvrMonitor = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* VPS Guide Dialog */}
+        <Dialog open={showGuide} onOpenChange={setShowGuide}>
+          <DialogContent className="max-w-2xl max-h-[85vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5" />
+                Guia de Configuração da VPS - DVR Collector
+              </DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="max-h-[65vh] pr-4">
+              <div className="space-y-2">
+                <div className="flex gap-2 mb-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const a = document.createElement("a");
+                      a.href = collectorDownloadUrl;
+                      a.download = "dvr-vps-collector.js";
+                      a.click();
+                    }}
+                  >
+                    <Download className="w-4 h-4 mr-1" /> Baixar Coletor
+                  </Button>
+                </div>
+
+                <Accordion type="single" collapsible className="w-full">
+                  {guideSteps.map((step) => (
+                    <AccordionItem key={step.id} value={step.id}>
+                      <AccordionTrigger className="text-sm font-medium">
+                        {step.title}
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-3">
+                          {step.content && (
+                            <p className="text-sm text-muted-foreground whitespace-pre-line">
+                              {step.content}
+                            </p>
+                          )}
+                          {step.code && (
+                            <div className="relative">
+                              <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto whitespace-pre-wrap font-mono">
+                                {step.code}
+                              </pre>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="absolute top-2 right-2 h-7 w-7 p-0"
+                                onClick={() => copyToClipboard(step.code!, step.id)}
+                              >
+                                {copiedStep === step.id ? (
+                                  <Check className="w-3 h-3 text-green-600" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+
+                <Card className="mt-4">
+                  <CardContent className="pt-4">
+                    <h4 className="font-medium text-sm mb-2">📋 Resumo do Fluxo</h4>
+                    <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                      <li>Instale Node.js e ffmpeg na VPS</li>
+                      <li>Configure o SIMPlay da Intelbras para acesso remoto aos DVRs</li>
+                      <li>Cadastre os DVRs e câmeras neste painel</li>
+                      <li>Baixe e configure o coletor na VPS</li>
+                      <li>Crie o serviço systemd para execução permanente</li>
+                      <li>O coletor verificará os DVRs a cada 60s e enviará os dados automaticamente</li>
+                    </ol>
+                  </CardContent>
+                </Card>
+              </div>
+            </ScrollArea>
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );
