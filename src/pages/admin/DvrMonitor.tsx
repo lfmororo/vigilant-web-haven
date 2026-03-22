@@ -253,6 +253,12 @@ const DvrMonitor = () => {
       title: "7. Configurar SIMPlay (Intelbras)",
       content: `O SIMPlay deve ser instalado na VPS para permitir acesso remoto aos DVRs Intelbras.\n\n1. Baixe o SIMPlay no site da Intelbras\n2. Instale na VPS (Windows) ou use Wine (Linux)\n3. Cadastre seus DVRs no SIMPlay com o ID de série\n4. Configure o acesso P2P ou DDNS\n5. Os DVRs ficarão acessíveis pela rede da VPS\n\nCom o SIMPlay configurado, o coletor conseguirá fazer ping e testar RTSP nos DVRs.`,
     },
+    {
+      id: "importar",
+      title: "8. Importar DVRs do SIMPlay (automático)",
+      content: `O script simplay-importer.js lê o banco SQLite do SIMPlay e importa automaticamente todos os DVRs cadastrados para o painel.\n\nEle detecta automaticamente o caminho do banco, ou você pode informar manualmente.`,
+      code: `# Instalar dependências\ncd /opt/dvr-collector\nnpm install better-sqlite3 axios\n\n# Copiar o script para a VPS\nscp simplay-importer.js usuario@sua-vps:/opt/dvr-collector/\n\n# Executar importação\n# Substitua <CLIENT_ID> pelo UUID do cliente no painel\nnode simplay-importer.js --client-id <CLIENT_ID>\n\n# Ou especificando o caminho do banco manualmente:\nnode simplay-importer.js --client-id <CLIENT_ID> --db-path "C:\\Users\\admin\\AppData\\Roaming\\Intelbras\\SIM Play\\simplay.db"`,
+    },
   ];
 
   return (
