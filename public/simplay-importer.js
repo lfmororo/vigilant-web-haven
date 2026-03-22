@@ -55,16 +55,16 @@ Opções:
   return parsed;
 }
 
-// ================= API HELPERS =================
+// ================= API HELPERS (via Edge Functions) =================
 async function fetchClients() {
   try {
     const { data } = await axios.get(
-      `${SUPABASE_URL}/rest/v1/clients?select=id,full_name&order=full_name`,
-      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+      `${SUPABASE_URL}/functions/v1/dvr-list?type=clients`,
+      { headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
     );
     return data || [];
   } catch (err) {
-    console.error("❌ Erro ao buscar clientes:", err.message);
+    console.error("❌ Erro ao buscar clientes:", err.response?.data || err.message);
     return [];
   }
 }
@@ -72,12 +72,12 @@ async function fetchClients() {
 async function fetchExistingDVRs() {
   try {
     const { data } = await axios.get(
-      `${SUPABASE_URL}/rest/v1/dvr_devices?select=id,name,host,port,client_id,status,clients(full_name)&order=name`,
-      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+      `${SUPABASE_URL}/functions/v1/dvr-list?type=dvrs`,
+      { headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
     );
     return data || [];
   } catch (err) {
-    console.error("❌ Erro ao buscar DVRs existentes:", err.message);
+    console.error("❌ Erro ao buscar DVRs existentes:", err.response?.data || err.message);
     return [];
   }
 }
