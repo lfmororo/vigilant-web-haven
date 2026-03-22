@@ -10,10 +10,6 @@
  *
  * === USO ===
  * node simplay-importer.js [--db-path <caminho_do_banco>]
- *
- * === CAMINHOS COMUNS DO BANCO DO SIMPLAY ===
- * Windows: C:\Users\<usuario>\AppData\Roaming\Intelbras\SIM Play\simplay.db
- *          C:\ProgramData\Intelbras\SIM Play\simplay.db
  */
 
 const Database = require("better-sqlite3");
@@ -55,16 +51,16 @@ Opções:
   return parsed;
 }
 
-// ================= API HELPERS =================
+// ================= API HELPERS (via Edge Functions) =================
 async function fetchClients() {
   try {
     const { data } = await axios.get(
-      `${SUPABASE_URL}/rest/v1/clients?select=id,full_name&order=full_name`,
-      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+      `${SUPABASE_URL}/functions/v1/dvr-list?type=clients`,
+      { headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
     );
     return data || [];
   } catch (err) {
-    console.error("❌ Erro ao buscar clientes:", err.message);
+    console.error("❌ Erro ao buscar clientes:", err.response?.data || err.message);
     return [];
   }
 }
@@ -72,12 +68,12 @@ async function fetchClients() {
 async function fetchExistingDVRs() {
   try {
     const { data } = await axios.get(
-      `${SUPABASE_URL}/rest/v1/dvr_devices?select=id,name,host,port,client_id,status,clients(full_name)&order=name`,
-      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+      `${SUPABASE_URL}/functions/v1/dvr-list?type=dvrs`,
+      { headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
     );
     return data || [];
   } catch (err) {
-    console.error("❌ Erro ao buscar DVRs existentes:", err.message);
+    console.error("❌ Erro ao buscar DVRs existentes:", err.response?.data || err.message);
     return [];
   }
 }
@@ -189,7 +185,7 @@ function readDevices(dbPath) {
   return devices;
 }
 
-// ================= COMPARAR E SELECIONAR =================
+// ================= COMPARAR =================
 function normalizeHost(h) {
   return (h || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
 }
@@ -200,18 +196,11 @@ function compareDevices(simplayDevices, existingDVRs) {
     const key = `${normalizeHost(dvr.host)}:${dvr.port}`;
     existingMap.set(key, dvr);
   }
-
-  const results = [];
-  for (const sp of simplayDevices) {
+  return simplayDevices.map(sp => {
     const key = `${normalizeHost(sp.host)}:${sp.port}`;
     const existing = existingMap.get(key);
-    results.push({
-      simplay: sp,
-      existing: existing || null,
-      isDuplicate: !!existing,
-    });
-  }
-  return results;
+    return { simplay: sp, existing: existing || null, isDuplicate: !!existing };
+  });
 }
 
 // ================= MAIN =================
@@ -222,7 +211,6 @@ async function main() {
 
   const args = parseArgs();
 
-  // 1. Buscar dados do painel
   console.log("📡 Buscando dados do painel...\n");
   const [clients, existingDVRs] = await Promise.all([fetchClients(), fetchExistingDVRs()]);
 
@@ -235,7 +223,6 @@ async function main() {
   console.log(`📋 ${clients.length} clientes no painel`);
   console.log(`📹 ${existingDVRs.length} DVRs já cadastrados no sistema\n`);
 
-  // 2. Localizar banco do SIMPlay
   let dbPath = args.dbPath;
   if (!dbPath) {
     console.log("🔍 Procurando banco do SIMPlay...");
@@ -254,7 +241,6 @@ async function main() {
     process.exit(1);
   }
 
-  // 3. Ler dispositivos do SIMPlay
   const simplayDevices = readDevices(dbPath);
   if (simplayDevices.length === 0) {
     console.log("⚠️ Nenhum dispositivo válido encontrado no banco.");
@@ -262,7 +248,6 @@ async function main() {
     process.exit(0);
   }
 
-  // 4. Comparar com existentes
   const comparison = compareDevices(simplayDevices, existingDVRs);
   const newDevices = comparison.filter(c => !c.isDuplicate);
   const duplicates = comparison.filter(c => c.isDuplicate);
@@ -270,9 +255,9 @@ async function main() {
   console.log("\n" + "═".repeat(65));
   console.log("  COMPARAÇÃO: SIMPlay vs Sistema");
   console.log("═".repeat(65));
-  console.log(`  📊 Total no SIMPlay:     ${simplayDevices.length}`);
-  console.log(`  ✅ Novos (não existe):    ${newDevices.length}`);
-  console.log(`  ⚠️  Duplicados (já existe): ${duplicates.length}`);
+  console.log(`  📊 Total no SIMPlay:        ${simplayDevices.length}`);
+  console.log(`  ✅ Novos (não existe):       ${newDevices.length}`);
+  console.log(`  ⚠️  Duplicados (já existe):  ${duplicates.length}`);
   console.log("═".repeat(65));
 
   if (duplicates.length > 0) {
@@ -287,38 +272,35 @@ async function main() {
     console.log("─".repeat(65));
   }
 
-  if (newDevices.length === 0) {
-    console.log("\n✅ Todos os DVRs do SIMPlay já existem no sistema. Nada a importar.");
+  if (newDevices.length === 0 && duplicates.length === 0) {
+    console.log("\n✅ Nada a importar.");
     rl.close();
     return;
   }
 
-  console.log("\n🆕 DVRs NOVOS para importar:");
-  console.log("─".repeat(65));
-  newDevices.forEach((d, i) => {
-    console.log(`  ${String(i + 1).padStart(3)}. ${d.simplay.name} (${d.simplay.host}:${d.simplay.port}) - ${d.simplay.channels} canais`);
-  });
-  console.log("─".repeat(65));
+  if (newDevices.length > 0) {
+    console.log("\n🆕 DVRs NOVOS para importar:");
+    console.log("─".repeat(65));
+    newDevices.forEach((d, i) => {
+      console.log(`  ${String(i + 1).padStart(3)}. ${d.simplay.name} (${d.simplay.host}:${d.simplay.port}) - ${d.simplay.channels} canais`);
+    });
+    console.log("─".repeat(65));
+  }
 
-  // 5. Perguntar o que fazer com duplicatas
+  // Duplicates handling
   let reimportDuplicates = [];
   if (duplicates.length > 0) {
     console.log("\n🔄 O que fazer com os DVRs duplicados?\n");
     console.log("  1. Ignorar duplicados (importar apenas os novos)");
-    console.log("  2. Selecionar quais duplicados reimportar (atualizar)");
+    console.log("  2. Selecionar quais duplicados reimportar");
     console.log("  3. Reimportar TODOS (novos + duplicados)");
     console.log("");
-
     const dupChoice = await ask("Opção (1, 2 ou 3): ");
-
     if (dupChoice.trim() === "2") {
-      console.log("\nSelecione os duplicados para reimportar:");
       for (let i = 0; i < duplicates.length; i++) {
         const d = duplicates[i];
         const answer = await ask(`  ${d.simplay.name} (${d.simplay.host}) — reimportar? (s/n): `);
-        if (answer.trim().toLowerCase() === "s") {
-          reimportDuplicates.push(d);
-        }
+        if (answer.trim().toLowerCase() === "s") reimportDuplicates.push(d);
       }
     } else if (dupChoice.trim() === "3") {
       reimportDuplicates = [...duplicates];
@@ -338,7 +320,7 @@ async function main() {
 
   console.log(`\n📦 Total de DVRs a importar: ${devicesToImport.length}`);
 
-  // 6. Listar clientes e escolher associação
+  // Client association
   console.log("\n📋 Clientes disponíveis:");
   console.log("─".repeat(50));
   clients.forEach((c, i) => {
@@ -350,12 +332,9 @@ async function main() {
   console.log("  1. Associar TODOS a um único cliente");
   console.log("  2. Escolher cliente para CADA DVR");
   console.log("");
-
   const mode = await ask("Opção (1 ou 2): ");
 
-  let totalImported = 0;
-  let totalSkipped = 0;
-  let totalErrors = 0;
+  let totalImported = 0, totalSkipped = 0, totalErrors = 0;
 
   if (mode.trim() === "1") {
     const clientNum = await ask(`\nNúmero do cliente (1-${clients.length}): `);
@@ -365,9 +344,9 @@ async function main() {
       rl.close();
       process.exit(1);
     }
-    const selectedClient = clients[idx];
-    console.log(`\n📤 Importando ${devicesToImport.length} DVRs para "${selectedClient.full_name}"...`);
-    const result = await importDevices(selectedClient.id, devicesToImport);
+    const sel = clients[idx];
+    console.log(`\n📤 Importando ${devicesToImport.length} DVRs para "${sel.full_name}"...`);
+    const result = await importDevices(sel.id, devicesToImport);
     if (result) {
       totalImported = result.imported || 0;
       totalSkipped = result.skipped || 0;
@@ -379,24 +358,17 @@ async function main() {
       const dvr = devicesToImport[i];
       console.log(`\n🎥 DVR ${i + 1}/${devicesToImport.length}: ${dvr.name} (${dvr.host})`);
       const clientNum = await ask(`   Cliente (1-${clients.length}, ou 's' para pular): `);
-      if (clientNum.trim().toLowerCase() === "s") {
-        totalSkipped++;
-        continue;
-      }
+      if (clientNum.trim().toLowerCase() === "s") { totalSkipped++; continue; }
       const idx = parseInt(clientNum) - 1;
-      if (idx < 0 || idx >= clients.length) {
-        console.log("   ⚠️ Número inválido, pulando.");
-        totalSkipped++;
-        continue;
-      }
-      const clientId = clients[idx].id;
-      if (!grouped[clientId]) grouped[clientId] = { name: clients[idx].full_name, devices: [] };
-      grouped[clientId].devices.push(dvr);
+      if (idx < 0 || idx >= clients.length) { console.log("   ⚠️ Número inválido, pulando."); totalSkipped++; continue; }
+      const cid = clients[idx].id;
+      if (!grouped[cid]) grouped[cid] = { name: clients[idx].full_name, devices: [] };
+      grouped[cid].devices.push(dvr);
       console.log(`   ✅ → ${clients[idx].full_name}`);
     }
-    for (const [clientId, group] of Object.entries(grouped)) {
+    for (const [cid, group] of Object.entries(grouped)) {
       console.log(`\n📤 Enviando ${group.devices.length} DVRs para "${group.name}"...`);
-      const result = await importDevices(clientId, group.devices);
+      const result = await importDevices(cid, group.devices);
       if (result) {
         totalImported += result.imported || 0;
         totalSkipped += result.skipped || 0;
@@ -405,7 +377,6 @@ async function main() {
     }
   }
 
-  // Resumo final
   console.log("\n" + "═".repeat(50));
   console.log("📊 RESUMO DA IMPORTAÇÃO");
   console.log("═".repeat(50));
@@ -417,7 +388,4 @@ async function main() {
   rl.close();
 }
 
-main().catch((err) => {
-  console.error(err);
-  rl.close();
-});
+main().catch((err) => { console.error(err); rl.close(); });
