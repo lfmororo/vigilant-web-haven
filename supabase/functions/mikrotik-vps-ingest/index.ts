@@ -372,7 +372,7 @@ async function sendWhatsAppAlert(
 
   // Montar mensagem
   const lines: string[] = [];
-  lines.push(`🔔 *ALERTA MIKROTIK*`);
+  lines.push(`🔔 *ALERTA DE DISPOSITIVO*`);
   lines.push(`📡 Dispositivo: *${device.name}*`);
   lines.push(`🏢 Cliente: ${clientName}`);
   lines.push(`🌐 IP: ${device.host}`);
@@ -444,7 +444,7 @@ async function sendWhatsAppAlert(
   }).format(now);
   lines.push(`🕐 ${brTime}`);
   lines.push("");
-  lines.push("_🤖 Alerta automático do monitoramento Mikrotik_");
+  lines.push("_🤖 Alerta automático do monitoramento de dispositivos_");
 
   const adminContactPhone = settingsMap.admin_contact_phone;
   if (adminContactPhone) {
