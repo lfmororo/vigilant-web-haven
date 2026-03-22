@@ -11,8 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Plus, RefreshCw, Video, VideoOff, Wifi, WifiOff, Trash2, Edit, Camera, History } from "lucide-react";
+import { Plus, RefreshCw, Video, VideoOff, Wifi, WifiOff, Trash2, Edit, Camera, History, BookOpen, Download, Copy, Check, ChevronRight } from "lucide-react";
 import { formatTimeAgo } from "@/lib/formatTimeAgo";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 interface DvrDevice {
   id: string;
