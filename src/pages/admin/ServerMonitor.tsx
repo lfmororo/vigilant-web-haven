@@ -636,8 +636,8 @@ WantedBy=multi-user.target`}</code>
 
                 <div className="flex gap-3">
                   <Button variant="outline" asChild>
-                    <a href="/windows-server-agent.ps1" download>
-                      <Download className="w-4 h-4 mr-1" /> Baixar Agente Windows (.ps1)
+                    <a href="/windows-server-collector.ps1" download>
+                      <Download className="w-4 h-4 mr-1" /> Baixar Coletor Windows (.ps1)
                     </a>
                   </Button>
                   <Button variant="outline" asChild>
