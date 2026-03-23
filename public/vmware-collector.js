@@ -169,7 +169,7 @@ async function collectVmwareHost(hostConfig) {
       }, { headers: supabaseHeaders, timeout: 10000 });
     } catch {}
   } finally {
-    if (sessionToken) await destroySession(host, port, sessionToken);
+    if (sessionToken) await destroySession(host, port, sessionToken, isLegacy);
   }
 }
 
