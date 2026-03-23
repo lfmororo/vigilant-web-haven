@@ -118,9 +118,12 @@ async function getVmwareData(host, port, sessionToken, legacy) {
   return { vms, datastores };
 }
 
-async function destroySession(host, port, sessionToken) {
+async function destroySession(host, port, sessionToken, legacy) {
   try {
-    await axios.delete(`https://${host}:${port}/api/session`, {
+    const url = legacy
+      ? `https://${host}:${port}/rest/com/vmware/cis/session`
+      : `https://${host}:${port}/api/session`;
+    await axios.delete(url, {
       headers: { "vmware-api-session-id": sessionToken },
       httpsAgent: agent,
       timeout: 5000,
