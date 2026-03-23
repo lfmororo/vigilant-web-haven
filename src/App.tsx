@@ -29,6 +29,7 @@ import CreateQuote from "./pages/admin/CreateQuote";
 import QuoteDetail from "./pages/admin/QuoteDetail";
 import MikrotikMonitor from "./pages/admin/MikrotikMonitor";
 import DvrMonitor from "./pages/admin/DvrMonitor";
+import ServerMonitor from "./pages/admin/ServerMonitor";
 import HelpdeskDashboard from "./pages/helpdesk/HelpdeskDashboard";
 import ClientTicketsList from "./pages/helpdesk/ClientTicketsList";
 import NewTicket from "./pages/helpdesk/NewTicket";
@@ -62,6 +63,7 @@ const App = () => (
               <Route path="/admin/inventory/:id" element={<AuthGuard requireAdmin><EquipmentDetail /></AuthGuard>} />
               <Route path="/admin/mikrotik" element={<AuthGuard requireAdmin><MikrotikMonitor /></AuthGuard>} />
               <Route path="/admin/dvr" element={<AuthGuard requireAdmin><DvrMonitor /></AuthGuard>} />
+              <Route path="/admin/servers" element={<AuthGuard requireAdmin><ServerMonitor /></AuthGuard>} />
               <Route path="/admin/helpdesk" element={<AuthGuard requireAdminOrTechnician><AdminHelpdeskDashboard /></AuthGuard>} />
               <Route path="/admin/tickets" element={<AuthGuard requireAdminOrTechnician><AdminTicketsManagement /></AuthGuard>} />
               <Route path="/admin/tickets/:id" element={<AuthGuard requireAdminOrTechnician><AdminTicketDetail /></AuthGuard>} />
