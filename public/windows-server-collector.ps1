@@ -63,7 +63,7 @@ function Collect-ServerData($server) {
 
     # Verificar se está online via ping
     if (-not (Test-ServerOnline $ip)) {
-        Write-Log "  ❌ $name OFFLINE"
+        Write-Log "  [OFFLINE] $name"
         # Reportar offline
         try {
             $headers = @{
