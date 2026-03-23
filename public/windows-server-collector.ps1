@@ -149,7 +149,7 @@ function Collect-ServerData($server) {
         Write-Log "  [OK] $name | CPU: ${cpuLoad}% | RAM: ${ramUsagePct}% | Disco: ${diskUsagePct}%"
     }
     catch {
-        Write-Log "  ⚠ $name: WMI falhou - $($_.Exception.Message) (marcando como online via ping)"
+        Write-Log "  [WARN] ${name}: WMI falhou - $($_.Exception.Message) (marcando como online via ping)"
         # Servidor responde ping mas WMI falhou - reportar online com erro
         try {
             $headers = @{
