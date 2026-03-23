@@ -51,7 +51,12 @@ function Get-ServerList {
 }
 
 function Test-ServerOnline($ip) {
-    return (Test-Connection -ComputerName $ip -Count 2 -Quiet -TimeoutSeconds 3)
+    try {
+        $result = Test-Connection -ComputerName $ip -Count 2 -Quiet -ErrorAction SilentlyContinue
+        return $result
+    } catch {
+        return $false
+    }
 }
 
 function Collect-ServerData($server) {
