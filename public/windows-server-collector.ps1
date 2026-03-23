@@ -146,7 +146,7 @@ function Collect-ServerData($server) {
 
         Invoke-RestMethod -Uri "$SUPABASE_URL/functions/v1/server-monitor-ingest" -Method POST -Body $payload -Headers $headers -TimeoutSec 15 | Out-Null
 
-        Write-Log "  ✅ $name | CPU: ${cpuLoad}% | RAM: ${ramUsagePct}% | Disco: ${diskUsagePct}%"
+        Write-Log "  [OK] $name | CPU: ${cpuLoad}% | RAM: ${ramUsagePct}% | Disco: ${diskUsagePct}%"
     }
     catch {
         Write-Log "  ⚠ $name: WMI falhou - $($_.Exception.Message) (marcando como online via ping)"
