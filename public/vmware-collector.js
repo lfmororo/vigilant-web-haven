@@ -52,44 +52,35 @@ async function getVmwareSession(host, port, username, password) {
   }
 }
 
-async function getVmwareData(host, port, sessionToken) {
-  const baseUrl = `https://${host}:${port}/api`;
+async function getVmwareData(host, port, sessionToken, legacy) {
+  const baseUrl = legacy
+    ? `https://${host}:${port}/rest/vcenter`
+    : `https://${host}:${port}/api/vcenter`;
   const headers = { "vmware-api-session-id": sessionToken };
-
-  // Get host system info
-  let hostInfo = {};
-  try {
-    const res = await axios.get(`${baseUrl}/vcenter/host`, { headers, httpsAgent: agent, timeout: 15000 });
-    if (res.data && res.data.length > 0) {
-      hostInfo = res.data[0];
-    }
-  } catch {
-    // Standalone ESXi may not have /vcenter/host
-  }
 
   // Get VMs
   let vms = [];
   try {
-    const res = await axios.get(`${baseUrl}/vcenter/vm`, { headers, httpsAgent: agent, timeout: 15000 });
-    vms = (res.data || []).map((vm) => ({
+    const res = await axios.get(`${baseUrl}/vm`, { headers, httpsAgent: agent, timeout: 15000 });
+    const vmList = legacy ? (res.data.value || []) : (res.data || []);
+    vms = vmList.map((vm) => ({
       name: vm.name,
       power_state: vm.power_state,
       cpu_count: vm.cpu_count,
-      ram_mb: vm.memory_size_MiB,
+      ram_mb: vm.memory_size_MiB || vm.memory_size_mib,
     }));
 
     // Get detailed info per VM
     for (let i = 0; i < vms.length; i++) {
       try {
-        const vmId = res.data[i].vm;
-        const detail = await axios.get(`${baseUrl}/vcenter/vm/${vmId}`, { headers, httpsAgent: agent, timeout: 10000 });
-        const d = detail.data;
+        const vmId = vmList[i].vm;
+        const detail = await axios.get(`${baseUrl}/vm/${vmId}`, { headers, httpsAgent: agent, timeout: 10000 });
+        const d = legacy ? (detail.data.value || detail.data) : detail.data;
         if (d.guest) {
           vms[i].ip_address = d.guest?.networking?.ip_addresses?.[0]?.ip_address || null;
-          vms[i].guest_os = d.guest?.os_id || null;
+          vms[i].guest_os = d.guest?.os_id || d.guest?.os || null;
           vms[i].tools_status = d.guest?.tools_version_status || null;
         }
-        // Disk info
         if (d.disks) {
           let totalCapacity = 0;
           Object.values(d.disks).forEach((disk) => {
@@ -106,15 +97,17 @@ async function getVmwareData(host, port, sessionToken) {
   // Get datastores
   let datastores = [];
   try {
-    const res = await axios.get(`${baseUrl}/vcenter/datastore`, { headers, httpsAgent: agent, timeout: 15000 });
-    for (const ds of res.data || []) {
+    const res = await axios.get(`${baseUrl}/datastore`, { headers, httpsAgent: agent, timeout: 15000 });
+    const dsList = legacy ? (res.data.value || []) : (res.data || []);
+    for (const ds of dsList) {
       try {
-        const detail = await axios.get(`${baseUrl}/vcenter/datastore/${ds.datastore}`, { headers, httpsAgent: agent, timeout: 10000 });
+        const detail = await axios.get(`${baseUrl}/datastore/${ds.datastore}`, { headers, httpsAgent: agent, timeout: 10000 });
+        const dd = legacy ? (detail.data.value || detail.data) : detail.data;
         datastores.push({
-          name: detail.data.name,
-          capacity_gb: +((detail.data.capacity || 0) / (1024 ** 3)).toFixed(2),
-          free_gb: +((detail.data.free_space || 0) / (1024 ** 3)).toFixed(2),
-          type: detail.data.type,
+          name: dd.name,
+          capacity_gb: +((dd.capacity || 0) / (1024 ** 3)).toFixed(2),
+          free_gb: +((dd.free_space || 0) / (1024 ** 3)).toFixed(2),
+          type: dd.type,
         });
       } catch {}
     }
@@ -122,7 +115,7 @@ async function getVmwareData(host, port, sessionToken) {
     log(`  ⚠ Erro ao listar datastores: ${err.message}`);
   }
 
-  return { hostInfo, vms, datastores };
+  return { vms, datastores };
 }
 
 async function destroySession(host, port, sessionToken) {
