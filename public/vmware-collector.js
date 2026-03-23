@@ -27,6 +27,7 @@ function log(msg) {
 }
 
 async function getVmwareSession(host, port, username, password) {
+  // Try modern API first (ESXi 7.0+/vCenter 7.0+)
   try {
     const url = `https://${host}:${port}/api/session`;
     const res = await axios.post(url, null, {
@@ -34,10 +35,20 @@ async function getVmwareSession(host, port, username, password) {
       httpsAgent: agent,
       timeout: 15000,
     });
-    return res.data; // session token string
-  } catch (err) {
-    // Try legacy SOAP login for older ESXi
-    throw new Error(`Login failed: ${err.message}`);
+    return { token: res.data, legacy: false };
+  } catch {
+    // Try legacy REST API (ESXi 6.5-6.7)
+    try {
+      const url = `https://${host}:${port}/rest/com/vmware/cis/session`;
+      const res = await axios.post(url, null, {
+        auth: { username, password },
+        httpsAgent: agent,
+        timeout: 15000,
+      });
+      return { token: res.data.value, legacy: true };
+    } catch (err2) {
+      throw new Error(`Login failed on both /api and /rest endpoints: ${err2.message}`);
+    }
   }
 }
 
