@@ -136,6 +136,7 @@ async function collectVmwareHost(hostConfig) {
   log(`📡 Coletando host: ${name} (${host}:${port})`);
 
   let sessionToken;
+  let isLegacy = false;
   try {
     const session = await getVmwareSession(host, port, username, password);
     sessionToken = session.token;
