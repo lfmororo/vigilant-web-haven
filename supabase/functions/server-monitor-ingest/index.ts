@@ -19,30 +19,34 @@ Deno.serve(async (req) => {
     const { type } = body;
 
     if (type === "windows") {
-      const { server_id, cpu_usage, ram_total_gb, ram_used_gb, ram_usage_pct, disk_total_gb, disk_used_gb, disk_free_gb, disk_usage_pct, uptime_seconds, last_boot_time, os_version, services_status } = body;
+      const { server_id, status: serverStatus, cpu_usage, ram_total_gb, ram_used_gb, ram_usage_pct, disk_total_gb, disk_used_gb, disk_free_gb, disk_usage_pct, uptime_seconds, last_boot_time, os_version, services_status, last_error } = body;
 
       if (!server_id) {
         return new Response(JSON.stringify({ error: "server_id required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      const { error } = await supabase.from("windows_servers").update({
-        status: "online",
-        cpu_usage,
-        ram_total_gb,
-        ram_used_gb,
-        ram_usage_pct,
-        disk_total_gb,
-        disk_used_gb,
-        disk_free_gb,
-        disk_usage_pct,
-        uptime_seconds,
-        last_boot_time,
-        os_version,
-        services_status,
+      const updateData: Record<string, any> = {
+        status: serverStatus || "online",
         last_polled_at: new Date().toISOString(),
-        last_error: null,
+        last_error: last_error || null,
         updated_at: new Date().toISOString(),
-      }).eq("id", server_id);
+      };
+
+      // Only set metrics if provided (online with full data)
+      if (cpu_usage !== undefined) updateData.cpu_usage = cpu_usage;
+      if (ram_total_gb !== undefined) updateData.ram_total_gb = ram_total_gb;
+      if (ram_used_gb !== undefined) updateData.ram_used_gb = ram_used_gb;
+      if (ram_usage_pct !== undefined) updateData.ram_usage_pct = ram_usage_pct;
+      if (disk_total_gb !== undefined) updateData.disk_total_gb = disk_total_gb;
+      if (disk_used_gb !== undefined) updateData.disk_used_gb = disk_used_gb;
+      if (disk_free_gb !== undefined) updateData.disk_free_gb = disk_free_gb;
+      if (disk_usage_pct !== undefined) updateData.disk_usage_pct = disk_usage_pct;
+      if (uptime_seconds !== undefined) updateData.uptime_seconds = uptime_seconds;
+      if (last_boot_time !== undefined) updateData.last_boot_time = last_boot_time;
+      if (os_version !== undefined) updateData.os_version = os_version;
+      if (services_status !== undefined) updateData.services_status = services_status;
+
+      const { error } = await supabase.from("windows_servers").update(updateData).eq("id", server_id);
 
       if (error) throw error;
 
