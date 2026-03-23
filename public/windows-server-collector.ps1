@@ -63,7 +63,7 @@ function Collect-ServerData($server) {
 
     # Verificar se está online via ping
     if (-not (Test-ServerOnline $ip)) {
-        Write-Log "  ❌ $name OFFLINE"
+        Write-Log "  [OFFLINE] $name"
         # Reportar offline
         try {
             $headers = @{
@@ -146,10 +146,10 @@ function Collect-ServerData($server) {
 
         Invoke-RestMethod -Uri "$SUPABASE_URL/functions/v1/server-monitor-ingest" -Method POST -Body $payload -Headers $headers -TimeoutSec 15 | Out-Null
 
-        Write-Log "  ✅ $name | CPU: ${cpuLoad}% | RAM: ${ramUsagePct}% | Disco: ${diskUsagePct}%"
+        Write-Log "  [OK] $name | CPU: ${cpuLoad}% | RAM: ${ramUsagePct}% | Disco: ${diskUsagePct}%"
     }
     catch {
-        Write-Log "  ⚠ $name: WMI falhou - $($_.Exception.Message) (marcando como online via ping)"
+        Write-Log "  [WARN] ${name}: WMI falhou - $($_.Exception.Message) (marcando como online via ping)"
         # Servidor responde ping mas WMI falhou - reportar online com erro
         try {
             $headers = @{
