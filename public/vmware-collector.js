@@ -137,8 +137,11 @@ async function collectVmwareHost(hostConfig) {
 
   let sessionToken;
   try {
-    sessionToken = await getVmwareSession(host, port, username, password);
-    const { vms, datastores } = await getVmwareData(host, port, sessionToken);
+    const session = await getVmwareSession(host, port, username, password);
+    sessionToken = session.token;
+    isLegacy = session.legacy;
+    log(`  🔑 Login OK (${isLegacy ? "legacy /rest" : "modern /api"})`);
+    const { vms, datastores } = await getVmwareData(host, port, sessionToken, isLegacy);
 
     const payload = {
       type: "vmware",
