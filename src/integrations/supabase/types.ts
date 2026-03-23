@@ -1705,6 +1705,145 @@ export type Database = {
         }
         Relationships: []
       }
+      vmware_hosts: {
+        Row: {
+          client_id: string
+          cpu_cores: number | null
+          cpu_usage_pct: number | null
+          created_at: string
+          datastores: Json | null
+          esxi_version: string | null
+          host: string
+          id: string
+          is_active: boolean
+          last_error: string | null
+          last_polled_at: string | null
+          name: string
+          password: string
+          port: number
+          ram_total_gb: number | null
+          ram_usage_pct: number | null
+          ram_used_gb: number | null
+          status: string
+          updated_at: string
+          uptime_seconds: number | null
+          username: string
+        }
+        Insert: {
+          client_id: string
+          cpu_cores?: number | null
+          cpu_usage_pct?: number | null
+          created_at?: string
+          datastores?: Json | null
+          esxi_version?: string | null
+          host: string
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_polled_at?: string | null
+          name: string
+          password?: string
+          port?: number
+          ram_total_gb?: number | null
+          ram_usage_pct?: number | null
+          ram_used_gb?: number | null
+          status?: string
+          updated_at?: string
+          uptime_seconds?: number | null
+          username?: string
+        }
+        Update: {
+          client_id?: string
+          cpu_cores?: number | null
+          cpu_usage_pct?: number | null
+          created_at?: string
+          datastores?: Json | null
+          esxi_version?: string | null
+          host?: string
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_polled_at?: string | null
+          name?: string
+          password?: string
+          port?: number
+          ram_total_gb?: number | null
+          ram_usage_pct?: number | null
+          ram_used_gb?: number | null
+          status?: string
+          updated_at?: string
+          uptime_seconds?: number | null
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vmware_hosts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vmware_vms: {
+        Row: {
+          cpu_count: number | null
+          created_at: string
+          disk_provisioned_gb: number | null
+          disk_used_gb: number | null
+          guest_os: string | null
+          host_id: string
+          id: string
+          ip_address: string | null
+          name: string
+          power_state: string
+          ram_mb: number | null
+          tools_status: string | null
+          updated_at: string
+          uptime_seconds: number | null
+        }
+        Insert: {
+          cpu_count?: number | null
+          created_at?: string
+          disk_provisioned_gb?: number | null
+          disk_used_gb?: number | null
+          guest_os?: string | null
+          host_id: string
+          id?: string
+          ip_address?: string | null
+          name: string
+          power_state?: string
+          ram_mb?: number | null
+          tools_status?: string | null
+          updated_at?: string
+          uptime_seconds?: number | null
+        }
+        Update: {
+          cpu_count?: number | null
+          created_at?: string
+          disk_provisioned_gb?: number | null
+          disk_used_gb?: number | null
+          guest_os?: string | null
+          host_id?: string
+          id?: string
+          ip_address?: string | null
+          name?: string
+          power_state?: string
+          ram_mb?: number | null
+          tools_status?: string | null
+          updated_at?: string
+          uptime_seconds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vmware_vms_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "vmware_hosts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_notification_logs: {
         Row: {
           created_at: string
@@ -1745,6 +1884,89 @@ export type Database = {
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      windows_servers: {
+        Row: {
+          client_id: string
+          cpu_usage: number | null
+          created_at: string
+          disk_free_gb: number | null
+          disk_total_gb: number | null
+          disk_usage_pct: number | null
+          disk_used_gb: number | null
+          host: string
+          id: string
+          is_active: boolean
+          last_boot_time: string | null
+          last_error: string | null
+          last_polled_at: string | null
+          name: string
+          os_version: string | null
+          ram_total_gb: number | null
+          ram_usage_pct: number | null
+          ram_used_gb: number | null
+          services_status: Json | null
+          status: string
+          updated_at: string
+          uptime_seconds: number | null
+        }
+        Insert: {
+          client_id: string
+          cpu_usage?: number | null
+          created_at?: string
+          disk_free_gb?: number | null
+          disk_total_gb?: number | null
+          disk_usage_pct?: number | null
+          disk_used_gb?: number | null
+          host: string
+          id?: string
+          is_active?: boolean
+          last_boot_time?: string | null
+          last_error?: string | null
+          last_polled_at?: string | null
+          name: string
+          os_version?: string | null
+          ram_total_gb?: number | null
+          ram_usage_pct?: number | null
+          ram_used_gb?: number | null
+          services_status?: Json | null
+          status?: string
+          updated_at?: string
+          uptime_seconds?: number | null
+        }
+        Update: {
+          client_id?: string
+          cpu_usage?: number | null
+          created_at?: string
+          disk_free_gb?: number | null
+          disk_total_gb?: number | null
+          disk_usage_pct?: number | null
+          disk_used_gb?: number | null
+          host?: string
+          id?: string
+          is_active?: boolean
+          last_boot_time?: string | null
+          last_error?: string | null
+          last_polled_at?: string | null
+          name?: string
+          os_version?: string | null
+          ram_total_gb?: number | null
+          ram_usage_pct?: number | null
+          ram_used_gb?: number | null
+          services_status?: Json | null
+          status?: string
+          updated_at?: string
+          uptime_seconds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "windows_servers_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
