@@ -581,24 +581,29 @@ const ServerMonitor = () => {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><Server className="w-5 h-5 text-blue-400" /> Agente Windows (PowerShell)</h3>
+                  <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><Server className="w-5 h-5 text-blue-400" /> Coletor Windows (PowerShell Centralizado)</h3>
                   <p className="text-sm text-muted-foreground mb-3">
-                    O agente roda diretamente no servidor Windows via Task Scheduler e envia métricas de CPU, RAM, disco, uptime e serviços.
+                    Um único script PowerShell roda em <strong>uma máquina Windows</strong> da rede e monitora <strong>todos os servidores</strong> remotamente via WMI. Ele busca a lista de servidores automaticamente do painel.
                   </p>
                   <div className="bg-muted rounded-lg p-4 space-y-2">
-                    <p className="text-sm font-medium">1. Baixe o script:</p>
+                    <p className="text-sm font-medium">1. Baixe o script na máquina coletora:</p>
                     <code className="text-xs block bg-background p-2 rounded">
-                      Invoke-WebRequest -Uri "{window.location.origin}/windows-server-agent.ps1" -OutFile "C:\Scripts\server-agent.ps1"
+                      Invoke-WebRequest -Uri "{window.location.origin}/windows-server-collector.ps1" -OutFile "C:\Scripts\windows-collector.ps1"
                     </code>
-                    <p className="text-sm font-medium mt-3">2. Configure as variáveis no início do script:</p>
+                    <p className="text-sm font-medium mt-3">2. Configure apenas a ANON_KEY no script:</p>
                     <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`$SUPABASE_URL = "${supabaseUrl}"
 $SUPABASE_ANON_KEY = "${anonKey}"
-$SERVER_ID = "ID-DO-SERVIDOR-NO-PAINEL"
-$SERVICES_TO_MONITOR = @("MSSQLSERVER","W3SVC","Spooler")`}</code>
-                    <p className="text-sm font-medium mt-3">3. Crie uma tarefa agendada (a cada 5 min):</p>
-                    <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File C:\\Scripts\\server-agent.ps1"
+$SERVICES_TO_MONITOR = @("MSSQLSERVER","W3SVC","DNS","DHCP")`}</code>
+                    <p className="text-sm font-medium mt-3">3. Pré-requisitos na rede:</p>
+                    <div className="text-xs bg-background p-2 rounded space-y-1">
+                      <p>• A conta que roda o script precisa de permissão WMI nos servidores remotos</p>
+                      <p>• Firewall: liberar porta WMI (135 + portas dinâmicas) entre a máquina coletora e os servidores</p>
+                      <p>• Habilitar serviço "Windows Remote Management" nos servidores alvo</p>
+                    </div>
+                    <p className="text-sm font-medium mt-3">4. Agende via Task Scheduler (a cada 5 min):</p>
+                    <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File C:\\Scripts\\windows-collector.ps1"
 $trigger = New-ScheduledTaskTrigger -RepetitionInterval (New-TimeSpan -Minutes 5) -Once -At (Get-Date)
-Register-ScheduledTask -TaskName "ServerMonitorAgent" -Action $action -Trigger $trigger -RunLevel Highest -User "SYSTEM"`}</code>
+Register-ScheduledTask -TaskName "WindowsServerCollector" -Action $action -Trigger $trigger -RunLevel Highest -User "SYSTEM"`}</code>
                   </div>
                 </div>
 
@@ -631,8 +636,8 @@ WantedBy=multi-user.target`}</code>
 
                 <div className="flex gap-3">
                   <Button variant="outline" asChild>
-                    <a href="/windows-server-agent.ps1" download>
-                      <Download className="w-4 h-4 mr-1" /> Baixar Agente Windows (.ps1)
+                    <a href="/windows-server-collector.ps1" download>
+                      <Download className="w-4 h-4 mr-1" /> Baixar Coletor Windows (.ps1)
                     </a>
                   </Button>
                   <Button variant="outline" asChild>
