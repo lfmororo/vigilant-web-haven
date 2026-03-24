@@ -731,20 +731,20 @@ Register-ScheduledTask -TaskName "WindowsServerCollector" -Action $action -Trigg
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><Monitor className="w-5 h-5 text-purple-400" /> Coletor VMware (Node.js — VPS)</h3>
+                  <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><Monitor className="w-5 h-5 text-purple-400" /> Coletor VMware (Node.js via SSH)</h3>
                   <p className="text-sm text-muted-foreground mb-3">
-                    O coletor roda em uma VPS externa e consulta os hosts ESXi/vCenter via API para obter dados de VMs, datastores e recursos.
+                    O coletor roda em uma VPS externa e consulta os hosts ESXi via <strong>SSH</strong> (vim-cmd / esxcli), garantindo compatibilidade com ESXi 6.5+. Requer serviço SSH ativo no host.
                   </p>
                   <div className="bg-muted rounded-lg p-4 space-y-2">
-                    <p className="text-sm font-medium">1. Na VPS, instale as dependências:</p>
-                    <code className="text-xs block bg-background p-2 rounded">npm install axios https</code>
+                    <p className="text-sm font-medium">1. Na VPS, instale a dependência:</p>
+                    <code className="text-xs block bg-background p-2 rounded">npm install ssh2</code>
                     <p className="text-sm font-medium mt-3">2. Baixe o script:</p>
                     <code className="text-xs block bg-background p-2 rounded">
                       curl -o vmware-collector.js {window.location.origin}/vmware-collector.js
                     </code>
-                    <p className="text-sm font-medium mt-3">3. Configure como serviço (systemd):</p>
+                    <p className="text-sm font-medium mt-3">3. Configure a ANON_KEY no script e rode como serviço (systemd):</p>
                     <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`[Unit]
-Description=VMware Collector
+Description=VMware Collector (SSH)
 After=network.target
 
 [Service]
@@ -754,6 +754,12 @@ RestartSec=10
 
 [Install]
 WantedBy=multi-user.target`}</code>
+                    <p className="text-sm font-medium mt-3">4. Pré-requisitos:</p>
+                    <div className="text-xs bg-background p-2 rounded space-y-1">
+                      <p>• Serviço SSH habilitado no host ESXi (porta 22)</p>
+                      <p>• Credenciais com acesso SSH (usuário root)</p>
+                      <p>• Liberação de firewall entre a VPS e os hosts na porta 22</p>
+                    </div>
                   </div>
                 </div>
 
