@@ -173,37 +173,58 @@ export type Database = {
       }
       dvr_cameras: {
         Row: {
+          camera_type: string | null
           channel: number
+          codec: string | null
           created_at: string
           dvr_id: string
+          fps: number | null
           id: string
           last_checked_at: string | null
+          motion_detect: boolean | null
           name: string
+          recording_status: string | null
+          resolution: string | null
           rtsp_url: string | null
           status: string
           updated_at: string
+          video_loss: boolean | null
         }
         Insert: {
+          camera_type?: string | null
           channel?: number
+          codec?: string | null
           created_at?: string
           dvr_id: string
+          fps?: number | null
           id?: string
           last_checked_at?: string | null
+          motion_detect?: boolean | null
           name: string
+          recording_status?: string | null
+          resolution?: string | null
           rtsp_url?: string | null
           status?: string
           updated_at?: string
+          video_loss?: boolean | null
         }
         Update: {
+          camera_type?: string | null
           channel?: number
+          codec?: string | null
           created_at?: string
           dvr_id?: string
+          fps?: number | null
           id?: string
           last_checked_at?: string | null
+          motion_detect?: boolean | null
           name?: string
+          recording_status?: string | null
+          resolution?: string | null
           rtsp_url?: string | null
           status?: string
           updated_at?: string
+          video_loss?: boolean | null
         }
         Relationships: [
           {
@@ -219,6 +240,12 @@ export type Database = {
         Row: {
           client_id: string
           created_at: string
+          device_model: string | null
+          disk_free_gb: number | null
+          disk_total_gb: number | null
+          disk_usage_pct: number | null
+          disk_used_gb: number | null
+          firmware_version: string | null
           host: string
           id: string
           is_active: boolean
@@ -227,13 +254,23 @@ export type Database = {
           name: string
           password: string
           port: number
+          recording_status: string | null
+          serial_number: string | null
           status: string
+          total_channels: number | null
           updated_at: string
+          uptime_seconds: number | null
           username: string
         }
         Insert: {
           client_id: string
           created_at?: string
+          device_model?: string | null
+          disk_free_gb?: number | null
+          disk_total_gb?: number | null
+          disk_usage_pct?: number | null
+          disk_used_gb?: number | null
+          firmware_version?: string | null
           host: string
           id?: string
           is_active?: boolean
@@ -242,13 +279,23 @@ export type Database = {
           name: string
           password?: string
           port?: number
+          recording_status?: string | null
+          serial_number?: string | null
           status?: string
+          total_channels?: number | null
           updated_at?: string
+          uptime_seconds?: number | null
           username?: string
         }
         Update: {
           client_id?: string
           created_at?: string
+          device_model?: string | null
+          disk_free_gb?: number | null
+          disk_total_gb?: number | null
+          disk_usage_pct?: number | null
+          disk_used_gb?: number | null
+          firmware_version?: string | null
           host?: string
           id?: string
           is_active?: boolean
@@ -257,8 +304,12 @@ export type Database = {
           name?: string
           password?: string
           port?: number
+          recording_status?: string | null
+          serial_number?: string | null
           status?: string
+          total_channels?: number | null
           updated_at?: string
+          uptime_seconds?: number | null
           username?: string
         }
         Relationships: [
