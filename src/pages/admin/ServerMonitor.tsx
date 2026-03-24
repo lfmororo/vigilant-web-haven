@@ -192,6 +192,69 @@ const ServerMonitor = () => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+  // Generate alerts
+  const STALE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+  const now = Date.now();
+
+  const alerts: { type: "critical" | "warning" | "info"; message: string }[] = [];
+
+  // Windows server alerts
+  windowsServers?.forEach(srv => {
+    if (srv.status === "offline") alerts.push({ type: "critical", message: `🔴 ${srv.name} está offline` });
+    if (srv.cpu_usage != null && srv.cpu_usage > 90) alerts.push({ type: "critical", message: `🔥 ${srv.name} — CPU em ${srv.cpu_usage.toFixed(1)}%` });
+    if (srv.cpu_usage != null && srv.cpu_usage > 70 && srv.cpu_usage <= 90) alerts.push({ type: "warning", message: `⚠️ ${srv.name} — CPU em ${srv.cpu_usage.toFixed(1)}%` });
+    if (srv.ram_usage_pct != null && srv.ram_usage_pct > 90) alerts.push({ type: "critical", message: `🔥 ${srv.name} — RAM em ${srv.ram_usage_pct.toFixed(1)}%` });
+    if (srv.ram_usage_pct != null && srv.ram_usage_pct > 70 && srv.ram_usage_pct <= 90) alerts.push({ type: "warning", message: `⚠️ ${srv.name} — RAM em ${srv.ram_usage_pct.toFixed(1)}%` });
+    if (srv.disk_usage_pct != null && srv.disk_usage_pct > 90) alerts.push({ type: "critical", message: `🔥 ${srv.name} — Disco em ${srv.disk_usage_pct.toFixed(1)}%` });
+    if (srv.disk_usage_pct != null && srv.disk_usage_pct > 70 && srv.disk_usage_pct <= 90) alerts.push({ type: "warning", message: `⚠️ ${srv.name} — Disco em ${srv.disk_usage_pct.toFixed(1)}%` });
+    if (srv.last_polled_at && (now - new Date(srv.last_polled_at).getTime()) > STALE_THRESHOLD_MS) {
+      alerts.push({ type: "warning", message: `⏰ ${srv.name} — Coletor sem atualização há ${formatTimeAgo(srv.last_polled_at)}` });
+    }
+    if (srv.services_status && Array.isArray(srv.services_status)) {
+      (srv.services_status as any[]).filter((svc: any) => svc.status !== "Running").forEach((svc: any) => {
+        alerts.push({ type: "critical", message: `🛑 ${srv.name} — Serviço "${svc.display_name || svc.name}" parado` });
+      });
+    }
+  });
+
+  // VMware host alerts
+  vmwareHosts?.forEach(host => {
+    if (host.status === "offline") alerts.push({ type: "critical", message: `🔴 Host VMware ${host.name} está offline` });
+    if (host.cpu_usage_pct != null && host.cpu_usage_pct > 90) alerts.push({ type: "critical", message: `🔥 Host ${host.name} — CPU em ${host.cpu_usage_pct.toFixed(1)}%` });
+    if (host.ram_usage_pct != null && host.ram_usage_pct > 90) alerts.push({ type: "critical", message: `🔥 Host ${host.name} — RAM em ${host.ram_usage_pct.toFixed(1)}%` });
+    if (host.last_polled_at && (now - new Date(host.last_polled_at).getTime()) > STALE_THRESHOLD_MS) {
+      alerts.push({ type: "warning", message: `⏰ Host ${host.name} — Coletor sem atualização há ${formatTimeAgo(host.last_polled_at)}` });
+    }
+    // Datastore alerts
+    const datastores = (host.datastores || []) as any[];
+    datastores.forEach((ds: any) => {
+      if (ds.capacity_gb > 0) {
+        const usedPct = ((ds.capacity_gb - ds.free_gb) / ds.capacity_gb) * 100;
+        if (usedPct > 90) alerts.push({ type: "critical", message: `🔥 ${host.name} — Datastore "${ds.name}" em ${usedPct.toFixed(1)}%` });
+        else if (usedPct > 70) alerts.push({ type: "warning", message: `⚠️ ${host.name} — Datastore "${ds.name}" em ${usedPct.toFixed(1)}%` });
+      }
+    });
+  });
+
+  // Sort: critical first, then warning, then info
+  alerts.sort((a, b) => {
+    const order = { critical: 0, warning: 1, info: 2 };
+    return order[a.type] - order[b.type];
+  });
+
+  // Collector status
+  const lastWinPoll = windowsServers?.reduce((latest: string | null, s) => {
+    if (!s.last_polled_at) return latest;
+    if (!latest || new Date(s.last_polled_at) > new Date(latest)) return s.last_polled_at;
+    return latest;
+  }, null) || null;
+
+  const lastVmPoll = vmwareHosts?.reduce((latest: string | null, h) => {
+    if (!h.last_polled_at) return latest;
+    if (!latest || new Date(h.last_polled_at) > new Date(latest)) return h.last_polled_at;
+    return latest;
+  }, null) || null;
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -261,6 +324,28 @@ const ServerMonitor = () => {
           </div>
         </div>
 
+        {/* Collector Status */}
+        <div className="flex flex-wrap gap-4 text-sm">
+          <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
+            <Server className="w-4 h-4 text-blue-400" />
+            <span className="text-muted-foreground">Coletor Windows:</span>
+            {lastWinPoll ? (
+              <span className={`font-medium ${(now - new Date(lastWinPoll).getTime()) > STALE_THRESHOLD_MS ? "text-amber-400" : "text-emerald-400"}`}>
+                {formatTimeAgo(lastWinPoll)}
+              </span>
+            ) : <span className="text-muted-foreground">Nunca</span>}
+          </div>
+          <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
+            <Monitor className="w-4 h-4 text-purple-400" />
+            <span className="text-muted-foreground">Coletor VMware:</span>
+            {lastVmPoll ? (
+              <span className={`font-medium ${(now - new Date(lastVmPoll).getTime()) > STALE_THRESHOLD_MS ? "text-amber-400" : "text-emerald-400"}`}>
+                {formatTimeAgo(lastVmPoll)}
+              </span>
+            ) : <span className="text-muted-foreground">Nunca</span>}
+          </div>
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
@@ -300,6 +385,44 @@ const ServerMonitor = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Alerts Panel */}
+        {alerts.length > 0 && (
+          <Card className="border-amber-500/30">
+            <CardHeader className="py-3 px-4">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                Alertas ({alerts.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="max-h-60 overflow-y-auto divide-y divide-border">
+                {alerts.map((alert, i) => (
+                  <div
+                    key={i}
+                    className={`px-4 py-2 text-sm flex items-center gap-2 ${
+                      alert.type === "critical" ? "bg-red-500/5 text-red-400" :
+                      alert.type === "warning" ? "bg-amber-500/5 text-amber-400" :
+                      "bg-blue-500/5 text-blue-400"
+                    }`}
+                  >
+                    {alert.type === "critical" && <XCircle className="w-4 h-4 shrink-0" />}
+                    {alert.type === "warning" && <AlertTriangle className="w-4 h-4 shrink-0" />}
+                    {alert.type === "info" && <CheckCircle className="w-4 h-4 shrink-0" />}
+                    {alert.message}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {alerts.length === 0 && (
+          <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-4 py-3">
+            <CheckCircle className="w-4 h-4" />
+            Todos os servidores estão operando normalmente.
+          </div>
+        )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
