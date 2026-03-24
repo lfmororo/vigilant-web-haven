@@ -26,29 +26,59 @@ function log(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
 }
 
+function getAxiosErrorDetails(err) {
+  const status = err?.response?.status;
+  const responseData = err?.response?.data;
+  const dataText = typeof responseData === "string"
+    ? responseData
+    : responseData
+      ? JSON.stringify(responseData)
+      : "";
+
+  if (status) return `HTTP ${status}${dataText ? ` - ${dataText}` : ""}`;
+  return err?.message || "erro desconhecido";
+}
+
+async function requestVmwareSession(host, port, endpoint, username, password) {
+  const res = await axios({
+    method: "post",
+    url: `https://${host}:${port}${endpoint}`,
+    auth: { username, password },
+    httpsAgent: agent,
+    timeout: 15000,
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  const token = typeof res.data === "string"
+    ? res.data.replace(/^"|"$/g, "")
+    : res.data?.value || res.headers?.["vmware-api-session-id"];
+
+  if (!token) {
+    throw new Error(`Sessão sem token em ${endpoint}`);
+  }
+
+  return token;
+}
+
 async function getVmwareSession(host, port, username, password) {
-  // Try modern API first (ESXi 7.0+/vCenter 7.0+)
+  let apiErr;
+
   try {
-    const url = `https://${host}:${port}/api/session`;
-    const res = await axios.post(url, null, {
-      auth: { username, password },
-      httpsAgent: agent,
-      timeout: 15000,
-    });
-    return { token: res.data, legacy: false };
-  } catch {
-    // Try legacy REST API (ESXi 6.5-6.7)
-    try {
-      const url = `https://${host}:${port}/rest/com/vmware/cis/session`;
-      const res = await axios.post(url, null, {
-        auth: { username, password },
-        httpsAgent: agent,
-        timeout: 15000,
-      });
-      return { token: res.data.value, legacy: true };
-    } catch (err2) {
-      throw new Error(`Login failed on both /api and /rest endpoints: ${err2.message}`);
-    }
+    const token = await requestVmwareSession(host, port, "/api/session", username, password);
+    return { token, legacy: false };
+  } catch (err) {
+    apiErr = err;
+  }
+
+  try {
+    const token = await requestVmwareSession(host, port, "/rest/com/vmware/cis/session", username, password);
+    return { token, legacy: true };
+  } catch (restErr) {
+    throw new Error(
+      `Login failed (/api e /rest). API: ${getAxiosErrorDetails(apiErr)} | REST: ${getAxiosErrorDetails(restErr)}`,
+    );
   }
 }
 
