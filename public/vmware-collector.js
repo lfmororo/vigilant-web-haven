@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// === VMware ESXi/vCenter Collector ===
-// Roda em VPS externa, coleta dados dos hosts ESXi via API REST
-// Requer: node >= 18, axios
-// npm install axios
+// === VMware ESXi Collector via SSH ===
+// Compatível com ESXi 6.5+ usando vim-cmd via SSH
+// Requer: node >= 18, ssh2
+// npm install ssh2
 // =====================================
 
-const axios = require("axios");
+const { Client } = require("ssh2");
 const https = require("https");
 
 // ---- CONFIGURAÇÃO ----
@@ -14,223 +14,305 @@ const SUPABASE_ANON_KEY = "COLE_SUA_ANON_KEY_AQUI";
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
 // ---- FIM CONFIGURAÇÃO ----
 
-const agent = new https.Agent({ rejectUnauthorized: false });
-
-const supabaseHeaders = {
-  "Content-Type": "application/json",
-  Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-  apikey: SUPABASE_ANON_KEY,
-};
-
 function log(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
 }
 
-function getAxiosErrorDetails(err) {
-  const status = err?.response?.status;
-  const responseData = err?.response?.data;
-  const dataText = typeof responseData === "string"
-    ? responseData
-    : responseData
-      ? JSON.stringify(responseData)
-      : "";
-
-  if (status) return `HTTP ${status}${dataText ? ` - ${dataText}` : ""}`;
-  return err?.message || "erro desconhecido";
-}
-
-async function requestVmwareSession(host, port, endpoint, username, password) {
-  const basicAuth = Buffer.from(`${username}:${password}`).toString("base64");
-
-  const res = await axios({
-    method: "post",
-    url: `https://${host}:${port}${endpoint}`,
-    httpsAgent: agent,
-    timeout: 15000,
-    data: undefined,
-    headers: {
-      Authorization: `Basic ${basicAuth}`,
-      Accept: "application/json",
-      "Content-Length": "0",
-    },
-    transformRequest: [(data, headers) => {
-      if (headers) {
-        delete headers["Content-Type"];
-        delete headers["content-type"];
-      }
-      return data;
-    }],
-    validateStatus: () => true,
-  });
-
-  if (res.status < 200 || res.status >= 300) {
-    const responseData = typeof res.data === "string"
-      ? res.data
-      : res.data
-        ? JSON.stringify(res.data)
-        : "";
-    throw new Error(`HTTP ${res.status}${responseData ? ` - ${responseData}` : ""}`);
-  }
-
-  const token = typeof res.data === "string"
-    ? res.data.replace(/^"|"$/g, "").trim()
-    : res.data?.value || res.headers?.["vmware-api-session-id"];
-
-  if (!token) {
-    throw new Error(`Sessão sem token em ${endpoint}`);
-  }
-
-  return token;
-}
-
-async function getVmwareSession(host, port, username, password) {
-  let apiErr;
-
-  try {
-    const token = await requestVmwareSession(host, port, "/api/session", username, password);
-    return { token, legacy: false };
-  } catch (err) {
-    apiErr = err;
-  }
-
-  try {
-    const token = await requestVmwareSession(host, port, "/rest/com/vmware/cis/session", username, password);
-    return { token, legacy: true };
-  } catch (restErr) {
-    throw new Error(
-      `Login failed (/api e /rest). API: ${getAxiosErrorDetails(apiErr)} | REST: ${getAxiosErrorDetails(restErr)}`,
-    );
-  }
-}
-
-async function getVmwareData(host, port, sessionToken, legacy) {
-  const baseUrl = legacy
-    ? `https://${host}:${port}/rest/vcenter`
-    : `https://${host}:${port}/api/vcenter`;
-  const headers = { "vmware-api-session-id": sessionToken };
-
-  // Get VMs
-  let vms = [];
-  try {
-    const res = await axios.get(`${baseUrl}/vm`, { headers, httpsAgent: agent, timeout: 15000 });
-    const vmList = legacy ? (res.data.value || []) : (res.data || []);
-    vms = vmList.map((vm) => ({
-      name: vm.name,
-      power_state: vm.power_state,
-      cpu_count: vm.cpu_count,
-      ram_mb: vm.memory_size_MiB || vm.memory_size_mib,
-    }));
-
-    // Get detailed info per VM
-    for (let i = 0; i < vms.length; i++) {
-      try {
-        const vmId = vmList[i].vm;
-        const detail = await axios.get(`${baseUrl}/vm/${vmId}`, { headers, httpsAgent: agent, timeout: 10000 });
-        const d = legacy ? (detail.data.value || detail.data) : detail.data;
-        if (d.guest) {
-          vms[i].ip_address = d.guest?.networking?.ip_addresses?.[0]?.ip_address || null;
-          vms[i].guest_os = d.guest?.os_id || d.guest?.os || null;
-          vms[i].tools_status = d.guest?.tools_version_status || null;
-        }
-        if (d.disks) {
-          let totalCapacity = 0;
-          Object.values(d.disks).forEach((disk) => {
-            totalCapacity += (disk.capacity || 0);
-          });
-          vms[i].disk_provisioned_gb = +(totalCapacity / (1024 ** 3)).toFixed(2);
-        }
-      } catch {}
-    }
-  } catch (err) {
-    log(`  ⚠ Erro ao listar VMs: ${err.message}`);
-  }
-
-  // Get datastores
-  let datastores = [];
-  try {
-    const res = await axios.get(`${baseUrl}/datastore`, { headers, httpsAgent: agent, timeout: 15000 });
-    const dsList = legacy ? (res.data.value || []) : (res.data || []);
-    for (const ds of dsList) {
-      try {
-        const detail = await axios.get(`${baseUrl}/datastore/${ds.datastore}`, { headers, httpsAgent: agent, timeout: 10000 });
-        const dd = legacy ? (detail.data.value || detail.data) : detail.data;
-        datastores.push({
-          name: dd.name,
-          capacity_gb: +((dd.capacity || 0) / (1024 ** 3)).toFixed(2),
-          free_gb: +((dd.free_space || 0) / (1024 ** 3)).toFixed(2),
-          type: dd.type,
-        });
-      } catch {}
-    }
-  } catch (err) {
-    log(`  ⚠ Erro ao listar datastores: ${err.message}`);
-  }
-
-  return { vms, datastores };
-}
-
-async function destroySession(host, port, sessionToken, legacy) {
-  try {
-    const url = legacy
-      ? `https://${host}:${port}/rest/com/vmware/cis/session`
-      : `https://${host}:${port}/api/session`;
-    await axios.delete(url, {
-      headers: { "vmware-api-session-id": sessionToken },
-      httpsAgent: agent,
-      timeout: 5000,
+// ---- Helper: POST JSON to Supabase ----
+function supabasePost(path, payload) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(path, SUPABASE_URL);
+    const data = JSON.stringify(payload);
+    const req = https.request(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        apikey: SUPABASE_ANON_KEY,
+        "Content-Length": Buffer.byteLength(data),
+      },
+      timeout: 15000,
+    }, (res) => {
+      let body = "";
+      res.on("data", (c) => body += c);
+      res.on("end", () => {
+        try { resolve(JSON.parse(body)); } catch { resolve(body); }
+      });
     });
-  } catch {}
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
+    req.write(data);
+    req.end();
+  });
 }
 
-async function collectVmwareHost(hostConfig) {
-  const { id, name, host, port, username, password } = hostConfig;
-  log(`📡 Coletando host: ${name} (${host}:${port})`);
+// ---- SSH helpers ----
+const SSH_ALGORITHMS = {
+  kex: [
+    "diffie-hellman-group14-sha256",
+    "diffie-hellman-group14-sha1",
+    "diffie-hellman-group-exchange-sha256",
+    "diffie-hellman-group-exchange-sha1",
+    "diffie-hellman-group1-sha1",
+  ],
+  cipher: ["aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-cbc", "aes256-cbc"],
+  serverHostKey: ["ssh-rsa", "ssh-ed25519", "ecdsa-sha2-nistp256"],
+  hmac: ["hmac-sha2-256", "hmac-sha1"],
+};
 
-  let sessionToken;
-  let isLegacy = false;
+function sshExec(conn, cmd) {
+  return new Promise((resolve, reject) => {
+    conn.exec(cmd, (err, stream) => {
+      if (err) return reject(err);
+      let stdout = "";
+      let stderr = "";
+      stream.on("data", (c) => stdout += c.toString());
+      stream.stderr.on("data", (c) => stderr += c.toString());
+      stream.on("close", (code) => {
+        if (code !== 0 && !stdout) {
+          reject(new Error(`cmd '${cmd}' exit ${code}: ${stderr.trim()}`));
+        } else {
+          resolve(stdout);
+        }
+      });
+    });
+  });
+}
+
+function sshConnect(host, port, username, password) {
+  return new Promise((resolve, reject) => {
+    const conn = new Client();
+    conn.on("keyboard-interactive", (_n, _i, _il, _p, finish) => finish([password]));
+    conn.on("ready", () => resolve(conn));
+    conn.on("error", (err) => reject(err));
+    conn.connect({
+      host,
+      port: port || 22,
+      username,
+      password,
+      tryKeyboard: true,
+      algorithms: SSH_ALGORITHMS,
+      readyTimeout: 20000,
+    });
+  });
+}
+
+// ---- Parsers para saída do vim-cmd / esxcli ----
+
+function parseVmList(raw) {
+  // vim-cmd vmsvc/getallvms
+  // Vmid  Name       File                Guest OS       Version   Annotation
+  const lines = raw.split("\n").slice(1).filter((l) => l.trim());
+  return lines.map((line) => {
+    const match = line.match(/^(\d+)\s+(\S+)\s+\[([^\]]+)\]\s+(\S+)\s+(\S+)\s+(\S+)/);
+    if (match) {
+      return { vmid: match[1], name: match[2], datastore: match[3], file: match[4], guestOs: match[5] };
+    }
+    // fallback: split por espaços
+    const parts = line.trim().split(/\s+/);
+    return { vmid: parts[0], name: parts[1], datastore: "", file: "", guestOs: parts[4] || "" };
+  });
+}
+
+function parsePowerState(raw) {
+  if (raw.includes("Powered on")) return "POWERED_ON";
+  if (raw.includes("Powered off")) return "POWERED_OFF";
+  if (raw.includes("Suspended")) return "SUSPENDED";
+  return "unknown";
+}
+
+function parseVmSummary(raw) {
+  // vim-cmd vmsvc/get.summary <vmid> - pega campos relevantes
+  const result = {};
+  const getVal = (key) => {
+    const regex = new RegExp(`${key}\\s*=\\s*(.+?)\\s*,`, "i");
+    const m = raw.match(regex);
+    return m ? m[1].trim().replace(/^"|"$/g, "") : null;
+  };
+
+  result.numCpu = parseInt(getVal("numCpu")) || null;
+  result.memorySizeMB = parseInt(getVal("memorySizeMB")) || null;
+  result.ipAddress = getVal("ipAddress") || getVal("guest.ipAddress");
+  result.guestFullName = getVal("guestFullName");
+  result.toolsStatus = getVal("toolsStatus") || getVal("toolsRunningStatus");
+  result.committedStorage = parseInt(getVal("committed")) || null;
+  result.uncommittedStorage = parseInt(getVal("uncommitted")) || null;
+
+  // limpar <unset> do ipAddress
+  if (result.ipAddress === "<unset>" || result.ipAddress === "unset") {
+    result.ipAddress = null;
+  }
+
+  return result;
+}
+
+function parseDatastores(raw) {
+  // esxcli storage filesystem list
+  // Mount Point  Volume Name  UUID  Mounted  Type  Size  Free
+  const lines = raw.split("\n").filter((l) => l.trim() && !l.startsWith("---") && !l.startsWith("Mount Point"));
+  return lines.map((line) => {
+    const parts = line.trim().split(/\s{2,}/);
+    if (parts.length >= 7) {
+      return {
+        name: parts[1] || parts[0],
+        capacity_gb: +(parseInt(parts[5]) / (1024 ** 3)).toFixed(2) || 0,
+        free_gb: +(parseInt(parts[6]) / (1024 ** 3)).toFixed(2) || 0,
+        type: parts[4] || "VMFS",
+      };
+    }
+    return null;
+  }).filter(Boolean);
+}
+
+function parseHostInfo(raw) {
+  // esxcli system version get
+  const info = {};
+  raw.split("\n").forEach((line) => {
+    const [key, ...val] = line.split(":");
+    if (key && val.length) {
+      const k = key.trim().toLowerCase().replace(/\s+/g, "_");
+      info[k] = val.join(":").trim();
+    }
+  });
+  return info;
+}
+
+function parseUptime(raw) {
+  // uptime output
+  const match = raw.match(/up\s+(.+?),\s+\d+ users/i) || raw.match(/up\s+(.+)/i);
+  if (!match) return null;
+  const parts = match[1];
+  let seconds = 0;
+  const days = parts.match(/(\d+)\s*day/);
+  const hours = parts.match(/(\d+):(\d+)/);
+  const mins = parts.match(/(\d+)\s*min/);
+  if (days) seconds += parseInt(days[1]) * 86400;
+  if (hours) { seconds += parseInt(hours[1]) * 3600 + parseInt(hours[2]) * 60; }
+  if (mins && !hours) seconds += parseInt(mins[1]) * 60;
+  return seconds || null;
+}
+
+function parseCpuMemInfo(raw) {
+  // esxcli hardware cpu global get -> CPU count / cores
+  const result = { cpuCores: null };
+  const cores = raw.match(/CPU Cores:\s*(\d+)/i);
+  if (cores) result.cpuCores = parseInt(cores[1]);
+  const packages = raw.match(/CPU Packages:\s*(\d+)/i);
+  if (packages) result.cpuPackages = parseInt(packages[1]);
+  return result;
+}
+
+function parseMemInfo(raw) {
+  // esxcli hardware memory get
+  const result = { ramTotalGB: null };
+  const bytes = raw.match(/Physical Memory:\s*(\d+)/i);
+  if (bytes) result.ramTotalGB = +(parseInt(bytes[1]) / (1024 ** 3)).toFixed(2);
+  return result;
+}
+
+// ---- Coleta principal ----
+async function collectVmwareHost(hostConfig) {
+  const { id, name, host, username, password } = hostConfig;
+  const sshPort = hostConfig.ssh_port || 22;
+  log(`📡 Coletando host: ${name} (${host}:${sshPort})`);
+
+  let conn;
   try {
-    const session = await getVmwareSession(host, port, username, password);
-    sessionToken = session.token;
-    isLegacy = session.legacy;
-    log(`  🔑 Login OK (${isLegacy ? "legacy /rest" : "modern /api"})`);
-    const { vms, datastores } = await getVmwareData(host, port, sessionToken, isLegacy);
+    conn = await sshConnect(host, sshPort, username, password);
+    log(`  🔑 SSH conectado`);
+
+    // Coletas paralelas
+    const [vmListRaw, datastoreRaw, versionRaw, uptimeRaw, cpuRaw, memRaw] = await Promise.all([
+      sshExec(conn, "vim-cmd vmsvc/getallvms").catch(() => ""),
+      sshExec(conn, "esxcli storage filesystem list").catch(() => ""),
+      sshExec(conn, "esxcli system version get").catch(() => ""),
+      sshExec(conn, "uptime").catch(() => ""),
+      sshExec(conn, "esxcli hardware cpu global get").catch(() => ""),
+      sshExec(conn, "esxcli hardware memory get").catch(() => ""),
+    ]);
+
+    // Parse VMs
+    const vmEntries = parseVmList(vmListRaw);
+    const vms = [];
+
+    // Coleta detalhes de cada VM (sequencial para não sobrecarregar SSH)
+    for (const vm of vmEntries) {
+      try {
+        const [powerRaw, summaryRaw] = await Promise.all([
+          sshExec(conn, `vim-cmd vmsvc/power.getstate ${vm.vmid}`).catch(() => ""),
+          sshExec(conn, `vim-cmd vmsvc/get.summary ${vm.vmid}`).catch(() => ""),
+        ]);
+
+        const powerState = parsePowerState(powerRaw);
+        const summary = parseVmSummary(summaryRaw);
+
+        let diskProvisionedGb = null;
+        if (summary.committedStorage || summary.uncommittedStorage) {
+          diskProvisionedGb = +(((summary.committedStorage || 0) + (summary.uncommittedStorage || 0)) / (1024 ** 3)).toFixed(2);
+        }
+
+        vms.push({
+          name: vm.name,
+          power_state: powerState,
+          cpu_count: summary.numCpu,
+          ram_mb: summary.memorySizeMB,
+          ip_address: summary.ipAddress,
+          guest_os: summary.guestFullName || vm.guestOs,
+          tools_status: summary.toolsStatus,
+          disk_provisioned_gb: diskProvisionedGb,
+          disk_used_gb: summary.committedStorage ? +(summary.committedStorage / (1024 ** 3)).toFixed(2) : null,
+        });
+      } catch (err) {
+        log(`    ⚠ VM ${vm.name}: ${err.message}`);
+        vms.push({ name: vm.name, power_state: "unknown" });
+      }
+    }
+
+    // Parse datastores
+    const datastores = parseDatastores(datastoreRaw);
+
+    // Parse host info
+    const hostInfo = parseHostInfo(versionRaw);
+    const uptimeSeconds = parseUptime(uptimeRaw);
+    const cpuInfo = parseCpuMemInfo(cpuRaw);
+    const memInfo = parseMemInfo(memRaw);
+
+    const esxiVersion = hostInfo.version
+      ? `${hostInfo.product || "ESXi"} ${hostInfo.version} (Build ${hostInfo.build || "?"})`
+      : null;
 
     const payload = {
       type: "vmware",
       host_id: id,
-      vms,
+      cpu_cores: cpuInfo.cpuCores,
+      ram_total_gb: memInfo.ramTotalGB,
+      esxi_version: esxiVersion,
+      uptime_seconds: uptimeSeconds,
       datastores,
+      vms,
     };
 
-    await axios.post(`${SUPABASE_URL}/functions/v1/server-monitor-ingest`, payload, {
-      headers: supabaseHeaders,
-      timeout: 15000,
-    });
-
+    await supabasePost("/functions/v1/server-monitor-ingest", payload);
     log(`  ✅ ${name}: ${vms.length} VMs, ${datastores.length} datastores`);
   } catch (err) {
     log(`  ❌ ${name}: ${err.message}`);
-    // Report error status
     try {
-      await axios.post(`${SUPABASE_URL}/functions/v1/server-monitor-ingest`, {
+      await supabasePost("/functions/v1/server-monitor-ingest", {
         type: "vmware",
         host_id: id,
         vms: [],
         datastores: [],
-      }, { headers: supabaseHeaders, timeout: 10000 });
+      });
     } catch {}
   } finally {
-    if (sessionToken) await destroySession(host, port, sessionToken, isLegacy);
+    if (conn) conn.end();
   }
 }
 
 async function fetchHosts() {
   try {
-    const res = await axios.post(`${SUPABASE_URL}/functions/v1/server-monitor-ingest`, { type: "list-vmware" }, {
-      headers: supabaseHeaders,
-      timeout: 15000,
-    });
-    return res.data || [];
+    const data = await supabasePost("/functions/v1/server-monitor-ingest", { type: "list-vmware" });
+    return Array.isArray(data) ? data : [];
   } catch (err) {
     log(`❌ Erro ao buscar hosts: ${err.message}`);
     return [];
@@ -238,7 +320,7 @@ async function fetchHosts() {
 }
 
 async function runCycle() {
-  log("=== Ciclo de coleta VMware ===");
+  log("=== Ciclo de coleta VMware (SSH) ===");
   const hosts = await fetchHosts();
 
   if (hosts.length === 0) {
@@ -257,7 +339,7 @@ async function runCycle() {
 
 // Run
 (async () => {
-  log("🚀 VMware Collector iniciado");
+  log("🚀 VMware Collector (SSH) iniciado");
   await runCycle();
   setInterval(runCycle, POLL_INTERVAL_MS);
 })();
