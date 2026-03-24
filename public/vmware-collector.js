@@ -46,7 +46,9 @@ async function requestVmwareSession(host, port, endpoint, username, password) {
     auth: { username, password },
     httpsAgent: agent,
     timeout: 15000,
+    data: "",
     headers: {
+      "Content-Type": "application/json",
       Accept: "application/json",
     },
   });
