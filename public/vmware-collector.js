@@ -40,21 +40,40 @@ function getAxiosErrorDetails(err) {
 }
 
 async function requestVmwareSession(host, port, endpoint, username, password) {
+  const basicAuth = Buffer.from(`${username}:${password}`).toString("base64");
+
   const res = await axios({
     method: "post",
     url: `https://${host}:${port}${endpoint}`,
-    auth: { username, password },
     httpsAgent: agent,
     timeout: 15000,
-    data: "",
+    data: undefined,
     headers: {
-      "Content-Type": "application/json",
+      Authorization: `Basic ${basicAuth}`,
       Accept: "application/json",
+      "Content-Length": "0",
     },
+    transformRequest: [(data, headers) => {
+      if (headers) {
+        delete headers["Content-Type"];
+        delete headers["content-type"];
+      }
+      return data;
+    }],
+    validateStatus: () => true,
   });
 
+  if (res.status < 200 || res.status >= 300) {
+    const responseData = typeof res.data === "string"
+      ? res.data
+      : res.data
+        ? JSON.stringify(res.data)
+        : "";
+    throw new Error(`HTTP ${res.status}${responseData ? ` - ${responseData}` : ""}`);
+  }
+
   const token = typeof res.data === "string"
-    ? res.data.replace(/^"|"$/g, "")
+    ? res.data.replace(/^"|"$/g, "").trim()
     : res.data?.value || res.headers?.["vmware-api-session-id"];
 
   if (!token) {
