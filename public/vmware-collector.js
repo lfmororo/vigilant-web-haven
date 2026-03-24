@@ -115,9 +115,9 @@ function parseVmList(raw) {
 }
 
 function parsePowerState(raw) {
-  if (raw.includes("Powered on")) return "POWERED_ON";
-  if (raw.includes("Powered off")) return "POWERED_OFF";
-  if (raw.includes("Suspended")) return "SUSPENDED";
+  if (raw.includes("Powered on")) return "poweredOn";
+  if (raw.includes("Powered off")) return "poweredOff";
+  if (raw.includes("Suspended")) return "suspended";
   return "unknown";
 }
 
