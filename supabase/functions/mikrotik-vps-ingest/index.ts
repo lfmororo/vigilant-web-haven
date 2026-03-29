@@ -370,94 +370,142 @@ async function sendWhatsAppAlert(
 
   const clientName = client?.full_name || "N/A";
 
+  // Helper: traduz tipo de interface para nome amigável
+  const friendlyType = (type: string | null): string => {
+    if (!type) return "";
+    const map: Record<string, string> = {
+      "pppoe-client": "Link de Internet (PPPoE)",
+      "pppoe-server": "Servidor PPPoE",
+      "ether": "Porta Ethernet",
+      "vlan": "Rede Virtual (VLAN)",
+      "bridge": "Bridge (Rede Interna)",
+      "wlan": "Wi-Fi",
+      "wireless": "Wi-Fi",
+      "lte": "Internet 4G/5G (LTE)",
+      "vpn": "Túnel VPN",
+      "l2tp-client": "VPN (L2TP)",
+      "l2tp-server": "Servidor VPN (L2TP)",
+      "pptp-client": "VPN (PPTP)",
+      "sstp-client": "VPN (SSTP)",
+      "ovpn-client": "VPN (OpenVPN)",
+      "gre-tunnel": "Túnel GRE",
+      "eoip-tunnel": "Túnel EoIP",
+      "bonding": "Link Agregado (Bonding)",
+      "cap": "Ponto de Acesso Wi-Fi",
+    };
+    return map[type.toLowerCase()] || type;
+  };
+
+  // Helper: traduz status para português
+  const friendlyStatus = (status: string): string => {
+    return status === "up" ? "Conectado" : status === "down" ? "Desconectado" : status;
+  };
+
   // Montar mensagem
   const lines: string[] = [];
-  lines.push(`🔔 *ALERTA DE DISPOSITIVO*`);
-  lines.push(`📡 Dispositivo: *${device.name}*`);
-  lines.push(`🏢 Cliente: ${clientName}`);
-  lines.push(`🌐 IP: ${device.host}`);
+  lines.push(`🔔 *ALERTA - ${device.name}*`);
+  lines.push(`🏢 ${clientName}`);
+  lines.push(`━━━━━━━━━━━━━━━━━━`);
   lines.push("");
 
   if (rebootInfo?.reboot_detected) {
-    lines.push("🔄 *REINICIALIZAÇÃO DETECTADA!*");
-    lines.push(`  Uptime anterior: ${rebootInfo.previous_uptime}`);
-    lines.push(`  Uptime atual: ${rebootInfo.uptime}`);
+    lines.push("🔄 *O equipamento foi reiniciado*");
+    lines.push(`   Estava ligado há: ${rebootInfo.previous_uptime}`);
+    lines.push(`   Agora ligado há: ${rebootInfo.uptime}`);
     lines.push("");
   }
 
   if (tempAlerts && tempAlerts.length > 0) {
-    lines.push("🌡️ *TEMPERATURA ALTA:*");
+    lines.push("🌡️ *Temperatura acima do normal:*");
     for (const alert of tempAlerts) {
-      lines.push(`  ${alert}`);
+      lines.push(`   ${alert}`);
     }
     lines.push("");
   }
 
   if (statusChanges.length > 0) {
-    lines.push("📊 *Mudanças de Status:*");
-    for (const change of statusChanges) {
-      const emoji = change.current_status === "up" ? "🟢" : "🔴";
-      let detail = `  ${emoji} *${change.interface_name}*: ${change.previous_status} → ${change.current_status}`;
+    // Separar quedas (down) e recuperações (up)
+    const downs = statusChanges.filter((c: any) => c.current_status === "down");
+    const ups = statusChanges.filter((c: any) => c.current_status === "up");
 
-      // Buscar detalhes da interface no banco
-      const { data: ifaceDetail } = await supabase
-        .from("mikrotik_interfaces")
-        .select("interface_type, ip_address, pppoe_user, pppoe_service, speed, mac_address")
-        .eq("device_id", device.id)
-        .eq("interface_name", change.interface_name)
-        .maybeSingle();
+    if (downs.length > 0) {
+      lines.push(`🔴 *${downs.length === 1 ? "Conexão caiu" : downs.length + " conexões caíram"}:*`);
+      for (const change of downs) {
+        const { data: ifaceDetail } = await supabase
+          .from("mikrotik_interfaces")
+          .select("interface_type, ip_address, pppoe_user, pppoe_service, speed")
+          .eq("device_id", device.id)
+          .eq("interface_name", change.interface_name)
+          .maybeSingle();
 
-      if (ifaceDetail) {
-        const extras: string[] = [];
-        if (ifaceDetail.interface_type) extras.push(`Tipo: ${ifaceDetail.interface_type}`);
-        if (ifaceDetail.ip_address) extras.push(`IP: ${ifaceDetail.ip_address}`);
-        if (ifaceDetail.pppoe_user) extras.push(`PPPoE: ${ifaceDetail.pppoe_user}`);
-        if (ifaceDetail.pppoe_service) extras.push(`Serviço: ${ifaceDetail.pppoe_service}`);
-        if (ifaceDetail.speed) extras.push(`Velocidade: ${ifaceDetail.speed}`);
-        if (extras.length > 0) {
-          detail += `\n    📎 ${extras.join(" | ")}`;
+        const typeName = friendlyType(ifaceDetail?.interface_type);
+        const label = typeName || change.interface_name;
+        lines.push(`   ❌ *${label}*`);
+        if (typeName && typeName !== change.interface_name) {
+          lines.push(`      Interface: ${change.interface_name}`);
         }
+        if (ifaceDetail?.pppoe_user) lines.push(`      Usuário: ${ifaceDetail.pppoe_user}`);
+        if (ifaceDetail?.pppoe_service) lines.push(`      Provedor: ${ifaceDetail.pppoe_service}`);
+        if (ifaceDetail?.ip_address) lines.push(`      IP: ${ifaceDetail.ip_address}`);
+        if (ifaceDetail?.speed) lines.push(`      Velocidade: ${ifaceDetail.speed}`);
       }
-
-      lines.push(detail);
+      lines.push("");
     }
-    lines.push("");
+
+    if (ups.length > 0) {
+      lines.push(`🟢 *${ups.length === 1 ? "Conexão restabelecida" : ups.length + " conexões restabelecidas"}:*`);
+      for (const change of ups) {
+        const { data: ifaceDetail } = await supabase
+          .from("mikrotik_interfaces")
+          .select("interface_type, ip_address, pppoe_user, pppoe_service, speed")
+          .eq("device_id", device.id)
+          .eq("interface_name", change.interface_name)
+          .maybeSingle();
+
+        const typeName = friendlyType(ifaceDetail?.interface_type);
+        const label = typeName || change.interface_name;
+        lines.push(`   ✅ *${label}*`);
+        if (ifaceDetail?.pppoe_user) lines.push(`      Usuário: ${ifaceDetail.pppoe_user}`);
+        if (ifaceDetail?.ip_address) lines.push(`      Novo IP: ${ifaceDetail.ip_address}`);
+      }
+      lines.push("");
+    }
   }
 
   if (logAlerts.length > 0) {
-    lines.push("📋 *Alertas nos Logs:*");
-    for (const alert of logAlerts.slice(0, 10)) {
-      lines.push(`  ⚠️ [${alert.time}] ${alert.message}`);
+    lines.push("📋 *Eventos importantes:*");
+    for (const alert of logAlerts.slice(0, 5)) {
+      lines.push(`   ⚠️ ${alert.message}`);
     }
-    if (logAlerts.length > 10) {
-      lines.push(`  ... e mais ${logAlerts.length - 10} alerta(s)`);
+    if (logAlerts.length > 5) {
+      lines.push(`   _... e mais ${logAlerts.length - 5} evento(s)_`);
     }
     lines.push("");
   }
 
   if (dhcpAlerts && dhcpAlerts.length > 0) {
-    lines.push("🚨 *DHCP - Pool com Utilização Alta (>90%):*");
+    lines.push("🚨 *Endereços de rede quase esgotados:*");
     for (const alert of dhcpAlerts) {
-      lines.push(`  ${alert}`);
+      lines.push(`   ${alert}`);
     }
     lines.push("");
   }
 
-  if (dhcpSummary) {
-    lines.push("🌐 *DHCP Leases:*");
-    lines.push(`  Total: ${dhcpSummary.total_leases} | Ativos: ${dhcpSummary.active_leases}`);
-    lines.push(`  Dinâmicos: ${dhcpSummary.dynamic_leases} | Estáticos: ${dhcpSummary.static_leases}`);
+  if (dhcpSummary && statusChanges.length === 0) {
+    lines.push("🌐 *Dispositivos na rede:*");
+    lines.push(`   ${dhcpSummary.active_leases} conectados de ${dhcpSummary.total_leases} total`);
     if (dhcpSummary.by_server && Object.keys(dhcpSummary.by_server).length > 0) {
       for (const [server, info] of Object.entries(dhcpSummary.by_server) as any) {
         const capacity = info.capacity || info.total || 0;
         const pct = capacity > 0 ? Math.round((info.active / capacity) * 100) : 0;
         const icon = pct >= 90 ? "🔴" : pct >= 70 ? "🟡" : "🟢";
-        lines.push(`  ${icon} ${server}: ${info.active}/${capacity} IPs (${pct}%)`);
+        lines.push(`   ${icon} ${server}: ${info.active}/${capacity} (${pct}%)`);
       }
     }
     lines.push("");
   }
 
+  lines.push(`━━━━━━━━━━━━━━━━━━`);
   const now = new Date();
   const brTime = new Intl.DateTimeFormat("pt-BR", {
     timeZone: "America/Sao_Paulo",
