@@ -397,7 +397,29 @@ async function sendWhatsAppAlert(
     lines.push("📊 *Mudanças de Status:*");
     for (const change of statusChanges) {
       const emoji = change.current_status === "up" ? "🟢" : "🔴";
-      lines.push(`  ${emoji} ${change.interface_name}: ${change.previous_status} → ${change.current_status}`);
+      let detail = `  ${emoji} *${change.interface_name}*: ${change.previous_status} → ${change.current_status}`;
+
+      // Buscar detalhes da interface no banco
+      const { data: ifaceDetail } = await supabase
+        .from("mikrotik_interfaces")
+        .select("interface_type, ip_address, pppoe_user, pppoe_service, speed, mac_address")
+        .eq("device_id", device.id)
+        .eq("interface_name", change.interface_name)
+        .maybeSingle();
+
+      if (ifaceDetail) {
+        const extras: string[] = [];
+        if (ifaceDetail.interface_type) extras.push(`Tipo: ${ifaceDetail.interface_type}`);
+        if (ifaceDetail.ip_address) extras.push(`IP: ${ifaceDetail.ip_address}`);
+        if (ifaceDetail.pppoe_user) extras.push(`PPPoE: ${ifaceDetail.pppoe_user}`);
+        if (ifaceDetail.pppoe_service) extras.push(`Serviço: ${ifaceDetail.pppoe_service}`);
+        if (ifaceDetail.speed) extras.push(`Velocidade: ${ifaceDetail.speed}`);
+        if (extras.length > 0) {
+          detail += `\n    📎 ${extras.join(" | ")}`;
+        }
+      }
+
+      lines.push(detail);
     }
     lines.push("");
   }
