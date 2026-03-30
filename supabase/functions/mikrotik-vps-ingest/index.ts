@@ -318,6 +318,10 @@ Deno.serve(async (req) => {
   }
 });
 
+function cleanPhone(phone: string): string {
+  return phone.replace(/[\s\-\(\)\+]/g, "");
+}
+
 // ==================== CONNECTION FAILURE ALERT ====================
 
 async function sendConnectionFailureAlert(
