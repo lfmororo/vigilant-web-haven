@@ -40,23 +40,32 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Se houve erro de conexão, registrar
+    // Se houve erro de conexão, registrar e notificar
     if (!collected_data?.success) {
+      const connectionError = collected_data?.error || "Erro de conexão via VPS";
+      const previousError = device.last_error;
+
       await supabase
         .from("mikrotik_devices")
         .update({
-          last_error: collected_data?.error || "Erro de conexão via VPS",
+          last_error: connectionError,
           last_polled_at: new Date().toISOString(),
         })
         .eq("id", device_id);
 
-      // Notificar via WhatsApp sobre falha de conexão
+      // Enviar notificação de falha de conexão (apenas se é uma nova falha, não repetida)
+      const isNewConnectionFailure = !previousError;
+      if (isNewConnectionFailure) {
+        await sendConnectionFailureAlert(supabase, device, connectionError);
+      }
+
+      // Notificar também status_changes se existirem
       if (status_changes?.length > 0) {
         await sendWhatsAppAlert(supabase, device, status_changes, log_alerts);
       }
 
       return new Response(
-        JSON.stringify({ success: false, error: collected_data?.error }),
+        JSON.stringify({ success: false, error: connectionError }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -309,11 +318,194 @@ Deno.serve(async (req) => {
   }
 });
 
-// ==================== WHATSAPP NOTIFICATION ====================
-
 function cleanPhone(phone: string): string {
   return phone.replace(/[\s\-\(\)\+]/g, "");
 }
+
+// ==================== CONNECTION FAILURE ALERT ====================
+
+async function sendConnectionFailureAlert(
+  supabase: any,
+  device: any,
+  errorMessage: string
+): Promise<boolean> {
+  const { data: settings } = await supabase
+    .from("system_settings")
+    .select("key, value");
+
+  if (!settings) return false;
+
+  const settingsMap: Record<string, string> = {};
+  for (const s of settings) settingsMap[s.key] = s.value || "";
+
+  if (settingsMap.whatsapp_enabled !== "true") return false;
+  if (settingsMap.notif_mikrotik_alert === "false") return false;
+
+  const apiUrl = settingsMap.whatsapp_api_url;
+  const apiToken = settingsMap.whatsapp_api_token;
+  if (!apiUrl || !apiToken) return false;
+
+  const { data: adminRoles } = await supabase
+    .from("user_roles")
+    .select("user_id")
+    .eq("role", "admin");
+  if (!adminRoles?.length) return false;
+
+  const adminIds = adminRoles.map((r: any) => r.user_id);
+  const { data: adminProfiles } = await supabase
+    .from("profiles")
+    .select("phone")
+    .in("id", adminIds)
+    .not("phone", "is", null);
+  if (!adminProfiles?.length) return false;
+
+  const { data: client } = await supabase
+    .from("clients")
+    .select("full_name, phone, whatsapp_group_id")
+    .eq("id", device.client_id)
+    .single();
+
+  const clientName = client?.full_name || "N/A";
+
+  // Buscar interfaces PPPoE que estavam UP antes da falha
+  const { data: pppoeInterfaces } = await supabase
+    .from("mikrotik_interfaces")
+    .select("interface_name, interface_type, pppoe_user, pppoe_service, ip_address, status")
+    .eq("device_id", device.id)
+    .eq("interface_type", "pppoe-client");
+
+  const lines: string[] = [];
+  lines.push(`🚨 *DISPOSITIVO INACESSÍVEL*`);
+  lines.push(`📡 *${device.name}*`);
+  lines.push(`🏢 ${clientName}`);
+  lines.push(`🌐 ${device.host}`);
+  lines.push(`━━━━━━━━━━━━━━━━━━`);
+  lines.push("");
+  lines.push(`⚠️ *Não foi possível conectar ao dispositivo.*`);
+  lines.push(`O coletor tentou acessar o equipamento mas não obteve resposta.`);
+  lines.push("");
+  lines.push(`📝 *Motivo:* ${errorMessage}`);
+  lines.push("");
+
+  // Listar conexões PPPoE que podem estar afetadas
+  const activePppoe = (pppoeInterfaces || []).filter((i: any) => i.status === "up");
+  const allPppoe = pppoeInterfaces || [];
+
+  if (allPppoe.length > 0) {
+    lines.push(`📶 *Conexões de internet no dispositivo:*`);
+    for (const pppoe of allPppoe) {
+      const statusIcon = pppoe.status === "up" ? "🟢" : "🔴";
+      const statusText = pppoe.status === "up" ? "estava conectada" : "já estava desconectada";
+      lines.push(`   ${statusIcon} *${pppoe.interface_name}* - ${statusText}`);
+      if (pppoe.pppoe_user) lines.push(`      Usuário: ${pppoe.pppoe_user}`);
+      if (pppoe.pppoe_service) lines.push(`      Provedor: ${pppoe.pppoe_service}`);
+      if (pppoe.ip_address) lines.push(`      Último IP: ${pppoe.ip_address}`);
+    }
+    lines.push("");
+    if (activePppoe.length > 0) {
+      lines.push(`⚠️ *${activePppoe.length} link(s) de internet podem estar fora do ar.*`);
+      lines.push("");
+    }
+  }
+
+  lines.push(`💡 *Possíveis causas:*`);
+  lines.push(`   • Queda de energia no local`);
+  lines.push(`   • Equipamento travou ou reiniciou`);
+  lines.push(`   • Perda de conectividade de internet`);
+  lines.push(`   • Firewall bloqueando acesso`);
+  lines.push("");
+
+  lines.push(`━━━━━━━━━━━━━━━━━━`);
+  const brTime = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    dateStyle: "short",
+    timeStyle: "medium",
+  }).format(new Date());
+  lines.push(`🕐 ${brTime}`);
+  lines.push("");
+  lines.push("_🤖 Alerta automático do monitoramento de dispositivos_");
+  const adminContactPhone = settingsMap.admin_contact_phone;
+  if (adminContactPhone) lines.push(`_📞 Suporte: ${adminContactPhone}_`);
+
+  const text = lines.join("\n");
+
+  // Send to admins, client, and technicians
+  const phoneSet = new Set<string>();
+  const allPhones: string[] = [];
+
+  for (const admin of adminProfiles) {
+    const phone = cleanPhone(admin.phone);
+    if (phone && phone.length >= 10 && !phoneSet.has(phone)) {
+      phoneSet.add(phone);
+      allPhones.push(phone);
+    }
+  }
+  if (client?.phone) {
+    const phone = cleanPhone(client.phone);
+    if (phone && phone.length >= 10 && !phoneSet.has(phone)) {
+      phoneSet.add(phone);
+      allPhones.push(phone);
+    }
+  }
+
+  const { data: techRoles } = await supabase.from("user_roles").select("user_id").eq("role", "technician");
+  if (techRoles?.length) {
+    const { data: techProfiles } = await supabase
+      .from("profiles")
+      .select("phone")
+      .in("id", techRoles.map((r: any) => r.user_id))
+      .eq("parent_client_id", device.client_id)
+      .not("phone", "is", null);
+    for (const tech of (techProfiles || [])) {
+      const phone = cleanPhone(tech.phone);
+      if (phone && phone.length >= 10 && !phoneSet.has(phone)) {
+        phoneSet.add(phone);
+        allPhones.push(phone);
+      }
+    }
+  }
+
+  let sent = false;
+  for (const phone of allPhones) {
+    try {
+      const res = await fetch(`${apiUrl}/send/text`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token: apiToken },
+        body: JSON.stringify({ number: phone, text, linkPreview: false }),
+      });
+      await supabase.from("whatsapp_notification_logs").insert({
+        notification_type: "mikrotik_connection_failure",
+        recipient_phone: phone,
+        message_preview: text.substring(0, 200),
+        status: res.ok ? "sent" : "failed",
+        error_message: res.ok ? null : await res.text(),
+      });
+      if (res.ok) sent = true;
+    } catch (err: any) {
+      await supabase.from("whatsapp_notification_logs").insert({
+        notification_type: "mikrotik_connection_failure",
+        recipient_phone: phone,
+        message_preview: text.substring(0, 200),
+        status: "failed",
+        error_message: err.message,
+      });
+    }
+  }
+
+  if (client?.whatsapp_group_id) {
+    try {
+      await fetch(`${apiUrl}/send/text`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token: apiToken },
+        body: JSON.stringify({ number: client.whatsapp_group_id, text, linkPreview: false }),
+      });
+    } catch (_) {}
+  }
+
+  return sent;
+}
+
+// ==================== WHATSAPP NOTIFICATION ====================
 
 async function sendWhatsAppAlert(
   supabase: any,
