@@ -40,23 +40,32 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Se houve erro de conexão, registrar
+    // Se houve erro de conexão, registrar e notificar
     if (!collected_data?.success) {
+      const connectionError = collected_data?.error || "Erro de conexão via VPS";
+      const previousError = device.last_error;
+
       await supabase
         .from("mikrotik_devices")
         .update({
-          last_error: collected_data?.error || "Erro de conexão via VPS",
+          last_error: connectionError,
           last_polled_at: new Date().toISOString(),
         })
         .eq("id", device_id);
 
-      // Notificar via WhatsApp sobre falha de conexão
+      // Enviar notificação de falha de conexão (apenas se é uma nova falha, não repetida)
+      const isNewConnectionFailure = !previousError;
+      if (isNewConnectionFailure) {
+        await sendConnectionFailureAlert(supabase, device, connectionError);
+      }
+
+      // Notificar também status_changes se existirem
       if (status_changes?.length > 0) {
         await sendWhatsAppAlert(supabase, device, status_changes, log_alerts);
       }
 
       return new Response(
-        JSON.stringify({ success: false, error: collected_data?.error }),
+        JSON.stringify({ success: false, error: connectionError }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
