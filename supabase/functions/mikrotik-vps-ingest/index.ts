@@ -258,7 +258,13 @@ Deno.serve(async (req) => {
       (device.last_log_alerts || []).map((a: any) => a.message || "")
     );
     const newLogAlerts = (log_alerts || []).filter(
-      (a: any) => !previousLogMessages.has(a.message || "")
+      (a: any) => {
+        if (previousLogMessages.has(a.message || "")) return false;
+        // Excluir conflitos ARP do alerta em tempo real (serão enviados no resumo diário às 19h)
+        const msg = (a.message || "").toLowerCase();
+        if (msg.includes("arp") && (msg.includes("conflict") || msg.includes("duplicate"))) return false;
+        return true;
+      }
     );
 
     // Filtrar DHCP alerts: só notificar se o estado de alerta mudou (deduplicação)
