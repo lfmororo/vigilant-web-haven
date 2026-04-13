@@ -17,8 +17,10 @@ Deno.serve(async (req) => {
   );
 
   try {
-    // Threshold: dispositivos sem poll há mais de 5 minutos
-    const STALE_MINUTES = 5;
+    // Threshold: dispositivos sem poll há mais de 10 minutos
+    const STALE_MINUTES = 10;
+    // Cooldown: não reenviar alerta do mesmo dispositivo por 2 horas
+    const COOLDOWN_MINUTES = 120;
     const cutoff = new Date(Date.now() - STALE_MINUTES * 60 * 1000).toISOString();
 
     // Buscar dispositivos ativos que não enviam dados há tempo
@@ -30,14 +32,8 @@ Deno.serve(async (req) => {
       .lt("last_polled_at", cutoff);
 
     if (error) throw error;
-    if (!staleDevices || staleDevices.length === 0) {
-      return new Response(
-        JSON.stringify({ success: true, stale_devices: 0, message: "Nenhum coletor inativo" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
 
-    // Também verificar dispositivos que NUNCA enviaram dados (last_polled_at = null) e foram criados há mais de 10 min
+    // Também verificar dispositivos que NUNCA enviaram dados e foram criados há mais de 10 min
     const neverPolledCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const { data: neverPolled } = await supabase
       .from("mikrotik_devices")
@@ -46,10 +42,47 @@ Deno.serve(async (req) => {
       .is("last_polled_at", null)
       .lt("created_at", neverPolledCutoff);
 
-    const allStale = [...staleDevices, ...(neverPolled || [])];
+    const allStale = [...(staleDevices || []), ...(neverPolled || [])];
     if (allStale.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, stale_devices: 0 }),
+        JSON.stringify({ success: true, stale_devices: 0, message: "Nenhum coletor inativo" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Deduplicação: verificar se já alertou sobre estes dispositivos recentemente
+    const cooldownCutoff = new Date(Date.now() - COOLDOWN_MINUTES * 60 * 1000).toISOString();
+    const { data: recentAlerts } = await supabase
+      .from("whatsapp_notification_logs")
+      .select("message_preview, created_at")
+      .eq("notification_type", "mikrotik_stale_collector")
+      .eq("status", "sent")
+      .gte("created_at", cooldownCutoff)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    // Extrair nomes de dispositivos já alertados recentemente
+    const recentlyAlertedDevices = new Set<string>();
+    for (const alert of (recentAlerts || [])) {
+      const preview = alert.message_preview || "";
+      // Extrair nomes dos dispositivos do preview (formato: *NOME* (HOST))
+      const matches = preview.matchAll(/\*([^*]+)\*\s*\(/g);
+      for (const m of matches) {
+        recentlyAlertedDevices.add(m[1]);
+      }
+    }
+
+    // Filtrar dispositivos que já foram alertados no cooldown
+    const newStaleDevices = allStale.filter((dev: any) => !recentlyAlertedDevices.has(dev.name));
+
+    if (newStaleDevices.length === 0) {
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          stale_devices: allStale.length, 
+          skipped_cooldown: allStale.length,
+          message: "Todos já alertados recentemente" 
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -66,7 +99,7 @@ Deno.serve(async (req) => {
 
     if (settingsMap.whatsapp_enabled !== "true" || settingsMap.notif_mikrotik_alert === "false") {
       return new Response(
-        JSON.stringify({ success: true, stale_devices: allStale.length, whatsapp_disabled: true }),
+        JSON.stringify({ success: true, stale_devices: newStaleDevices.length, whatsapp_disabled: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -107,7 +140,7 @@ Deno.serve(async (req) => {
     }
 
     // Buscar nomes dos clientes
-    const clientIds = [...new Set(allStale.map((d: any) => d.client_id))];
+    const clientIds = [...new Set(newStaleDevices.map((d: any) => d.client_id))];
     const { data: clients } = await supabase
       .from("clients")
       .select("id, full_name")
@@ -120,12 +153,12 @@ Deno.serve(async (req) => {
 
     // Montar mensagem
     const lines: string[] = [];
-    lines.push("🚨 *ALERTA: COLETOR MIKROTIK INATIVO*");
+    lines.push("🚨 *ALERTA: DISPOSITIVO SEM COMUNICAÇÃO*");
     lines.push("");
     lines.push(`Os seguintes dispositivos não enviam dados há mais de ${STALE_MINUTES} minutos:`);
     lines.push("");
 
-    for (const dev of allStale) {
+    for (const dev of newStaleDevices) {
       const clientName = clientMap[dev.client_id] || "N/A";
       const lastPoll = dev.last_polled_at
         ? new Intl.DateTimeFormat("pt-BR", {
@@ -139,13 +172,20 @@ Deno.serve(async (req) => {
         ? Math.round((Date.now() - new Date(dev.last_polled_at).getTime()) / 60000)
         : null;
 
+      const timeAgoText = minutesAgo
+        ? minutesAgo >= 60
+          ? `${Math.floor(minutesAgo / 60)}h${minutesAgo % 60}min atrás`
+          : `${minutesAgo} min atrás`
+        : "";
+
       lines.push(`🔴 *${dev.name}* (${dev.host})`);
       lines.push(`   🏢 Cliente: ${clientName}`);
-      lines.push(`   🕐 Último envio: ${lastPoll}${minutesAgo ? ` (${minutesAgo} min atrás)` : ""}`);
+      lines.push(`   🕐 Último envio: ${lastPoll}${timeAgoText ? ` (${timeAgoText})` : ""}`);
       lines.push("");
     }
 
     lines.push("⚙️ Verifique se o script coletor está rodando na VPS.");
+    lines.push("_ℹ️ Próximo alerta sobre estes dispositivos somente em 2 horas._");
     lines.push("");
 
     const now = new Date();
@@ -155,7 +195,7 @@ Deno.serve(async (req) => {
       timeStyle: "medium",
     }).format(now);
     lines.push(`🕐 ${brTime}`);
-    lines.push("_🤖 Alerta automático do monitoramento de dispositivos_");
+    lines.push("_🤖 Alerta automático do monitoramento_");
 
     const text = lines.join("\n");
 
@@ -198,7 +238,8 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        stale_devices: allStale.length,
+        stale_devices: newStaleDevices.length,
+        skipped_cooldown: allStale.length - newStaleDevices.length,
         whatsapp_sent: sent,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
