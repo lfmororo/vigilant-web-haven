@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -32,24 +32,29 @@ const ClientTicketDetail = () => {
       .then(({ data }) => { setTicket(data); setLoading(false); });
   }, [id]);
 
-  // Fetch adjacent tickets for navigation
+  const [searchParams] = useSearchParams();
+  const filterStatus = searchParams.get("status") || "all";
+  const filterQS = `?status=${filterStatus}`;
+
+  // Fetch adjacent tickets for navigation (respeita filtro de status)
   useEffect(() => {
     if (!id || !user) return;
     supabase.from("profiles").select("parent_client_id").eq("id", user.id).maybeSingle()
       .then(({ data: profile }) => {
         if (!profile?.parent_client_id) return;
-        supabase.from("tickets").select("id").eq("client_id", profile.parent_client_id)
-          .order("created_at", { ascending: false })
-          .then(({ data }) => {
+        let query = supabase.from("tickets").select("id, status").eq("client_id", profile.parent_client_id)
+          .order("created_at", { ascending: false });
+        if (filterStatus !== "all") query = query.eq("status", filterStatus as any);
+        query.then(({ data }) => {
             if (!data) return;
             const idx = data.findIndex((t: any) => t.id === id);
             setAdjacentTickets({
               prev: idx > 0 ? data[idx - 1].id : null,
-              next: idx < data.length - 1 ? data[idx + 1].id : null,
+              next: idx >= 0 && idx < data.length - 1 ? data[idx + 1].id : null,
             });
           });
       });
-  }, [id, user]);
+  }, [id, user, filterStatus]);
 
   if (loading) return <HelpdeskLayout><div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div></HelpdeskLayout>;
   if (!ticket) return <HelpdeskLayout><p className="text-center text-muted-foreground py-12">Chamado não encontrado</p></HelpdeskLayout>;
@@ -62,9 +67,9 @@ const ClientTicketDetail = () => {
     <HelpdeskLayout>
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link to="/helpdesk/tickets"><Button variant="ghost" size="icon"><ArrowLeft className="w-5 h-5" /></Button></Link>
-          <Button variant="outline" size="icon" disabled={!adjacentTickets.prev} onClick={() => adjacentTickets.prev && navigate(`/helpdesk/tickets/${adjacentTickets.prev}`)} title="Chamado anterior"><ChevronLeft className="w-5 h-5" /></Button>
-          <Button variant="outline" size="icon" disabled={!adjacentTickets.next} onClick={() => adjacentTickets.next && navigate(`/helpdesk/tickets/${adjacentTickets.next}`)} title="Próximo chamado"><ChevronRight className="w-5 h-5" /></Button>
+          <Link to={`/helpdesk/tickets${filterQS}`}><Button variant="ghost" size="icon"><ArrowLeft className="w-5 h-5" /></Button></Link>
+          <Button variant="outline" size="icon" disabled={!adjacentTickets.prev} onClick={() => adjacentTickets.prev && navigate(`/helpdesk/tickets/${adjacentTickets.prev}${filterQS}`)} title="Chamado anterior"><ChevronLeft className="w-5 h-5" /></Button>
+          <Button variant="outline" size="icon" disabled={!adjacentTickets.next} onClick={() => adjacentTickets.next && navigate(`/helpdesk/tickets/${adjacentTickets.next}${filterQS}`)} title="Próximo chamado"><ChevronRight className="w-5 h-5" /></Button>
           <div className="flex-1">
             <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground font-mono">#{ticket.ticket_number}</span>

@@ -135,8 +135,8 @@ const AdminTicketsManagement = () => {
                      <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">Nenhum chamado encontrado</TableCell></TableRow>
                    ) : filtered.map((t) => (
                      <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50">
-                       <TableCell><Link to={`/admin/tickets/${t.id}`} className="font-mono text-xs">{t.ticket_number}</Link></TableCell>
-                       <TableCell><Link to={`/admin/tickets/${t.id}`} className="font-medium hover:underline">{t.title}</Link></TableCell>
+                     <TableCell><Link to={`/admin/tickets/${t.id}?status=${statusFilter}&priority=${priorityFilter}`} className="font-mono text-xs">{t.ticket_number}</Link></TableCell>
+                       <TableCell><Link to={`/admin/tickets/${t.id}?status=${statusFilter}&priority=${priorityFilter}`} className="font-medium hover:underline">{t.title}</Link></TableCell>
                        <TableCell className="text-muted-foreground">{t.client?.full_name || "-"}</TableCell>
                        <TableCell className="text-muted-foreground">{t.sector?.name || "-"}</TableCell>
                        <TableCell className="text-muted-foreground">{creatorNames[t.created_by] || "-"}</TableCell>
