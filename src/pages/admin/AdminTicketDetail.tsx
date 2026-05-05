@@ -370,9 +370,9 @@ const AdminTicketDetail = () => {
     <AdminLayout>
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link to="/admin/tickets"><Button variant="ghost" size="icon"><ArrowLeft className="w-5 h-5" /></Button></Link>
-          <Button variant="outline" size="icon" disabled={!adjacentTickets.prev} onClick={() => adjacentTickets.prev && navigate(`/admin/tickets/${adjacentTickets.prev}`)} title="Chamado anterior"><ChevronLeft className="w-5 h-5" /></Button>
-          <Button variant="outline" size="icon" disabled={!adjacentTickets.next} onClick={() => adjacentTickets.next && navigate(`/admin/tickets/${adjacentTickets.next}`)} title="Próximo chamado"><ChevronRight className="w-5 h-5" /></Button>
+          <Link to={`/admin/tickets${filterQS}`}><Button variant="ghost" size="icon"><ArrowLeft className="w-5 h-5" /></Button></Link>
+          <Button variant="outline" size="icon" disabled={!adjacentTickets.prev} onClick={() => adjacentTickets.prev && navigate(`/admin/tickets/${adjacentTickets.prev}${filterQS}`)} title="Chamado anterior"><ChevronLeft className="w-5 h-5" /></Button>
+          <Button variant="outline" size="icon" disabled={!adjacentTickets.next} onClick={() => adjacentTickets.next && navigate(`/admin/tickets/${adjacentTickets.next}${filterQS}`)} title="Próximo chamado"><ChevronRight className="w-5 h-5" /></Button>
           <div className="flex-1">
             <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground font-mono">#{ticket.ticket_number}</span>
