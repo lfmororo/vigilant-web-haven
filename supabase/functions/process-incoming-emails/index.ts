@@ -165,6 +165,9 @@ function cleanMimeArtifacts(text: string): string {
   cleaned = cleaned.replace(/^[A-Za-z0-9+/=]{40,}\s*$/gm, "");
   // Remove "name=" lines for attachments
   cleaned = cleaned.replace(/^name="[^"]*"\s*$/gim, "");
+  // Remove inline image CID references like [cid:image001.png@01D...]
+  cleaned = cleaned.replace(/\[cid:[^\]]+\]/gi, "");
+  cleaned = cleaned.replace(/\bcid:[^\s>"']+/gi, "");
   // Remove "This is a multipart message in MIME format." prefix
   cleaned = cleaned.replace(/This is a multipart message in MIME format\.\s*/gi, "");
   // Remove HTML tags
