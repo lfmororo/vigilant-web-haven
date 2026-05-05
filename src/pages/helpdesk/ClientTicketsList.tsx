@@ -113,7 +113,7 @@ const ClientTicketsList = () => {
                   {filtered.length === 0 ? (
                      <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Nenhum chamado encontrado</TableCell></TableRow>
                    ) : filtered.map((t) => (
-                     <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50" onClick={() => window.location.href = `/helpdesk/tickets/${t.id}`}>
+                     <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50" onClick={() => window.location.href = `/helpdesk/tickets/${t.id}?status=${statusFilter}`}>
                        <TableCell className="font-mono text-xs">{t.ticket_number}</TableCell>
                        <TableCell className="font-medium">{t.title}</TableCell>
                        <TableCell className="text-muted-foreground">{t.sector?.name || "-"}</TableCell>
