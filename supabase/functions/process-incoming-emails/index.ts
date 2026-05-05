@@ -165,6 +165,9 @@ function cleanMimeArtifacts(text: string): string {
   cleaned = cleaned.replace(/^[A-Za-z0-9+/=]{40,}\s*$/gm, "");
   // Remove "name=" lines for attachments
   cleaned = cleaned.replace(/^name="[^"]*"\s*$/gim, "");
+  // Remove inline image CID references like [cid:image001.png@01D...]
+  cleaned = cleaned.replace(/\[cid:[^\]]+\]/gi, "");
+  cleaned = cleaned.replace(/\bcid:[^\s>"']+/gi, "");
   // Remove "This is a multipart message in MIME format." prefix
   cleaned = cleaned.replace(/This is a multipart message in MIME format\.\s*/gi, "");
   // Remove HTML tags
@@ -278,15 +281,25 @@ function parseMimeBodyWithAttachments(rawBody: string): ParsedEmail {
     const charset = charsetMatch ? charsetMatch[1] : "utf-8";
 
     // Extract image/file attachments
+    const hasContentId = /Content-ID:\s*<[^>]+>/i.test(sectionHeader);
     const isAttachment = sectionHeader.toLowerCase().includes("content-disposition: attachment") ||
-                         sectionHeader.toLowerCase().includes("content-disposition: inline");
+                         sectionHeader.toLowerCase().includes("content-disposition: inline") ||
+                         hasContentId;
     const isImage = contentType.startsWith("image/");
     const isFile = contentType.startsWith("application/") && !contentType.includes("text");
 
     if (isImage || ((isAttachment || isFile) && transferEncoding === "base64")) {
-      // Extract filename
-      const filenameMatch = sectionHeader.match(/(?:filename|name)=\"?([^\";\r\n]+)\"?/i);
+      // Extract filename - try multiple sources
+      const filenameMatch = sectionHeader.match(/(?:filename\*?|name)=\"?([^\";\r\n]+)\"?/i);
       let filename = filenameMatch ? filenameMatch[1].trim() : "";
+      // Fallback to Content-ID for inline images
+      if (!filename && hasContentId) {
+        const cidMatch = sectionHeader.match(/Content-ID:\s*<([^>@]+)/i);
+        if (cidMatch && isImage) {
+          const ext = contentType.replace("image/", "").replace("jpeg", "jpg");
+          filename = `${cidMatch[1].trim()}.${ext}`;
+        }
+      }
       if (!filename && isImage) {
         const ext = contentType.replace("image/", "").replace("jpeg", "jpg");
         filename = `image_${Date.now()}.${ext}`;
