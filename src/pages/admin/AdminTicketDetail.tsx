@@ -152,19 +152,39 @@ const AdminTicketDetail = () => {
     });
   }, [id, isAdmin, authLoading, user]);
 
-  // Fetch adjacent tickets for navigation
+  const [searchParams] = useSearchParams();
+  const filterStatus = searchParams.get("status") || "all";
+  const filterPriority = searchParams.get("priority") || "all";
+  const filterQS = `?status=${filterStatus}&priority=${filterPriority}`;
+
+  // Fetch adjacent tickets for navigation (respeita filtros da listagem)
   useEffect(() => {
     if (!id) return;
-    supabase.from("tickets").select("id, ticket_number").order("created_at", { ascending: false })
-      .then(({ data }) => {
-        if (!data) return;
-        const idx = data.findIndex((t: any) => t.id === id);
-        setAdjacentTickets({
-          prev: idx > 0 ? data[idx - 1].id : null,
-          next: idx < data.length - 1 ? data[idx + 1].id : null,
-        });
+    let query = supabase.from("tickets").select("id, status, priority").order("created_at", { ascending: false });
+    if (filterStatus !== "all") query = query.eq("status", filterStatus as any);
+    if (filterPriority !== "all") query = query.eq("priority", filterPriority as any);
+    query.then(({ data }) => {
+      if (!data) return;
+      const idx = data.findIndex((t: any) => t.id === id);
+      if (idx === -1) {
+        // Ticket atual fora do filtro: usa lista global como fallback
+        supabase.from("tickets").select("id").order("created_at", { ascending: false })
+          .then(({ data: all }) => {
+            if (!all) return;
+            const i = all.findIndex((t: any) => t.id === id);
+            setAdjacentTickets({
+              prev: i > 0 ? all[i - 1].id : null,
+              next: i >= 0 && i < all.length - 1 ? all[i + 1].id : null,
+            });
+          });
+        return;
+      }
+      setAdjacentTickets({
+        prev: idx > 0 ? data[idx - 1].id : null,
+        next: idx < data.length - 1 ? data[idx + 1].id : null,
       });
-  }, [id]);
+    });
+  }, [id, filterStatus, filterPriority]);
 
   // Fetch equipment inventory for the selected client
   useEffect(() => {
