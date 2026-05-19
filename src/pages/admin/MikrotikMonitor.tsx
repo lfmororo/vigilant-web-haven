@@ -1156,7 +1156,7 @@ const MikrotikMonitor = () => {
 
           <p className="text-xs text-muted-foreground">Coleta via SNMP (IF-MIB). Certifique-se de que o SNMP está habilitado no dispositivo.</p>
         </>
-      ) : (
+      ) : form.device_type !== 'grandstream_gdms' ? (
         <>
           <div className="grid grid-cols-2 gap-3">
             <div>
