@@ -1438,10 +1438,10 @@ const MikrotikMonitor = () => {
                     <TabsTrigger value="interfaces"><Activity className="w-4 h-4 mr-1" /> Interfaces</TabsTrigger>
                     <TabsTrigger value="bandwidth"><Zap className="w-4 h-4 mr-1" /> Banda</TabsTrigger>
                     <TabsTrigger value="traffic"><ArrowUpDown className="w-4 h-4 mr-1" /> Tráfego</TabsTrigger>
-                    {selectedDevice.device_type !== 'snmp' && (
+                    {selectedDevice.device_type !== 'snmp' && selectedDevice.device_type !== 'grandstream' && (
                       <TabsTrigger value="dhcp"><Globe className="w-4 h-4 mr-1" /> DHCP</TabsTrigger>
                     )}
-                    {selectedDevice.device_type !== 'snmp' && (
+                    {selectedDevice.device_type !== 'snmp' && selectedDevice.device_type !== 'grandstream' && (
                       <TabsTrigger value="logs">
                         <ScrollText className="w-4 h-4 mr-1" /> Logs
                         {selectedDevice.last_log_alerts && selectedDevice.last_log_alerts.length > 0 && (
