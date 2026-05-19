@@ -918,12 +918,18 @@ const MikrotikMonitor = () => {
 
   const handleDeleteDevice = async () => {
     if (!deleteDevice) return;
-    const { error } = await supabase.from("mikrotik_devices").delete().eq("id", deleteDevice.id);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Dispositivo removido");
-    setShowDeleteDialog(false);
-    if (selectedDevice?.id === deleteDevice.id) setSelectedDevice(null);
-    fetchDevices();
+    try {
+      const { error } = await supabase.from("mikrotik_devices").delete().eq("id", deleteDevice.id);
+      if (error) throw error;
+      
+      toast.success("Dispositivo removido");
+      setShowDeleteDialog(false);
+      setDeleteDevice(null);
+      if (selectedDevice?.id === deleteDevice.id) setSelectedDevice(null);
+      fetchDevices();
+    } catch (error: any) {
+      toast.error(`Erro ao remover: ${error.message}`);
+    }
   };
 
   const handlePollDevice = async (deviceId: string) => {
