@@ -1028,7 +1028,8 @@ const MikrotikMonitor = () => {
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="mikrotik">Mikrotik (RouterOS)</SelectItem>
-            <SelectItem value="grandstream">Grandstream (SNMP)</SelectItem>
+            <SelectItem value="grandstream_gdms">Grandstream (API GDMS)</SelectItem>
+            <SelectItem value="grandstream">Grandstream (SNMP Local)</SelectItem>
             <SelectItem value="snmp">SNMP (TP-Link, Ubiquiti, etc.)</SelectItem>
           </SelectContent>
         </Select>
@@ -1037,18 +1038,42 @@ const MikrotikMonitor = () => {
         <Label>Nome do dispositivo *</Label>
         <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={form.device_type === 'snmp' ? 'TP-Link ER605 - Matriz' : 'RB 750 - Matriz'} />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Host/IP *</Label>
-          <Input value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} placeholder="192.168.1.1 ou ddns.exemplo.com" />
-        </div>
-        <div>
-          <Label>Porta</Label>
-          <Input type="number" value={form.port} onChange={(e) => setForm({ ...form, port: parseInt(e.target.value) || 443 })} />
-        </div>
-      </div>
 
-      {form.device_type === 'snmp' || form.device_type === 'grandstream' ? (
+      {form.device_type === 'grandstream_gdms' ? (
+        <div className="space-y-4 pt-2 border-t">
+          <p className="text-xs text-muted-foreground mb-2">Monitoramento via API do Grandstream Device Management System (GDMS).</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <Label>App Key (Key do Desenvolvedor)</Label>
+              <Input value={form.username || ''} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="Sua App Key do GDMS" />
+            </div>
+            <div className="col-span-2">
+              <Label>App Secret (Secret do Desenvolvedor)</Label>
+              <Input type="password" value={form.password || ''} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Seu App Secret do GDMS" />
+            </div>
+            <div className="col-span-2">
+              <Label>ID do Dispositivo (no GDMS)</Label>
+              <Input value={form.host || ''} onChange={(e) => setForm({ ...form, host: e.target.value })} placeholder="MAC Address ou ID único" />
+            </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground italic">Nota: Requer conta de desenvolvedor aprovada no painel GDMS.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Host/IP *</Label>
+              <Input value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} placeholder="192.168.1.1 ou ddns.exemplo.com" />
+            </div>
+            <div>
+              <Label>Porta</Label>
+              <Input type="number" value={form.port} onChange={(e) => setForm({ ...form, port: parseInt(e.target.value) || (form.device_type === 'mikrotik' ? 443 : 161) })} />
+            </div>
+          </div>
+        </>
+      )}
+
+      {form.device_type !== 'grandstream_gdms' && (form.device_type === 'snmp' || form.device_type === 'grandstream') ? (
         <>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -1131,7 +1156,7 @@ const MikrotikMonitor = () => {
 
           <p className="text-xs text-muted-foreground">Coleta via SNMP (IF-MIB). Certifique-se de que o SNMP está habilitado no dispositivo.</p>
         </>
-      ) : (
+      ) : form.device_type !== 'grandstream_gdms' ? (
         <>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -1168,7 +1193,7 @@ const MikrotikMonitor = () => {
             <p className="text-xs text-muted-foreground mt-1">Preencha apenas se o equipamento não suporta API REST (RouterOS &lt; 7.1)</p>
           </div>
         </>
-      )}
+      ) : null}
       {isEdit && (
         <div className="flex items-center gap-2">
           <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
