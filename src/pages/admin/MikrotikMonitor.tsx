@@ -1073,7 +1073,7 @@ const MikrotikMonitor = () => {
         </>
       )}
 
-      {form.device_type === 'snmp' || form.device_type === 'grandstream' ? (
+      {form.device_type !== 'grandstream_gdms' && (form.device_type === 'snmp' || form.device_type === 'grandstream') ? (
         <>
           <div className="grid grid-cols-2 gap-3">
             <div>
