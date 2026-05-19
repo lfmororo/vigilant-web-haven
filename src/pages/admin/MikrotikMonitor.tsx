@@ -1472,7 +1472,7 @@ const MikrotikMonitor = () => {
                               <TableHead>IP</TableHead>
                               <TableHead>MAC</TableHead>
                               <TableHead>Velocidade</TableHead>
-                              {selectedDevice.device_type !== 'snmp' && <TableHead>PPPoE</TableHead>}
+                              {selectedDevice.device_type !== 'snmp' && selectedDevice.device_type !== 'grandstream' && <TableHead>PPPoE</TableHead>}
                             </TableRow>
                           </TableHeader>
                           <TableBody>
