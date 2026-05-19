@@ -1398,10 +1398,20 @@ const MikrotikMonitor = () => {
                           <p className="text-xs text-muted-foreground">{selectedDevice.client?.full_name} • {selectedDevice.host}:{selectedDevice.port}</p>
                         </div>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => handlePollDevice(selectedDevice.id)} disabled={polling === selectedDevice.id}>
-                        {polling === selectedDevice.id ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />}
-                        Atualizar
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handlePollDevice(selectedDevice.id)} disabled={polling === selectedDevice.id}>
+                          {polling === selectedDevice.id ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+                          Atualizar
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => { setEditDevice({ ...selectedDevice }); setShowEditDialog(true); }}>
+                          <Edit className="w-4 h-4 mr-1" />
+                          Editar
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={() => { setDeleteDevice(selectedDevice); setShowDeleteDialog(true); }}>
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Excluir
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
