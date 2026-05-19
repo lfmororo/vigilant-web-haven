@@ -1028,6 +1028,7 @@ const MikrotikMonitor = () => {
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="mikrotik">Mikrotik (RouterOS)</SelectItem>
+            <SelectItem value="grandstream">Grandstream (SNMP)</SelectItem>
             <SelectItem value="snmp">SNMP (TP-Link, Ubiquiti, etc.)</SelectItem>
           </SelectContent>
         </Select>
