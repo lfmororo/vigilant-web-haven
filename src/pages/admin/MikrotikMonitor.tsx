@@ -1528,7 +1528,7 @@ const MikrotikMonitor = () => {
                                     <TableCell className="text-xs">{iface.ip_address || "-"}</TableCell>
                                     <TableCell className="text-xs font-mono">{iface.mac_address || "-"}</TableCell>
                                     <TableCell className="text-xs">{formatSpeed(iface.speed)}</TableCell>
-                                    {selectedDevice.device_type !== 'snmp' && (
+                                    {selectedDevice.device_type !== 'snmp' && selectedDevice.device_type !== 'grandstream' && (
                                       <TableCell className="text-xs">
                                         {iface.pppoe_user ? (
                                           <span>{iface.pppoe_user}{iface.uptime ? ` (${iface.uptime})` : ""}</span>
