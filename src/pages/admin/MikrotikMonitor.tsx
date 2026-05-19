@@ -918,12 +918,18 @@ const MikrotikMonitor = () => {
 
   const handleDeleteDevice = async () => {
     if (!deleteDevice) return;
-    const { error } = await supabase.from("mikrotik_devices").delete().eq("id", deleteDevice.id);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Dispositivo removido");
-    setShowDeleteDialog(false);
-    if (selectedDevice?.id === deleteDevice.id) setSelectedDevice(null);
-    fetchDevices();
+    try {
+      const { error } = await supabase.from("mikrotik_devices").delete().eq("id", deleteDevice.id);
+      if (error) throw error;
+      
+      toast.success("Dispositivo removido");
+      setShowDeleteDialog(false);
+      setDeleteDevice(null);
+      if (selectedDevice?.id === deleteDevice.id) setSelectedDevice(null);
+      fetchDevices();
+    } catch (error: any) {
+      toast.error(`Erro ao remover: ${error.message}`);
+    }
   };
 
   const handlePollDevice = async (deviceId: string) => {
@@ -1367,14 +1373,24 @@ const MikrotikMonitor = () => {
                             </TooltipTrigger>
                             <TooltipContent>Baixar collector</TooltipContent>
                           </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditDevice({ ...device }); setShowEditDialog(true); }}>
+                                <Edit className="w-3.5 h-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Editar dispositivo</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteDevice(device); setShowDeleteDialog(true); }}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Remover dispositivo</TooltipContent>
+                          </Tooltip>
                         </TooltipProvider>
                         <div className="flex-1" />
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditDevice({ ...device }); setShowEditDialog(true); }}>
-                          <Edit className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteDevice(device); setShowDeleteDialog(true); }}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -1398,10 +1414,20 @@ const MikrotikMonitor = () => {
                           <p className="text-xs text-muted-foreground">{selectedDevice.client?.full_name} • {selectedDevice.host}:{selectedDevice.port}</p>
                         </div>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => handlePollDevice(selectedDevice.id)} disabled={polling === selectedDevice.id}>
-                        {polling === selectedDevice.id ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />}
-                        Atualizar
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handlePollDevice(selectedDevice.id)} disabled={polling === selectedDevice.id}>
+                          {polling === selectedDevice.id ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+                          Atualizar
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => { setEditDevice({ ...selectedDevice }); setShowEditDialog(true); }}>
+                          <Edit className="w-4 h-4 mr-1" />
+                          Editar
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={() => { setDeleteDevice(selectedDevice); setShowDeleteDialog(true); }}>
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Excluir
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
