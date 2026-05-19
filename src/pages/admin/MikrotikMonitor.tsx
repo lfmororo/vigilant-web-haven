@@ -1028,6 +1028,7 @@ const MikrotikMonitor = () => {
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="mikrotik">Mikrotik (RouterOS)</SelectItem>
+            <SelectItem value="grandstream">Grandstream (SNMP)</SelectItem>
             <SelectItem value="snmp">SNMP (TP-Link, Ubiquiti, etc.)</SelectItem>
           </SelectContent>
         </Select>
@@ -1047,7 +1048,7 @@ const MikrotikMonitor = () => {
         </div>
       </div>
 
-      {form.device_type === 'snmp' ? (
+      {form.device_type === 'snmp' || form.device_type === 'grandstream' ? (
         <>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -1437,10 +1438,10 @@ const MikrotikMonitor = () => {
                     <TabsTrigger value="interfaces"><Activity className="w-4 h-4 mr-1" /> Interfaces</TabsTrigger>
                     <TabsTrigger value="bandwidth"><Zap className="w-4 h-4 mr-1" /> Banda</TabsTrigger>
                     <TabsTrigger value="traffic"><ArrowUpDown className="w-4 h-4 mr-1" /> Tráfego</TabsTrigger>
-                    {selectedDevice.device_type !== 'snmp' && (
+                    {selectedDevice.device_type !== 'snmp' && selectedDevice.device_type !== 'grandstream' && (
                       <TabsTrigger value="dhcp"><Globe className="w-4 h-4 mr-1" /> DHCP</TabsTrigger>
                     )}
-                    {selectedDevice.device_type !== 'snmp' && (
+                    {selectedDevice.device_type !== 'snmp' && selectedDevice.device_type !== 'grandstream' && (
                       <TabsTrigger value="logs">
                         <ScrollText className="w-4 h-4 mr-1" /> Logs
                         {selectedDevice.last_log_alerts && selectedDevice.last_log_alerts.length > 0 && (
@@ -1471,7 +1472,7 @@ const MikrotikMonitor = () => {
                               <TableHead>IP</TableHead>
                               <TableHead>MAC</TableHead>
                               <TableHead>Velocidade</TableHead>
-                              {selectedDevice.device_type !== 'snmp' && <TableHead>PPPoE</TableHead>}
+                              {selectedDevice.device_type !== 'snmp' && selectedDevice.device_type !== 'grandstream' && <TableHead>PPPoE</TableHead>}
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1527,7 +1528,7 @@ const MikrotikMonitor = () => {
                                     <TableCell className="text-xs">{iface.ip_address || "-"}</TableCell>
                                     <TableCell className="text-xs font-mono">{iface.mac_address || "-"}</TableCell>
                                     <TableCell className="text-xs">{formatSpeed(iface.speed)}</TableCell>
-                                    {selectedDevice.device_type !== 'snmp' && (
+                                    {selectedDevice.device_type !== 'snmp' && selectedDevice.device_type !== 'grandstream' && (
                                       <TableCell className="text-xs">
                                         {iface.pppoe_user ? (
                                           <span>{iface.pppoe_user}{iface.uptime ? ` (${iface.uptime})` : ""}</span>
