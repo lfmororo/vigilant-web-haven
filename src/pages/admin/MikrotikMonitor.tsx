@@ -1193,7 +1193,7 @@ const MikrotikMonitor = () => {
             <p className="text-xs text-muted-foreground mt-1">Preencha apenas se o equipamento não suporta API REST (RouterOS &lt; 7.1)</p>
           </div>
         </>
-      : null}
+      ) : null}
       {isEdit && (
         <div className="flex items-center gap-2">
           <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
