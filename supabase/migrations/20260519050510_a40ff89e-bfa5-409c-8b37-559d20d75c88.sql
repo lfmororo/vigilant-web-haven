@@ -1,0 +1,2 @@
+ALTER TABLE public.mikrotik_devices DROP CONSTRAINT IF EXISTS mikrotik_devices_device_type_check;
+ALTER TABLE public.mikrotik_devices ADD CONSTRAINT mikrotik_devices_device_type_check CHECK (device_type IN ('mikrotik', 'snmp', 'grandstream'));
