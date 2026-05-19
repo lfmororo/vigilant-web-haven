@@ -616,6 +616,13 @@ async function fetchDeviceData(supabase: any, device: any) {
   }
 
   if (device.device_type === "grandstream") {
+    console.log(`Device ${device.name}: Grandstream detection via SNMP`);
+    if (!device.proxy_url) {
+      const error = "Dispositivos Grandstream (SNMP) requerem um Proxy VPS para realizar a coleta.";
+      await updateDevicePollStatus(supabase, device.id, error);
+      return { success: false, error };
+    }
+  }
 
   if (device.proxy_url) {
     console.log(`Device ${device.name}: using proxy at ${device.proxy_url}`);
