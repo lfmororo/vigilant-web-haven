@@ -605,16 +605,17 @@ async function fetchDeviceDataDirect(supabase: any, device: any) {
 }
 
 async function fetchDeviceData(supabase: any, device: any) {
-  if (device.device_type === "grandstream") {
-    console.log(`Device ${device.name}: Grandstream detection via SNMP (mocked for now)`);
-    // Note: Em ambiente cloud, o SNMP requer um proxy local. 
-    // Se o dispositivo tiver proxy_url, o proxy tratará o SNMP.
-    if (!device.proxy_url) {
-      const error = "Dispositivos Grandstream (SNMP) requerem um Proxy VPS para realizar a coleta.";
-      await updateDevicePollStatus(supabase, device.id, error);
-      return { success: false, error };
-    }
+  if (device.device_type === "grandstream_gdms") {
+    console.log(`Device ${device.name}: Grandstream via GDMS API`);
+    // Mock implementation for GDMS API
+    // In a real scenario, we would use device.username (AppKey) and device.password (AppSecret)
+    // to authenticate with https://open.gdms.cloud/api/...
+    const lastError = "Integração GDMS API em desenvolvimento. No momento, utilize SNMP Local com Proxy VPS.";
+    await updateDevicePollStatus(supabase, device.id, lastError);
+    return { success: false, error: lastError };
   }
+
+  if (device.device_type === "grandstream") {
 
   if (device.proxy_url) {
     console.log(`Device ${device.name}: using proxy at ${device.proxy_url}`);
