@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, FileText, Trash2, Eye, Building2 } from "lucide-react";
+import { Plus, FileText, Trash2, Eye, Building2, Pencil } from "lucide-react";
 import QuoteSenderProfilesTab from "@/components/admin/quotes/QuoteSenderProfilesTab";
 
 interface Quote {
@@ -187,6 +187,9 @@ const QuotesManagement = () => {
                               <div className="flex justify-end gap-2">
                                 <Button size="sm" variant="outline" onClick={() => navigate(`/admin/quotes/${q.id}`)}>
                                   <Eye className="w-4 h-4" />
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => navigate(`/admin/quotes/${q.id}/edit`)}>
+                                  <Pencil className="w-4 h-4" />
                                 </Button>
                                 <Button size="sm" variant="destructive" onClick={() => setDeleteId(q.id)}>
                                   <Trash2 className="w-4 h-4" />
