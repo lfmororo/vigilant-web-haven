@@ -50,6 +50,7 @@ const statusMap: Record<string, { label: string; variant: "default" | "secondary
 
 const QuotesManagement = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,6 +115,62 @@ const QuotesManagement = () => {
       fetchQuotes();
     }
     setDeleteId(null);
+  };
+
+  const handleDuplicate = async (quote: Quote) => {
+    try {
+      const { data: q, error: qError } = await supabase
+        .from("quotes")
+        .select("*")
+        .eq("id", quote.id)
+        .single();
+
+      if (qError) throw qError;
+
+      const { data: items, error: iError } = await supabase
+        .from("quote_items")
+        .select("*")
+        .eq("quote_id", quote.id);
+
+      if (iError) throw iError;
+
+      const { data: newQuote, error: createError } = await supabase
+        .from("quotes")
+        .insert({
+          title: `${q.title} (Cópia)`,
+          sender_profile_id: q.sender_profile_id,
+          client_id: q.client_id,
+          notes: q.notes,
+          validity_days: q.validity_days,
+          total: q.total,
+          status: "draft",
+          created_by: user?.id
+        })
+        .select("id")
+        .single();
+
+      if (createError) throw createError;
+
+      const itemsToInsert = (items || []).map((item) => ({
+        quote_id: newQuote.id,
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        item_order: item.item_order,
+      }));
+
+      if (itemsToInsert.length > 0) {
+        const { error: insertItemsError } = await supabase
+          .from("quote_items")
+          .insert(itemsToInsert);
+        if (insertItemsError) throw insertItemsError;
+      }
+
+      toast({ title: "Orçamento duplicado com sucesso!" });
+      fetchQuotes();
+    } catch (error: any) {
+      toast({ title: "Erro ao duplicar", description: error.message, variant: "destructive" });
+    }
   };
 
   return (
