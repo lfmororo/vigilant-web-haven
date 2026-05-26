@@ -63,6 +63,7 @@ const CreateQuote = () => {
   const [notes, setNotes] = useState("");
   const [validityDays, setValidityDays] = useState(30);
 
+  const [status, setStatus] = useState("draft");
   const [items, setItems] = useState<QuoteItem[]>([
     { id: crypto.randomUUID(), description: "", quantity: 1, unit_price: 0 },
   ]);
@@ -95,6 +96,7 @@ const CreateQuote = () => {
         setTitle(q.title || "");
         setNotes(q.notes || "");
         setValidityDays(q.validity_days || 30);
+        setStatus(q.status || "draft");
 
         const { data: existingItems } = await supabase
           .from("quote_items")
@@ -156,6 +158,7 @@ const CreateQuote = () => {
       notes: notes.trim() || null,
       validity_days: validityDays,
       total: totalQuote,
+      status: status,
     };
 
     let quoteId = editId;
@@ -279,6 +282,22 @@ const CreateQuote = () => {
               <div className="space-y-2">
                 <Label htmlFor="validity">Validade (dias)</Label>
                 <Input id="validity" type="number" value={validityDays} onChange={(e) => setValidityDays(Number(e.target.value))} min={1} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger id="status">
+                    <SelectValue placeholder="Selecione o status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Rascunho</SelectItem>
+                    <SelectItem value="sent">Enviado</SelectItem>
+                    <SelectItem value="approved">Aprovado</SelectItem>
+                    <SelectItem value="rejected">Rejeitado</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="space-y-2">
