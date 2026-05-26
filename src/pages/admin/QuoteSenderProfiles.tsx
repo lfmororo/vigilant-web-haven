@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -25,7 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, FileText, Trash2, Eye, Building2, Pencil } from "lucide-react";
+import { Plus, FileText, Trash2, Eye, Building2, Pencil, Copy } from "lucide-react";
 import QuoteSenderProfilesTab from "@/components/admin/quotes/QuoteSenderProfilesTab";
 
 interface Quote {
@@ -190,6 +191,9 @@ const QuotesManagement = () => {
                                 </Button>
                                 <Button size="sm" variant="outline" onClick={() => navigate(`/admin/quotes/${q.id}/edit`)}>
                                   <Pencil className="w-4 h-4" />
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => handleDuplicate(q)}>
+                                  <Copy className="w-4 h-4" />
                                 </Button>
                                 <Button size="sm" variant="destructive" onClick={() => setDeleteId(q.id)}>
                                   <Trash2 className="w-4 h-4" />
