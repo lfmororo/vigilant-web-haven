@@ -716,14 +716,14 @@ const MikrotikMonitor = () => {
       if (error) throw error;
       if (data?.success) {
         setGdmsTestResult({ success: true, message: data.message || "Conexão OK", details: data });
-        toast({ title: "Conexão GDMS bem-sucedida", description: `Latência: ${data.latency_ms}ms` });
+        toast.success(`Conexão GDMS bem-sucedida (${data.latency_ms}ms)`);
       } else {
         setGdmsTestResult({ success: false, message: data?.error || "Falha na conexão", details: data });
-        toast({ title: "Falha na conexão GDMS", description: data?.error || "Erro desconhecido", variant: "destructive" });
+        toast.error(data?.error || "Falha na conexão GDMS");
       }
     } catch (err: any) {
       setGdmsTestResult({ success: false, message: err?.message || "Erro" });
-      toast({ title: "Erro ao testar conexão", description: err?.message, variant: "destructive" });
+      toast.error(err?.message || "Erro ao testar conexão");
     } finally {
       setGdmsTesting(false);
     }
