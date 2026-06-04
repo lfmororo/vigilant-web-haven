@@ -1283,6 +1283,9 @@ const MikrotikMonitor = () => {
             <Button variant="outline" onClick={() => setShowSetupGuide(true)}>
               <BookOpen className="w-4 h-4 mr-2" /> Guia VPS
             </Button>
+            <Button variant="outline" onClick={() => navigate("/admin/gdms-tutorial")}>
+              <Info className="w-4 h-4 mr-2" /> Tutorial GDMS
+            </Button>
             <Button onClick={() => { setDeviceForm(emptyDevice); setShowCreateDialog(true); }}>
               <Plus className="w-4 h-4 mr-2" /> Novo Dispositivo
             </Button>
