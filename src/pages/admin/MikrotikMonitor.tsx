@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download, Server, ScrollText, Globe, TrendingUp, Thermometer, Cpu, CalendarDays, Clock, MoreHorizontal, Zap, MemoryStick, BookOpen, Copy, Check } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download, Server, ScrollText, Globe, TrendingUp, Thermometer, Cpu, CalendarDays, Clock, MoreHorizontal, Zap, MemoryStick, BookOpen, Copy, Check, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
 
@@ -677,6 +678,8 @@ main().catch(err => { console.error('Erro fatal:', err); process.exit(1); });
 };
 
 const MikrotikMonitor = () => {
+  const navigate = useNavigate();
+
   const [devices, setDevices] = useState<MikrotikDevice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<MikrotikDevice | null>(null);
@@ -1279,6 +1282,9 @@ const MikrotikMonitor = () => {
             </div>
             <Button variant="outline" onClick={() => setShowSetupGuide(true)}>
               <BookOpen className="w-4 h-4 mr-2" /> Guia VPS
+            </Button>
+            <Button variant="outline" onClick={() => navigate("/admin/gdms-tutorial")}>
+              <Info className="w-4 h-4 mr-2" /> Tutorial GDMS
             </Button>
             <Button onClick={() => { setDeviceForm(emptyDevice); setShowCreateDialog(true); }}>
               <Plus className="w-4 h-4 mr-2" /> Novo Dispositivo
