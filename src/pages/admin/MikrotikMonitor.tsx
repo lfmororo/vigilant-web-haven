@@ -701,6 +701,33 @@ const MikrotikMonitor = () => {
   const [interfaceEvents, setInterfaceEvents] = useState<any[]>([]);
   const [showSetupGuide, setShowSetupGuide] = useState(false);
   const [copiedBlock, setCopiedBlock] = useState<string | null>(null);
+  const [showGdmsTest, setShowGdmsTest] = useState(false);
+  const [gdmsTestForm, setGdmsTestForm] = useState({ username: "", password: "", client_id: "", client_secret: "", region: "us" as "us" | "eu" });
+  const [gdmsTesting, setGdmsTesting] = useState(false);
+  const [gdmsTestResult, setGdmsTestResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);
+
+  const testGdmsConnection = async () => {
+    setGdmsTesting(true);
+    setGdmsTestResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("grandstream-test-connection", {
+        body: gdmsTestForm,
+      });
+      if (error) throw error;
+      if (data?.success) {
+        setGdmsTestResult({ success: true, message: data.message || "Conexão OK", details: data });
+        toast({ title: "Conexão GDMS bem-sucedida", description: `Latência: ${data.latency_ms}ms` });
+      } else {
+        setGdmsTestResult({ success: false, message: data?.error || "Falha na conexão", details: data });
+        toast({ title: "Falha na conexão GDMS", description: data?.error || "Erro desconhecido", variant: "destructive" });
+      }
+    } catch (err: any) {
+      setGdmsTestResult({ success: false, message: err?.message || "Erro" });
+      toast({ title: "Erro ao testar conexão", description: err?.message, variant: "destructive" });
+    } finally {
+      setGdmsTesting(false);
+    }
+  };
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
