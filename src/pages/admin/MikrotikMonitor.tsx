@@ -678,6 +678,10 @@ main().catch(err => { console.error('Erro fatal:', err); process.exit(1); });
 };
 
 const MikrotikMonitor = () => {
+  const navigate = useNavigate();
+  const { toast: toastUI } = useToast(); // I need to check if useToast is imported. It wasn't in the lines I saw. 
+  // Wait, line 16 has `import { toast } from "sonner";`. Let me check if `useToast` is also there.
+
   const [devices, setDevices] = useState<MikrotikDevice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<MikrotikDevice | null>(null);
