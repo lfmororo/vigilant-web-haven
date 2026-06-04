@@ -1058,8 +1058,8 @@ const MikrotikMonitor = () => {
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="mikrotik">Mikrotik (RouterOS)</SelectItem>
-            <SelectItem value="grandstream_gdms">Grandstream (API GDMS)</SelectItem>
-            <SelectItem value="grandstream">Grandstream (SNMP Local)</SelectItem>
+            <SelectItem value="grandstream">Grandstream (SNMP Local - Recomendado)</SelectItem>
+            <SelectItem value="grandstream_gdms">Grandstream (API GDMS - Beta)</SelectItem>
             <SelectItem value="snmp">SNMP (TP-Link, Ubiquiti, etc.)</SelectItem>
           </SelectContent>
         </Select>
@@ -1071,6 +1071,15 @@ const MikrotikMonitor = () => {
 
       {form.device_type === 'grandstream_gdms' ? (
         <div className="space-y-4 pt-2 border-t">
+          <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-md flex gap-2">
+            <AlertTriangle className="w-4 h-4 text-yellow-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-yellow-700 uppercase">Atenção</p>
+              <p className="text-[10px] text-yellow-600 leading-tight">
+                A API GDMS está em desenvolvimento. Utilize <strong>SNMP Local + Proxy VPS</strong> para monitoramento estável no momento.
+              </p>
+            </div>
+          </div>
           <p className="text-xs text-muted-foreground mb-2">Monitoramento via API do Grandstream Device Management System (GDMS).</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
@@ -1189,7 +1198,16 @@ const MikrotikMonitor = () => {
             </>
           )}
 
-          <p className="text-xs text-muted-foreground">Coleta via SNMP (IF-MIB). Certifique-se de que o SNMP está habilitado no dispositivo.</p>
+          <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-md flex gap-3 mt-2">
+            <Server className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-blue-700 uppercase">Configuração VPS</p>
+              <p className="text-[10px] text-blue-600 leading-tight">
+                Para dispositivos locais, utilize o <strong>Script do Coletor</strong> em uma VPS para enviar os dados SNMP para este painel.
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">Coleta via SNMP (IF-MIB). Certifique-se de que o SNMP está habilitado no dispositivo.</p>
         </>
       ) : form.device_type !== 'grandstream_gdms' ? (
         <>
@@ -2468,7 +2486,7 @@ const MikrotikMonitor = () => {
                   {copiedBlock === "s3" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
                 </Button>
               </div>
-              <p className="text-muted-foreground text-xs">A lib <code className="bg-muted px-1 rounded">net-snmp</code> só é necessária para dispositivos SNMP (ex: TP-Link ER605).</p>
+              <p className="text-muted-foreground text-xs">A lib <code className="bg-muted px-1 rounded">net-snmp</code> é necessária para dispositivos SNMP (ex: Grandstream, TP-Link, Ubiquiti).</p>
             </div>
 
             <div className="space-y-2">
