@@ -1071,6 +1071,15 @@ const MikrotikMonitor = () => {
 
       {form.device_type === 'grandstream_gdms' ? (
         <div className="space-y-4 pt-2 border-t">
+          <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-md flex gap-2">
+            <AlertTriangle className="w-4 h-4 text-yellow-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-yellow-700 uppercase">Atenção</p>
+              <p className="text-[10px] text-yellow-600 leading-tight">
+                A API GDMS está em desenvolvimento. Utilize <strong>SNMP Local + Proxy VPS</strong> para monitoramento estável no momento.
+              </p>
+            </div>
+          </div>
           <p className="text-xs text-muted-foreground mb-2">Monitoramento via API do Grandstream Device Management System (GDMS).</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
