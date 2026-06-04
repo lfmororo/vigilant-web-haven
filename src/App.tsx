@@ -63,6 +63,7 @@ const App = () => (
               <Route path="/admin/inventory" element={<AuthGuard requireAdmin><EquipmentInventory /></AuthGuard>} />
               <Route path="/admin/inventory/:id" element={<AuthGuard requireAdmin><EquipmentDetail /></AuthGuard>} />
               <Route path="/admin/mikrotik" element={<AuthGuard requireAdmin><MikrotikMonitor /></AuthGuard>} />
+              <Route path="/admin/gdms-tutorial" element={<AuthGuard requireAdmin><GdmsTutorial /></AuthGuard>} />
               <Route path="/admin/dvr" element={<AuthGuard requireAdmin><DvrMonitor /></AuthGuard>} />
               <Route path="/admin/servers" element={<AuthGuard requireAdmin><ServerMonitor /></AuthGuard>} />
               <Route path="/admin/helpdesk" element={<AuthGuard requireAdminOrTechnician><AdminHelpdeskDashboard /></AuthGuard>} />
