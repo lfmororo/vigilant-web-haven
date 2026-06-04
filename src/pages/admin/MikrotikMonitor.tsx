@@ -1083,7 +1083,12 @@ const MikrotikMonitor = () => {
               <Input value={form.host || ''} onChange={(e) => setForm({ ...form, host: e.target.value })} placeholder="MAC Address ou ID único" />
             </div>
           </div>
-          <p className="text-[10px] text-muted-foreground italic">Nota: Requer conta de desenvolvedor aprovada no painel GDMS.</p>
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <p className="text-[10px] text-muted-foreground italic">Nota: Requer conta de desenvolvedor aprovada no painel GDMS.</p>
+            <Button type="button" size="sm" variant="outline" onClick={() => setShowGdmsTest(true)}>
+              Testar conexão GDMS
+            </Button>
+          </div>
         </div>
       ) : (
         <>
