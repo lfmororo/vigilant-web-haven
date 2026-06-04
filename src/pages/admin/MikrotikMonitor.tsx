@@ -2486,7 +2486,7 @@ const MikrotikMonitor = () => {
                   {copiedBlock === "s3" ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
                 </Button>
               </div>
-              <p className="text-muted-foreground text-xs">A lib <code className="bg-muted px-1 rounded">net-snmp</code> só é necessária para dispositivos SNMP (ex: TP-Link ER605).</p>
+              <p className="text-muted-foreground text-xs">A lib <code className="bg-muted px-1 rounded">net-snmp</code> é necessária para dispositivos SNMP (ex: Grandstream, TP-Link, Ubiquiti).</p>
             </div>
 
             <div className="space-y-2">
