@@ -1198,7 +1198,16 @@ const MikrotikMonitor = () => {
             </>
           )}
 
-          <p className="text-xs text-muted-foreground">Coleta via SNMP (IF-MIB). Certifique-se de que o SNMP está habilitado no dispositivo.</p>
+          <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-md flex gap-3 mt-2">
+            <Server className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-blue-700 uppercase">Configuração VPS</p>
+              <p className="text-[10px] text-blue-600 leading-tight">
+                Para dispositivos locais, utilize o <strong>Script do Coletor</strong> em uma VPS para enviar os dados SNMP para este painel.
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">Coleta via SNMP (IF-MIB). Certifique-se de que o SNMP está habilitado no dispositivo.</p>
         </>
       ) : form.device_type !== 'grandstream_gdms' ? (
         <>
