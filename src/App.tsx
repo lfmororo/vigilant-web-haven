@@ -28,6 +28,7 @@ import QuoteSenderProfiles from "./pages/admin/QuoteSenderProfiles";
 import CreateQuote from "./pages/admin/CreateQuote";
 import QuoteDetail from "./pages/admin/QuoteDetail";
 import MikrotikMonitor from "./pages/admin/MikrotikMonitor";
+import GdmsTutorial from "./pages/admin/GdmsTutorial";
 import DvrMonitor from "./pages/admin/DvrMonitor";
 import ServerMonitor from "./pages/admin/ServerMonitor";
 import HelpdeskDashboard from "./pages/helpdesk/HelpdeskDashboard";
