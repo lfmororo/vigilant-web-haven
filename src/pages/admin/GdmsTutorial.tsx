@@ -37,6 +37,17 @@ const GdmsTutorial = () => {
           </div>
         </div>
 
+        {/* Aviso de Status */}
+        <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg flex gap-3">
+          <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-yellow-700">Integração em Desenvolvimento</p>
+            <p className="text-xs text-yellow-600 leading-relaxed">
+              A integração direta via API GDMS Cloud está sendo finalizada. No momento, <strong>recomendamos utilizar o monitoramento via SNMP Local com Proxy VPS</strong> para garantir estabilidade e coleta em tempo real.
+            </p>
+          </div>
+        </div>
+
         {/* 1. Introdução */}
         <section className="space-y-4">
           <div className="flex items-center gap-2">
