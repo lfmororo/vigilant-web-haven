@@ -1895,6 +1895,64 @@ export type Database = {
           },
         ]
       }
+      whatsapp_conversations: {
+        Row: {
+          active_ticket_id: string | null
+          client_id: string | null
+          context: Json
+          created_at: string
+          last_message_at: string
+          phone: string
+          profile_id: string | null
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          active_ticket_id?: string | null
+          client_id?: string | null
+          context?: Json
+          created_at?: string
+          last_message_at?: string
+          phone: string
+          profile_id?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          active_ticket_id?: string | null
+          client_id?: string | null
+          context?: Json
+          created_at?: string
+          last_message_at?: string
+          phone?: string
+          profile_id?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_conversations_active_ticket_id_fkey"
+            columns: ["active_ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_conversations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_conversations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_notification_logs: {
         Row: {
           created_at: string
