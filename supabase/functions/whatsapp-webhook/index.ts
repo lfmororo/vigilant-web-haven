@@ -392,11 +392,13 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    console.log("whatsapp-webhook received:", JSON.stringify(body).substring(0, 500));
-
     const eventType = body.EventType || body.eventType || "";
-    if (eventType === "messages_update" || eventType === "message_revoke" || eventType === "presence") {
-      return new Response(JSON.stringify({ success: true, skipped: "irrelevant_event" }), {
+    console.log(`whatsapp-webhook eventType=${eventType} body:`, JSON.stringify(body).substring(0, 2000));
+
+    if (eventType === "messages_update" || eventType === "message_revoke" || eventType === "presence" ||
+        eventType === "chats" || eventType === "chats_update" || eventType === "contacts" ||
+        eventType === "connection" || eventType === "history" || eventType === "call") {
+      return new Response(JSON.stringify({ success: true, skipped: "irrelevant_event", eventType }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
