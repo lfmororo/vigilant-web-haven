@@ -65,36 +65,53 @@ function extractPollData(body: any): { voterPhone: string; selectedOption: strin
   return { voterPhone, selectedOption: String(selectedOption).trim() };
 }
 
-function extractTextMessage(body: any): { phone: string; text: string; fromMe: boolean; isGroup: boolean } {
-  const eventData = body.event || body.data || body;
+function extractTextMessage(body: any): { phone: string; text: string; fromMe: boolean; isGroup: boolean; messageType: string } {
+  const eventData = body.event || body.data || body.message || body;
   const msg = eventData.message || eventData.Message || eventData;
 
   const fromMe = Boolean(
-    eventData.fromMe ?? eventData.FromMe ?? msg?.key?.fromMe ?? msg?.Key?.FromMe ?? false
+    eventData.fromMe ?? eventData.FromMe ?? eventData.isFromMe ?? eventData.IsFromMe ??
+    msg?.fromMe ?? msg?.FromMe ?? msg?.key?.fromMe ?? msg?.Key?.FromMe ?? false
   );
 
   const remoteJid: string =
-    msg?.key?.remoteJid ||
-    msg?.Key?.RemoteJid ||
     eventData.chatid ||
+    eventData.chatId ||
     eventData.Chat ||
+    eventData.chat ||
+    eventData.sender ||
+    eventData.Sender ||
     eventData.from ||
     eventData.From ||
+    msg?.chatid ||
+    msg?.key?.remoteJid ||
+    msg?.Key?.RemoteJid ||
     "";
   const isGroup = String(remoteJid).includes("@g.us");
   const phone = cleanPhone(String(remoteJid).replace(/@.*/, ""));
 
-  let text = "";
-  if (typeof eventData.text === "string") text = eventData.text;
-  else if (typeof eventData.body === "string") text = eventData.body;
-  else if (typeof eventData.messageText === "string") text = eventData.messageText;
-  else if (typeof msg?.conversation === "string") text = msg.conversation;
-  else if (typeof msg?.message?.conversation === "string") text = msg.message.conversation;
-  else if (typeof msg?.message?.extendedTextMessage?.text === "string") text = msg.message.extendedTextMessage.text;
-  else if (typeof msg?.extendedTextMessage?.text === "string") text = msg.extendedTextMessage.text;
-  else if (typeof eventData.content === "string") text = eventData.content;
+  const messageType: string = eventData.messageType || eventData.type || msg?.messageType || "";
 
-  return { phone, text: (text || "").trim(), fromMe, isGroup };
+  let text = "";
+  const candidates = [
+    eventData.text, eventData.Text,
+    eventData.body, eventData.Body,
+    eventData.content, eventData.Content,
+    eventData.messageText, eventData.MessageText,
+    eventData.caption, eventData.Caption,
+    msg?.text, msg?.body, msg?.content, msg?.caption, msg?.conversation,
+    msg?.message?.conversation,
+    msg?.message?.extendedTextMessage?.text,
+    msg?.extendedTextMessage?.text,
+    msg?.imageMessage?.caption,
+    msg?.videoMessage?.caption,
+    msg?.documentMessage?.caption,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) { text = c; break; }
+  }
+
+  return { phone, text: (text || "").trim(), fromMe, isGroup, messageType };
 }
 
 async function loadSettings(supabaseAdmin: any) {
