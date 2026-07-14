@@ -458,14 +458,16 @@ Deno.serve(async (req) => {
     }
 
     // 2) Text message → AI flow
-    const { phone, text, fromMe, isGroup } = extractTextMessage(body);
+    const { phone, text, fromMe, isGroup, messageType } = extractTextMessage(body);
+    console.log(`extracted: phone=${phone} fromMe=${fromMe} isGroup=${isGroup} messageType=${messageType} text="${text.substring(0, 100)}"`);
     if (fromMe || isGroup || !phone || !text) {
-      return new Response(JSON.stringify({ success: true, skipped: "not_actionable_text" }), {
+      return new Response(JSON.stringify({ success: true, skipped: "not_actionable_text", phone, fromMe, isGroup, hasText: Boolean(text), messageType }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const result = await handleTextMessage(supabaseAdmin, phone, text);
+    console.log(`handleTextMessage result:`, JSON.stringify(result));
     return new Response(JSON.stringify({ success: true, ...result }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
