@@ -1,5 +1,6 @@
 import { Instagram, Facebook, Linkedin } from "lucide-react";
 import fmLogo from "@/assets/fm-techflow-logo.png";
+import mororoLogo from "@/assets/mororo-tech-logo.png.asset.json";
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
