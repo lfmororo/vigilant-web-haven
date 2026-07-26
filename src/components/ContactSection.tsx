@@ -62,7 +62,7 @@ const ContactSection = () => {
                 {
                   icon: Mail,
                   title: "E-mail",
-                  value: "contato@fmtechflow.com.br",
+                  value: "contato@mororo.tech",
                   subtitle: "Resposta em até 24h",
                 },
                 {
