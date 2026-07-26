@@ -60,8 +60,9 @@ const Footer = () => {
 
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-sm text-muted-foreground">
-            © {currentYear} FM TechFlow. Todos os direitos reservados.
+          <p className="text-sm text-muted-foreground flex items-center gap-2">
+            <img src={mororoLogo.url} alt="Mororo.Tech" className="h-5 w-auto" />
+            <span>© {currentYear} Mororo.Tech. Todos os direitos reservados.</span>
           </p>
           <div className="flex gap-6 text-sm">
             <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">
