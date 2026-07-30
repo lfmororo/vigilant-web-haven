@@ -1,0 +1,822 @@
+#!/usr/bin/env node
+/**
+ * ============================================================================
+ *  Cloud Backup — Mororo.Tech
+ *  Copia uma pasta local para OneDrive (Microsoft Graph) e/ou Google Drive.
+ *
+ *  Instalação:
+ *    npm init -y
+ *    npm install googleapis @azure/msal-node yargs dotenv mime-types
+ *
+ *  Autenticação (uma vez por provedor):
+ *    node cloud-backup.js auth --provider google
+ *    node cloud-backup.js auth --provider onedrive
+ *
+ *  Backup:
+ *    node cloud-backup.js run --dir /caminho/local --provider both
+ *
+ *  Agendamento (cron Linux, todo dia às 02:00):
+ *    0 2 * * * cd /opt/backup && /usr/bin/node cloud-backup.js run >> backup.log 2>&1
+ * ============================================================================
+ */
+
+"use strict";
+
+require("dotenv").config();
+
+const fs = require("fs");
+const fsp = require("fs/promises");
+const path = require("path");
+const os = require("os");
+const http = require("http");
+const crypto = require("crypto");
+const readline = require("readline");
+const { URL } = require("url");
+
+const yargs = require("yargs/yargs");
+const { hideBin } = require("yargs/helpers");
+const mime = require("mime-types");
+const { google } = require("googleapis");
+const { PublicClientApplication } = require("@azure/msal-node");
+
+// ============================================================================
+// CONFIGURAÇÃO
+// ============================================================================
+
+/** Diretório onde tokens/estado são persistidos (permissão 0600). */
+const STATE_DIR = process.env.BACKUP_STATE_DIR || path.join(os.homedir(), ".cloud-backup");
+const TOKEN_FILE = path.join(STATE_DIR, "tokens.json");
+const MANIFEST_FILE = path.join(STATE_DIR, "manifest.json");
+
+/** Escopos mínimos necessários. */
+const GOOGLE_SCOPES = ["https://www.googleapis.com/auth/drive.file"];
+const MS_SCOPES = ["Files.ReadWrite", "offline_access"];
+
+/** Porta local usada no fluxo OAuth (loopback redirect). */
+const OAUTH_PORT = Number(process.env.OAUTH_PORT || 53682);
+const OAUTH_REDIRECT = `http://localhost:${OAUTH_PORT}/callback`;
+
+/** Uploads acima deste tamanho usam sessão resumível (chunked). */
+const LARGE_FILE_THRESHOLD = 4 * 1024 * 1024; // 4 MB
+const CHUNK_SIZE = 5 * 1024 * 1024; // múltiplo de 320 KiB exigido pelo Graph
+
+// ============================================================================
+// LOGGER
+// ============================================================================
+
+const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
+const LOG_LEVEL = LEVELS[(process.env.LOG_LEVEL || "info").toLowerCase()] ?? LEVELS.info;
+
+/**
+ * Log estruturado com timestamp ISO. Nunca imprime segredos.
+ * @param {"debug"|"info"|"warn"|"error"} level
+ * @param {string} message
+ * @param {Record<string, unknown>} [meta]
+ */
+function log(level, message, meta) {
+  if (LEVELS[level] < LOG_LEVEL) return;
+  const icon = { debug: "·", info: "→", warn: "⚠", error: "✖" }[level];
+  const suffix = meta && Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : "";
+  const line = `[${new Date().toISOString()}] ${icon} ${message}${suffix}`;
+  (level === "error" ? console.error : console.log)(line);
+}
+
+// ============================================================================
+// PERSISTÊNCIA SEGURA DE TOKENS
+// ============================================================================
+
+async function ensureStateDir() {
+  await fsp.mkdir(STATE_DIR, { recursive: true, mode: 0o700 });
+}
+
+/** @returns {Promise<Record<string, any>>} */
+async function readTokens() {
+  try {
+    const raw = await fsp.readFile(TOKEN_FILE, "utf8");
+    return JSON.parse(raw);
+  } catch (err) {
+    if (err.code === "ENOENT") return {};
+    throw new Error(`Falha ao ler ${TOKEN_FILE}: ${err.message}`);
+  }
+}
+
+/**
+ * Grava tokens com permissão restrita (somente o dono lê).
+ * @param {string} provider
+ * @param {Record<string, unknown>} data
+ */
+async function writeTokens(provider, data) {
+  await ensureStateDir();
+  const all = await readTokens();
+  all[provider] = data;
+  await fsp.writeFile(TOKEN_FILE, JSON.stringify(all, null, 2), { mode: 0o600 });
+  await fsp.chmod(TOKEN_FILE, 0o600).catch(() => {});
+}
+
+// ============================================================================
+// MANIFESTO (evita reenviar arquivos idênticos)
+// ============================================================================
+
+async function readManifest() {
+  try {
+    return JSON.parse(await fsp.readFile(MANIFEST_FILE, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+async function writeManifest(manifest) {
+  await ensureStateDir();
+  await fsp.writeFile(MANIFEST_FILE, JSON.stringify(manifest, null, 2), { mode: 0o600 });
+}
+
+/** Hash rápido do arquivo para detectar mudanças. */
+function hashFile(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash("sha256");
+    const stream = fs.createReadStream(filePath);
+    stream.on("error", reject);
+    stream.on("data", (c) => hash.update(c));
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
+}
+
+// ============================================================================
+// UTILITÁRIOS
+// ============================================================================
+
+function requireEnv(name) {
+  const value = process.env[name];
+  if (!value || !value.trim()) {
+    throw new Error(`Variável de ambiente obrigatória ausente: ${name}. Veja o README.`);
+  }
+  return value.trim();
+}
+
+/**
+ * Percorre recursivamente um diretório retornando caminhos relativos.
+ * @param {string} rootDir
+ * @param {string[]} excludes globs simples (substring match)
+ * @returns {Promise<string[]>}
+ */
+async function walkDir(rootDir, excludes = []) {
+  /** @type {string[]} */
+  const files = [];
+
+  async function recurse(current) {
+    const entries = await fsp.readdir(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const abs = path.join(current, entry.name);
+      const rel = path.relative(rootDir, abs);
+      if (excludes.some((ex) => rel.includes(ex))) {
+        log("debug", "Ignorado por exclusão", { rel });
+        continue;
+      }
+      if (entry.isDirectory()) {
+        await recurse(abs);
+      } else if (entry.isFile()) {
+        files.push(rel);
+      }
+    }
+  }
+
+  await recurse(rootDir);
+  return files;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let i = 0;
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024;
+    i += 1;
+  }
+  return `${value.toFixed(2)} ${units[i]}`;
+}
+
+/** Retenta uma operação com backoff exponencial. */
+async function withRetry(label, fn, attempts = 3) {
+  let lastError;
+  for (let i = 1; i <= attempts; i += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      const status = err?.response?.status || err?.statusCode;
+      // 4xx (exceto 408/429) são erros permanentes — não adianta retentar.
+      if (status && status >= 400 && status < 500 && status !== 408 && status !== 429) {
+        throw err;
+      }
+      const delay = Math.min(30000, 1000 * 2 ** (i - 1));
+      log("warn", `${label} falhou (tentativa ${i}/${attempts}), aguardando ${delay}ms`, {
+        error: err.message,
+      });
+      if (i < attempts) await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastError;
+}
+
+/** Abre um servidor local temporário e captura o código OAuth. */
+function waitForOAuthCode(expectedState) {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      try {
+        const url = new URL(req.url, OAUTH_REDIRECT);
+        if (url.pathname !== "/callback") {
+          res.writeHead(404).end("Not found");
+          return;
+        }
+        const error = url.searchParams.get("error");
+        const code = url.searchParams.get("code");
+        const state = url.searchParams.get("state");
+
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(
+          `<html><body style="font-family:sans-serif;background:#0b1220;color:#e2e8f0;padding:40px">
+             <h2>${error ? "Falha na autorização" : "Autorização concluída"}</h2>
+             <p>${error ? error : "Pode fechar esta janela e voltar ao terminal."}</p>
+           </body></html>`
+        );
+
+        server.close();
+        if (error) return reject(new Error(`OAuth negado: ${error}`));
+        if (expectedState && state !== expectedState) {
+          return reject(new Error("State OAuth inválido (possível CSRF). Abortado."));
+        }
+        if (!code) return reject(new Error("Callback sem 'code'."));
+        resolve(code);
+      } catch (err) {
+        reject(err);
+      }
+    });
+
+    server.on("error", reject);
+    server.listen(OAUTH_PORT, "127.0.0.1", () => {
+      log("info", `Aguardando callback OAuth em ${OAUTH_REDIRECT}`);
+    });
+
+    setTimeout(() => {
+      server.close();
+      reject(new Error("Tempo esgotado aguardando autorização (5 min)."));
+    }, 5 * 60 * 1000).unref();
+  });
+}
+
+function prompt(question) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => rl.question(question, (answer) => { rl.close(); resolve(answer.trim()); }));
+}
+
+// ============================================================================
+// PROVEDOR: GOOGLE DRIVE
+// ============================================================================
+
+const GoogleDrive = {
+  id: "google",
+  label: "Google Drive",
+
+  createOAuthClient() {
+    return new google.auth.OAuth2(
+      requireEnv("GOOGLE_CLIENT_ID"),
+      requireEnv("GOOGLE_CLIENT_SECRET"),
+      OAUTH_REDIRECT
+    );
+  },
+
+  /** Fluxo interativo de consentimento. */
+  async authorize() {
+    const client = this.createOAuthClient();
+    const state = crypto.randomBytes(16).toString("hex");
+    const authUrl = client.generateAuthUrl({
+      access_type: "offline",
+      prompt: "consent",
+      scope: GOOGLE_SCOPES,
+      state,
+    });
+
+    console.log("\nAbra esta URL no navegador para autorizar o Google Drive:\n");
+    console.log(authUrl + "\n");
+
+    const code = await waitForOAuthCode(state);
+    const { tokens } = await client.getToken(code);
+    if (!tokens.refresh_token) {
+      throw new Error("Google não retornou refresh_token. Revogue o acesso e tente novamente.");
+    }
+    await writeTokens("google", { refresh_token: tokens.refresh_token });
+    log("info", "Google Drive autorizado com sucesso.");
+  },
+
+  /** @returns {Promise<import("googleapis").drive_v3.Drive>} */
+  async getClient() {
+    const saved = (await readTokens()).google;
+    if (!saved?.refresh_token) {
+      throw new Error("Google Drive não autorizado. Rode: node cloud-backup.js auth --provider google");
+    }
+    const client = this.createOAuthClient();
+    client.setCredentials({ refresh_token: saved.refresh_token });
+    return google.drive({ version: "v3", auth: client });
+  },
+
+  /** Garante a existência da árvore de pastas e devolve o id da folha. */
+  async ensureFolder(drive, segments, cache) {
+    let parentId = "root";
+    let accumulated = "";
+
+    for (const segment of segments) {
+      accumulated = accumulated ? `${accumulated}/${segment}` : segment;
+      if (cache.has(accumulated)) {
+        parentId = cache.get(accumulated);
+        continue;
+      }
+
+      const safeName = segment.replace(/'/g, "\\'");
+      const { data } = await drive.files.list({
+        q: `name='${safeName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        fields: "files(id)",
+        pageSize: 1,
+      });
+
+      let folderId = data.files?.[0]?.id;
+      if (!folderId) {
+        const created = await drive.files.create({
+          requestBody: {
+            name: segment,
+            mimeType: "application/vnd.google-apps.folder",
+            parents: [parentId],
+          },
+          fields: "id",
+        });
+        folderId = created.data.id;
+        log("debug", "Pasta criada no Google Drive", { path: accumulated });
+      }
+
+      cache.set(accumulated, folderId);
+      parentId = folderId;
+    }
+
+    return parentId;
+  },
+
+  /**
+   * Envia um arquivo. `conflict`: overwrite | skip | rename
+   */
+  async uploadFile(ctx, relPath, absPath, conflict) {
+    const drive = ctx.client;
+    const segments = [ctx.remoteRoot, ...path.dirname(relPath).split(path.sep)].filter(
+      (s) => s && s !== "."
+    );
+    const parentId = await this.ensureFolder(drive, segments, ctx.folderCache);
+    const name = path.basename(relPath);
+    const safeName = name.replace(/'/g, "\\'");
+
+    const { data } = await drive.files.list({
+      q: `name='${safeName}' and '${parentId}' in parents and trashed=false`,
+      fields: "files(id)",
+      pageSize: 1,
+    });
+    const existingId = data.files?.[0]?.id;
+
+    if (existingId && conflict === "skip") return "skipped";
+
+    const media = {
+      mimeType: mime.lookup(absPath) || "application/octet-stream",
+      body: fs.createReadStream(absPath),
+    };
+
+    if (existingId && conflict === "overwrite") {
+      await drive.files.update({ fileId: existingId, media });
+      return "updated";
+    }
+
+    const finalName =
+      existingId && conflict === "rename"
+        ? `${path.parse(name).name}-${Date.now()}${path.parse(name).ext}`
+        : name;
+
+    await drive.files.create({
+      requestBody: { name: finalName, parents: [parentId] },
+      media,
+      fields: "id",
+    });
+    return "uploaded";
+  },
+};
+
+// ============================================================================
+// PROVEDOR: ONEDRIVE (Microsoft Graph)
+// ============================================================================
+
+const OneDrive = {
+  id: "onedrive",
+  label: "OneDrive",
+  graph: "https://graph.microsoft.com/v1.0",
+
+  createApp() {
+    return new PublicClientApplication({
+      auth: {
+        clientId: requireEnv("MS_CLIENT_ID"),
+        authority: `https://login.microsoftonline.com/${process.env.MS_TENANT_ID || "common"}`,
+      },
+    });
+  },
+
+  /** Device code flow: ideal para servidores sem navegador. */
+  async authorize() {
+    const app = this.createApp();
+    const result = await app.acquireTokenByDeviceCode({
+      scopes: MS_SCOPES,
+      deviceCodeCallback: (response) => {
+        console.log(`\n${response.message}\n`);
+      },
+    });
+
+    const cache = app.getTokenCache().serialize();
+    await writeTokens("onedrive", {
+      msalCache: cache,
+      homeAccountId: result.account?.homeAccountId ?? null,
+    });
+    log("info", "OneDrive autorizado com sucesso.", { user: result.account?.username });
+  },
+
+  /** Obtém access token silenciosamente a partir do cache persistido. */
+  async getAccessToken() {
+    const saved = (await readTokens()).onedrive;
+    if (!saved?.msalCache) {
+      throw new Error("OneDrive não autorizado. Rode: node cloud-backup.js auth --provider onedrive");
+    }
+
+    const app = this.createApp();
+    const cache = app.getTokenCache();
+    await cache.deserialize(saved.msalCache);
+
+    const accounts = await cache.getAllAccounts();
+    const account =
+      accounts.find((a) => a.homeAccountId === saved.homeAccountId) || accounts[0];
+    if (!account) throw new Error("Nenhuma conta Microsoft no cache. Reautorize.");
+
+    const result = await app.acquireTokenSilent({ account, scopes: MS_SCOPES });
+
+    // Persiste o cache atualizado (refresh token rotacionado).
+    await writeTokens("onedrive", {
+      msalCache: cache.serialize(),
+      homeAccountId: account.homeAccountId,
+    });
+
+    return result.accessToken;
+  },
+
+  async getClient() {
+    const token = await this.getAccessToken();
+    return { token };
+  },
+
+  /** Chamada genérica ao Graph com tratamento de erro explícito. */
+  async graphFetch(token, url, options = {}) {
+    const response = await fetch(url.startsWith("http") ? url : `${this.graph}${url}`, {
+      ...options,
+      headers: { Authorization: `Bearer ${token}`, ...(options.headers || {}) },
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      const error = new Error(`Graph ${response.status}: ${body.slice(0, 500)}`);
+      error.statusCode = response.status;
+      throw error;
+    }
+    return response.status === 204 ? null : response.json();
+  },
+
+  encodePath(remotePath) {
+    return remotePath.split("/").filter(Boolean).map(encodeURIComponent).join("/");
+  },
+
+  /** Upload simples (<4MB) ou sessão resumível (>=4MB). */
+  async uploadFile(ctx, relPath, absPath, conflict) {
+    const token = ctx.client.token;
+    const remotePath = [ctx.remoteRoot, ...relPath.split(path.sep)].filter(Boolean).join("/");
+    const encoded = this.encodePath(remotePath);
+    const stats = await fsp.stat(absPath);
+
+    // Verifica existência para respeitar a política de conflito.
+    let exists = false;
+    try {
+      await this.graphFetch(token, `/me/drive/root:/${encoded}`);
+      exists = true;
+    } catch (err) {
+      if (err.statusCode !== 404) throw err;
+    }
+
+    if (exists && conflict === "skip") return "skipped";
+
+    const graphConflict = conflict === "rename" ? "rename" : "replace";
+
+    if (stats.size < LARGE_FILE_THRESHOLD) {
+      const buffer = await fsp.readFile(absPath);
+      await this.graphFetch(
+        token,
+        `/me/drive/root:/${encoded}:/content?@microsoft.graph.conflictBehavior=${graphConflict}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": mime.lookup(absPath) || "application/octet-stream" },
+          body: buffer,
+        }
+      );
+      return exists ? "updated" : "uploaded";
+    }
+
+    // --- Upload resumível em blocos ---
+    const session = await this.graphFetch(token, `/me/drive/root:/${encoded}:/createUploadSession`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ item: { "@microsoft.graph.conflictBehavior": graphConflict } }),
+    });
+
+    const handle = await fsp.open(absPath, "r");
+    try {
+      let offset = 0;
+      while (offset < stats.size) {
+        const size = Math.min(CHUNK_SIZE, stats.size - offset);
+        const buffer = Buffer.alloc(size);
+        await handle.read(buffer, 0, size, offset);
+
+        const res = await fetch(session.uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Length": String(size),
+            "Content-Range": `bytes ${offset}-${offset + size - 1}/${stats.size}`,
+          },
+          body: buffer,
+        });
+
+        if (!res.ok && res.status !== 202) {
+          const body = await res.text().catch(() => "");
+          throw new Error(`Chunk falhou ${res.status}: ${body.slice(0, 300)}`);
+        }
+
+        offset += size;
+        log("debug", "Chunk enviado", {
+          file: relPath,
+          progress: `${Math.round((offset / stats.size) * 100)}%`,
+        });
+      }
+    } finally {
+      await handle.close();
+    }
+
+    return exists ? "updated" : "uploaded";
+  },
+};
+
+const PROVIDERS = { google: GoogleDrive, onedrive: OneDrive };
+
+// ============================================================================
+// ORQUESTRAÇÃO DO BACKUP
+// ============================================================================
+
+/**
+ * @param {{ dir: string, provider: string, remote: string, conflict: string,
+ *           exclude: string[], incremental: boolean, dryRun: boolean }} options
+ */
+async function runBackup(options) {
+  const startedAt = Date.now();
+  const localDir = path.resolve(options.dir);
+
+  // --- Validação de entrada ---
+  const stats = await fsp.stat(localDir).catch(() => null);
+  if (!stats || !stats.isDirectory()) {
+    throw new Error(`Diretório local inválido ou inexistente: ${localDir}`);
+  }
+
+  const selected =
+    options.provider === "both" ? ["google", "onedrive"] : [options.provider];
+  for (const id of selected) {
+    if (!PROVIDERS[id]) throw new Error(`Provedor desconhecido: ${id}`);
+  }
+
+  log("info", "Iniciando backup", {
+    origem: localDir,
+    destinos: selected.join(", "),
+    remoteRoot: options.remote,
+    conflito: options.conflict,
+    incremental: options.incremental,
+    dryRun: options.dryRun,
+  });
+
+  const files = await walkDir(localDir, options.exclude);
+  if (files.length === 0) {
+    log("warn", "Nenhum arquivo encontrado na pasta de origem. Nada a fazer.");
+    return;
+  }
+  log("info", `${files.length} arquivo(s) encontrado(s).`);
+
+  const manifest = options.incremental ? await readManifest() : {};
+
+  // --- Conecta em cada provedor (falha isolada por provedor) ---
+  /** @type {Array<{provider: any, ctx: any}>} */
+  const targets = [];
+  for (const id of selected) {
+    const provider = PROVIDERS[id];
+    try {
+      const client = await withRetry(`Autenticação ${provider.label}`, () => provider.getClient());
+      targets.push({
+        provider,
+        ctx: { client, remoteRoot: options.remote, folderCache: new Map() },
+      });
+      log("info", `Conectado a ${provider.label}.`);
+    } catch (err) {
+      log("error", `Não foi possível conectar a ${provider.label}: ${err.message}`);
+    }
+  }
+
+  if (targets.length === 0) {
+    throw new Error("Nenhum provedor de nuvem disponível. Backup abortado.");
+  }
+
+  // --- Envio arquivo a arquivo ---
+  const summary = {};
+  for (const { provider } of targets) {
+    summary[provider.id] = { uploaded: 0, updated: 0, skipped: 0, failed: 0, bytes: 0 };
+  }
+
+  for (const relPath of files) {
+    const absPath = path.join(localDir, relPath);
+    const fileStat = await fsp.stat(absPath);
+    const signature = options.incremental ? await hashFile(absPath) : null;
+
+    for (const { provider, ctx } of targets) {
+      const manifestKey = `${provider.id}:${relPath}`;
+
+      if (options.incremental && manifest[manifestKey] === signature) {
+        summary[provider.id].skipped += 1;
+        log("debug", "Inalterado, pulando", { file: relPath, provider: provider.id });
+        continue;
+      }
+
+      if (options.dryRun) {
+        log("info", `[dry-run] Enviaria ${relPath} → ${provider.label}`);
+        summary[provider.id].uploaded += 1;
+        continue;
+      }
+
+      try {
+        const result = await withRetry(`Upload ${relPath} → ${provider.label}`, () =>
+          provider.uploadFile(ctx, relPath, absPath, options.conflict)
+        );
+        summary[provider.id][result] += 1;
+        if (result !== "skipped") summary[provider.id].bytes += fileStat.size;
+        if (signature) manifest[manifestKey] = signature;
+        log("info", `${result} · ${relPath}`, {
+          provider: provider.id,
+          size: formatBytes(fileStat.size),
+        });
+      } catch (err) {
+        summary[provider.id].failed += 1;
+        log("error", `Falha ao enviar ${relPath} para ${provider.label}: ${err.message}`);
+      }
+    }
+  }
+
+  if (options.incremental && !options.dryRun) await writeManifest(manifest);
+
+  // --- Relatório final ---
+  const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+  console.log("\n================ RESUMO DO BACKUP ================");
+  let anyFailure = false;
+  for (const [id, s] of Object.entries(summary)) {
+    if (s.failed > 0) anyFailure = true;
+    console.log(
+      `${PROVIDERS[id].label.padEnd(14)} enviados:${s.uploaded} atualizados:${s.updated} ` +
+        `pulados:${s.skipped} falhas:${s.failed} volume:${formatBytes(s.bytes)}`
+    );
+  }
+  console.log(`Duração: ${elapsed}s`);
+  console.log("==================================================\n");
+
+  if (anyFailure) {
+    process.exitCode = 1; // permite que o cron/monitor detecte falha parcial
+  }
+}
+
+// ============================================================================
+// CLI
+// ============================================================================
+
+async function main() {
+  await yargs(hideBin(process.argv))
+    .scriptName("cloud-backup")
+    .usage("$0 <comando> [opções]")
+    .command(
+      "auth",
+      "Autoriza o acesso a um provedor de nuvem (OAuth 2.0)",
+      (y) =>
+        y.option("provider", {
+          alias: "p",
+          choices: ["google", "onedrive"],
+          demandOption: true,
+          describe: "Provedor a autorizar",
+        }),
+      async (argv) => {
+        await PROVIDERS[argv.provider].authorize();
+      }
+    )
+    .command(
+      "run",
+      "Executa o backup da pasta local para a(s) nuvem(ns)",
+      (y) =>
+        y
+          .option("dir", {
+            alias: "d",
+            type: "string",
+            default: process.env.BACKUP_DIR,
+            describe: "Pasta local a ser copiada",
+          })
+          .option("provider", {
+            alias: "p",
+            choices: ["google", "onedrive", "both"],
+            default: process.env.BACKUP_PROVIDER || "both",
+          })
+          .option("remote", {
+            alias: "r",
+            type: "string",
+            default: process.env.BACKUP_REMOTE_DIR || "Backups",
+            describe: "Pasta raiz de destino na nuvem",
+          })
+          .option("conflict", {
+            alias: "c",
+            choices: ["overwrite", "skip", "rename"],
+            default: process.env.BACKUP_CONFLICT || "overwrite",
+            describe: "O que fazer com arquivos já existentes",
+          })
+          .option("exclude", {
+            alias: "x",
+            type: "array",
+            default: (process.env.BACKUP_EXCLUDE || "node_modules,.git").split(",").filter(Boolean),
+            describe: "Trechos de caminho a ignorar",
+          })
+          .option("incremental", {
+            type: "boolean",
+            default: true,
+            describe: "Pula arquivos cujo conteúdo não mudou desde o último backup",
+          })
+          .option("dry-run", {
+            type: "boolean",
+            default: false,
+            describe: "Simula a execução sem enviar nada",
+          })
+          .check((argv) => {
+            if (!argv.dir) throw new Error("Informe --dir ou defina BACKUP_DIR no .env");
+            return true;
+          }),
+      async (argv) => {
+        await runBackup({
+          dir: argv.dir,
+          provider: argv.provider,
+          remote: argv.remote,
+          conflict: argv.conflict,
+          exclude: argv.exclude,
+          incremental: argv.incremental,
+          dryRun: argv["dry-run"],
+        });
+      }
+    )
+    .command(
+      "status",
+      "Mostra quais provedores já estão autorizados",
+      () => {},
+      async () => {
+        const tokens = await readTokens();
+        console.log("\nEstado das autorizações:");
+        for (const [id, provider] of Object.entries(PROVIDERS)) {
+          console.log(`  ${provider.label.padEnd(14)} ${tokens[id] ? "✅ autorizado" : "❌ não autorizado"}`);
+        }
+        console.log(`\nArquivo de estado: ${TOKEN_FILE}\n`);
+      }
+    )
+    .command(
+      "logout",
+      "Remove as credenciais salvas de um provedor",
+      (y) => y.option("provider", { alias: "p", choices: ["google", "onedrive"], demandOption: true }),
+      async (argv) => {
+        const answer = await prompt(`Remover credenciais de ${PROVIDERS[argv.provider].label}? (s/N) `);
+        if (answer.toLowerCase() !== "s") return log("info", "Cancelado.");
+        const tokens = await readTokens();
+        delete tokens[argv.provider];
+        await ensureStateDir();
+        await fsp.writeFile(TOKEN_FILE, JSON.stringify(tokens, null, 2), { mode: 0o600 });
+        log("info", "Credenciais removidas.");
+      }
+    )
+    .demandCommand(1, "Informe um comando: auth | run | status | logout")
+    .strict()
+    .help()
+    .parseAsync();
+}
+
+main().catch((err) => {
+  log("error", err.message);
+  if (process.env.LOG_LEVEL === "debug") console.error(err.stack);
+  process.exit(1);
+});
