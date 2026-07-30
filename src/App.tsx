@@ -31,6 +31,7 @@ import MikrotikMonitor from "./pages/admin/MikrotikMonitor";
 import GdmsTutorial from "./pages/admin/GdmsTutorial";
 import DvrMonitor from "./pages/admin/DvrMonitor";
 import ServerMonitor from "./pages/admin/ServerMonitor";
+import AdminBackup from "./pages/admin/AdminBackup";
 import HelpdeskDashboard from "./pages/helpdesk/HelpdeskDashboard";
 import ClientTicketsList from "./pages/helpdesk/ClientTicketsList";
 import NewTicket from "./pages/helpdesk/NewTicket";
@@ -79,6 +80,7 @@ const App = () => (
               <Route path="/admin/quotes/new" element={<AuthGuard requireAdmin><CreateQuote /></AuthGuard>} />
               <Route path="/admin/quotes/:id" element={<AuthGuard requireAdmin><QuoteDetail /></AuthGuard>} />
               <Route path="/admin/quotes/:id/edit" element={<AuthGuard requireAdmin><CreateQuote /></AuthGuard>} />
+              <Route path="/admin/backup" element={<AuthGuard requireAdmin><AdminBackup /></AuthGuard>} />
               <Route path="/admin/settings" element={<AuthGuard requireAdmin><SystemSettings /></AuthGuard>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
