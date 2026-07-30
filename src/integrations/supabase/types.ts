@@ -14,6 +14,142 @@ export type Database = {
   }
   public: {
     Tables: {
+      backup_agents: {
+        Row: {
+          active: boolean
+          api_key: string
+          created_at: string
+          hostname: string | null
+          id: string
+          last_seen_at: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          api_key: string
+          created_at?: string
+          hostname?: string | null
+          id?: string
+          last_seen_at?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          api_key?: string
+          created_at?: string
+          hostname?: string | null
+          id?: string
+          last_seen_at?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      backup_run_logs: {
+        Row: {
+          created_at: string
+          id: string
+          level: string
+          message: string
+          run_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          level?: string
+          message: string
+          run_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          level?: string
+          message?: string
+          run_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backup_run_logs_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "backup_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      backup_runs: {
+        Row: {
+          agent_id: string | null
+          bytes: number
+          created_at: string
+          current_file: string | null
+          error_message: string | null
+          failed: number
+          finished_at: string | null
+          id: string
+          processed_files: number
+          providers: string | null
+          skipped: number
+          source_dir: string | null
+          started_at: string
+          status: string
+          total_files: number
+          updated: number
+          updated_at: string
+          uploaded: number
+        }
+        Insert: {
+          agent_id?: string | null
+          bytes?: number
+          created_at?: string
+          current_file?: string | null
+          error_message?: string | null
+          failed?: number
+          finished_at?: string | null
+          id?: string
+          processed_files?: number
+          providers?: string | null
+          skipped?: number
+          source_dir?: string | null
+          started_at?: string
+          status?: string
+          total_files?: number
+          updated?: number
+          updated_at?: string
+          uploaded?: number
+        }
+        Update: {
+          agent_id?: string | null
+          bytes?: number
+          created_at?: string
+          current_file?: string | null
+          error_message?: string | null
+          failed?: number
+          finished_at?: string | null
+          id?: string
+          processed_files?: number
+          providers?: string | null
+          skipped?: number
+          source_dir?: string | null
+          started_at?: string
+          status?: string
+          total_files?: number
+          updated?: number
+          updated_at?: string
+          uploaded?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backup_runs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "backup_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checklist_template_items: {
         Row: {
           created_at: string
