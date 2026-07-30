@@ -580,6 +580,35 @@ const PROVIDERS = { google: GoogleDrive, onedrive: OneDrive };
  * @param {{ dir: string, provider: string, remote: string, conflict: string,
  *           exclude: string[], incremental: boolean, dryRun: boolean }} options
  */
+
+// ============================================================================
+// Reporter — envia progresso para o painel (Backup em Nuvem)
+// ============================================================================
+
+const REPORT_URL = process.env.BACKUP_API_URL || "";
+const REPORT_KEY = process.env.BACKUP_API_KEY || "";
+const REPORT_ENABLED = Boolean(REPORT_URL && REPORT_KEY);
+
+/** Envia um evento ao painel. Nunca interrompe o backup em caso de falha. */
+async function report(action, payload = {}) {
+  if (!REPORT_ENABLED) return null;
+  try {
+    const res = await fetch(REPORT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": REPORT_KEY },
+      body: JSON.stringify({ action, hostname: os.hostname(), ...payload }),
+    });
+    if (!res.ok) {
+      log("debug", `Painel respondeu ${res.status} para "${action}"`);
+      return null;
+    }
+    return await res.json().catch(() => null);
+  } catch (err) {
+    log("debug", `Falha ao reportar "${action}": ${err.message}`);
+    return null;
+  }
+}
+
 async function runBackup(options) {
   const startedAt = Date.now();
   const localDir = path.resolve(options.dir);
@@ -612,6 +641,14 @@ async function runBackup(options) {
   }
   log("info", `${files.length} arquivo(s) encontrado(s).`);
 
+  // Registra o início da execução no painel (se configurado)
+  const started = await report("start", {
+    source_dir: localDir,
+    providers: selected.join(","),
+    total_files: files.length,
+  });
+  const runId = started?.run_id ?? null;
+
   const manifest = options.incremental ? await readManifest() : {};
 
   // --- Conecta em cada provedor (falha isolada por provedor) ---
@@ -640,6 +677,20 @@ async function runBackup(options) {
   for (const { provider } of targets) {
     summary[provider.id] = { uploaded: 0, updated: 0, skipped: 0, failed: 0, bytes: 0 };
   }
+
+  let processed = 0;
+  /** Soma os contadores de todos os provedores para o painel. */
+  const totals = () => {
+    const acc = { uploaded: 0, updated: 0, skipped: 0, failed: 0, bytes: 0 };
+    for (const s of Object.values(summary)) {
+      acc.uploaded += s.uploaded;
+      acc.updated += s.updated;
+      acc.skipped += s.skipped;
+      acc.failed += s.failed;
+      acc.bytes += s.bytes;
+    }
+    return acc;
+  };
 
   for (const relPath of files) {
     const absPath = path.join(localDir, relPath);
@@ -677,6 +728,11 @@ async function runBackup(options) {
         log("error", `Falha ao enviar ${relPath} para ${provider.label}: ${err.message}`);
       }
     }
+
+    processed += 1;
+    if (runId && (processed % 5 === 0 || processed === files.length)) {
+      await report("progress", { run_id: runId, processed_files: processed, current_file: relPath, ...totals() });
+    }
   }
 
   if (options.incremental && !options.dryRun) await writeManifest(manifest);
@@ -694,6 +750,15 @@ async function runBackup(options) {
   }
   console.log(`Duração: ${elapsed}s`);
   console.log("==================================================\n");
+
+  if (runId) {
+    await report("finish", {
+      run_id: runId,
+      status: anyFailure ? "partial" : "success",
+      processed_files: processed,
+      ...totals(),
+    });
+  }
 
   if (anyFailure) {
     process.exitCode = 1; // permite que o cron/monitor detecte falha parcial
