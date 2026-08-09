@@ -339,9 +339,16 @@ node cloud-backup.js run --dir /caminho/da/pasta --provider both`}
                       </span>
                     </div>
                     <Progress value={pct} />
-                    <p className="text-xs text-muted-foreground truncate">
-                      {run.current_file ? `Enviando: ${run.current_file}` : "Preparando..."}
-                    </p>
+                    <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
+                      <span className="truncate">
+                        {run.current_file ? `Copiando: ${run.current_file}` : "Preparando..."}
+                      </span>
+                      <span className="whitespace-nowrap">
+                        {formatBytes(run.bytes)}
+                        {run.speed_bps ? ` · ${formatBytes(run.speed_bps)}/s` : ""} · restam{" "}
+                        {formatDuration(run.eta_seconds)}
+                      </span>
+                    </div>
                   </div>
                 );
               })}
