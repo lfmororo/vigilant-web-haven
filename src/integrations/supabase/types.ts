@@ -47,6 +47,77 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_jobs: {
+        Row: {
+          agent_id: string | null
+          created_at: string
+          dest_path: string
+          id: string
+          is_active: boolean
+          job_type: string
+          mirror: boolean
+          name: string
+          notify_on_error: boolean
+          notify_on_finish: boolean
+          notify_on_progress: boolean
+          notify_on_start: boolean
+          notify_phone: string | null
+          progress_step_pct: number
+          schedule_cron: string | null
+          source_path: string
+          threads: number
+          updated_at: string
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string
+          dest_path: string
+          id?: string
+          is_active?: boolean
+          job_type?: string
+          mirror?: boolean
+          name: string
+          notify_on_error?: boolean
+          notify_on_finish?: boolean
+          notify_on_progress?: boolean
+          notify_on_start?: boolean
+          notify_phone?: string | null
+          progress_step_pct?: number
+          schedule_cron?: string | null
+          source_path: string
+          threads?: number
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string
+          dest_path?: string
+          id?: string
+          is_active?: boolean
+          job_type?: string
+          mirror?: boolean
+          name?: string
+          notify_on_error?: boolean
+          notify_on_finish?: boolean
+          notify_on_progress?: boolean
+          notify_on_start?: boolean
+          notify_phone?: string | null
+          progress_step_pct?: number
+          schedule_cron?: string | null
+          source_path?: string
+          threads?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backup_jobs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "backup_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       backup_run_logs: {
         Row: {
           created_at: string
@@ -82,17 +153,23 @@ export type Database = {
       backup_runs: {
         Row: {
           agent_id: string | null
+          backup_type: string
           bytes: number
           created_at: string
           current_file: string | null
+          dest_dir: string | null
           error_message: string | null
+          eta_seconds: number | null
           failed: number
           finished_at: string | null
           id: string
+          job_id: string | null
+          last_notified_pct: number
           processed_files: number
           providers: string | null
           skipped: number
           source_dir: string | null
+          speed_bps: number | null
           started_at: string
           status: string
           total_files: number
@@ -102,17 +179,23 @@ export type Database = {
         }
         Insert: {
           agent_id?: string | null
+          backup_type?: string
           bytes?: number
           created_at?: string
           current_file?: string | null
+          dest_dir?: string | null
           error_message?: string | null
+          eta_seconds?: number | null
           failed?: number
           finished_at?: string | null
           id?: string
+          job_id?: string | null
+          last_notified_pct?: number
           processed_files?: number
           providers?: string | null
           skipped?: number
           source_dir?: string | null
+          speed_bps?: number | null
           started_at?: string
           status?: string
           total_files?: number
@@ -122,17 +205,23 @@ export type Database = {
         }
         Update: {
           agent_id?: string | null
+          backup_type?: string
           bytes?: number
           created_at?: string
           current_file?: string | null
+          dest_dir?: string | null
           error_message?: string | null
+          eta_seconds?: number | null
           failed?: number
           finished_at?: string | null
           id?: string
+          job_id?: string | null
+          last_notified_pct?: number
           processed_files?: number
           providers?: string | null
           skipped?: number
           source_dir?: string | null
+          speed_bps?: number | null
           started_at?: string
           status?: string
           total_files?: number
@@ -146,6 +235,13 @@ export type Database = {
             columns: ["agent_id"]
             isOneToOne: false
             referencedRelation: "backup_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backup_runs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "backup_jobs"
             referencedColumns: ["id"]
           },
         ]

@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import LocalBackupJobs from "@/components/admin/backup/LocalBackupJobs";
 import { toast } from "sonner";
 import { Copy, Download, HardDriveDownload, Plus, RefreshCw, Trash2 } from "lucide-react";
 
@@ -37,6 +39,10 @@ interface BackupRun {
   error_message: string | null;
   started_at: string;
   finished_at: string | null;
+  backup_type?: string | null;
+  dest_dir?: string | null;
+  speed_bps?: number | null;
+  eta_seconds?: number | null;
 }
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/backup-report`;
@@ -46,6 +52,16 @@ const formatBytes = (bytes: number): string => {
   const units = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+};
+
+const formatDuration = (seconds?: number | null): string => {
+  if (seconds === null || seconds === undefined || !isFinite(seconds) || seconds < 0) return "—";
+  const s = Math.round(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return `${h}h ${m}min`;
+  if (m > 0) return `${m}min ${s % 60}s`;
+  return `${s}s`;
 };
 
 const statusBadge = (status: string) => {
@@ -139,10 +155,10 @@ const AdminBackup = () => {
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-2">
               <HardDriveDownload className="w-7 h-7 text-primary" />
-              Backup em Nuvem
+              Backup
             </h1>
             <p className="text-muted-foreground">
-              Baixe os scripts, configure os servidores e acompanhe o progresso das cópias.
+              Backup em nuvem e backup local/rede, com alertas de início, progresso, término e erros via WhatsApp.
             </p>
           </div>
           <Button variant="outline" onClick={loadData} disabled={loading}>
@@ -150,30 +166,60 @@ const AdminBackup = () => {
           </Button>
         </div>
 
-        {/* Downloads */}
+        <Tabs defaultValue="local">
+          <TabsList>
+            <TabsTrigger value="local">Backup local / rede</TabsTrigger>
+            <TabsTrigger value="cloud">Backup em nuvem</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="local" className="mt-4">
+            <LocalBackupJobs agents={agents.map((a) => ({ id: a.id, name: a.name }))} endpoint={FUNCTIONS_URL} />
+          </TabsContent>
+
+          <TabsContent value="cloud" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Scripts</CardTitle>
+                <CardDescription>Baixe e execute no servidor que possui a pasta a ser copiada.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-3">
+                <Button asChild>
+                  <a href="/cloud-backup.js" download>
+                    <Download className="w-4 h-4 mr-2" /> cloud-backup.js
+                  </a>
+                </Button>
+                <Button variant="outline" asChild>
+                  <a href="/cloud-backup-README.md" download>
+                    <Download className="w-4 h-4 mr-2" /> README (instalação)
+                  </a>
+                </Button>
+                <Button variant="ghost" asChild>
+                  <a href="/cloud-backup-README.md" target="_blank" rel="noreferrer">
+                    Ver documentação
+                  </a>
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Download do script local */}
         <Card>
           <CardHeader>
-            <CardTitle>Scripts</CardTitle>
-            <CardDescription>Baixe e execute no servidor que possui a pasta a ser copiada.</CardDescription>
+            <CardTitle>Script de backup local</CardTitle>
+            <CardDescription>
+              Copia para disco ou rede usando várias cópias simultâneas e reporta o progresso em tempo real.
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
             <Button asChild>
-              <a href="/cloud-backup.js" download>
-                <Download className="w-4 h-4 mr-2" /> cloud-backup.js
-              </a>
-            </Button>
-            <Button variant="outline" asChild>
-              <a href="/cloud-backup-README.md" download>
-                <Download className="w-4 h-4 mr-2" /> README (instalação)
-              </a>
-            </Button>
-            <Button variant="ghost" asChild>
-              <a href="/cloud-backup-README.md" target="_blank" rel="noreferrer">
-                Ver documentação
+              <a href="/local-backup.js" download>
+                <Download className="w-4 h-4 mr-2" /> local-backup.js
               </a>
             </Button>
           </CardContent>
         </Card>
+
 
         {/* Agentes */}
         <Card>
@@ -293,9 +339,16 @@ node cloud-backup.js run --dir /caminho/da/pasta --provider both`}
                       </span>
                     </div>
                     <Progress value={pct} />
-                    <p className="text-xs text-muted-foreground truncate">
-                      {run.current_file ? `Enviando: ${run.current_file}` : "Preparando..."}
-                    </p>
+                    <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
+                      <span className="truncate">
+                        {run.current_file ? `Copiando: ${run.current_file}` : "Preparando..."}
+                      </span>
+                      <span className="whitespace-nowrap">
+                        {formatBytes(run.bytes)}
+                        {run.speed_bps ? ` · ${formatBytes(run.speed_bps)}/s` : ""} · restam{" "}
+                        {formatDuration(run.eta_seconds)}
+                      </span>
+                    </div>
                   </div>
                 );
               })}
