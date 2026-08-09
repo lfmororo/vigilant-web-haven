@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import LocalBackupJobs from "@/components/admin/backup/LocalBackupJobs";
 import { toast } from "sonner";
 import { Copy, Download, HardDriveDownload, Plus, RefreshCw, Trash2 } from "lucide-react";
 
