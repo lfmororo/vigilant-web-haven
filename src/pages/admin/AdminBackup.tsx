@@ -39,6 +39,10 @@ interface BackupRun {
   error_message: string | null;
   started_at: string;
   finished_at: string | null;
+  backup_type?: string | null;
+  dest_dir?: string | null;
+  speed_bps?: number | null;
+  eta_seconds?: number | null;
 }
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/backup-report`;
