@@ -54,6 +54,16 @@ const formatBytes = (bytes: number): string => {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 };
 
+const formatDuration = (seconds?: number | null): string => {
+  if (seconds === null || seconds === undefined || !isFinite(seconds) || seconds < 0) return "—";
+  const s = Math.round(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return `${h}h ${m}min`;
+  if (m > 0) return `${m}min ${s % 60}s`;
+  return `${s}s`;
+};
+
 const statusBadge = (status: string) => {
   switch (status) {
     case "running":
