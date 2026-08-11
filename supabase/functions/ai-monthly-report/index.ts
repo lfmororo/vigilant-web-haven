@@ -150,7 +150,9 @@ Regras:
 - Use formatação Markdown
 - Seja analítico e profissional
 - Inclua percentuais quando relevante
-- Destaque pontos de atenção`;
+- Destaque pontos de atenção
+- NUNCA invente datas. A data atual de emissão é ${new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}. O período analisado é ${monthNames[month - 1]} de ${year}.
+- NÃO inclua cabeçalho com "Data de Emissão", "Elaborado por" ou similares — isso já consta no documento final.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -161,7 +163,7 @@ Regras:
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: "Você é um analista de suporte técnico especializado em relatórios gerenciais de TI." },
+          { role: "system", content: `Você é um analista de suporte técnico especializado em relatórios gerenciais de TI. A data de hoje é ${new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}. Nunca invente datas fora do período informado.` },
           { role: "user", content: prompt },
         ],
       }),
