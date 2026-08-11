@@ -163,7 +163,7 @@ Regras:
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: "Você é um analista de suporte técnico especializado em relatórios gerenciais de TI." },
+          { role: "system", content: `Você é um analista de suporte técnico especializado em relatórios gerenciais de TI. A data de hoje é ${new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}. Nunca invente datas fora do período informado.` },
           { role: "user", content: prompt },
         ],
       }),
