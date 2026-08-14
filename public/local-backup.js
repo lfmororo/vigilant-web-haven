@@ -1,361 +1,438 @@
 #!/usr/bin/env node
+'use strict';
+
 /**
- * local-backup.js — Backup LOCAL / REDE com telemetria e alertas WhatsApp.
+ * copiar-pastas.js
+ * ------------------------------------------------------------
+ * Copia uma ou mais pastas para um destino, mostrando progresso
+ * em tempo real (bytes copiados, %, velocidade, ETA).
  *
- * Copia uma pasta de origem para uma pasta de destino (disco local, HD externo
- * ou caminho de rede UNC \\servidor\share / ponto de montagem SMB-NFS), usando
- * várias cópias em paralelo para aproveitar o máximo de banda disponível.
+ * Usa modelo produtor/consumidor: o mapeamento das pastas roda em
+ * paralelo com a cópia (que começa assim que os primeiros arquivos
+ * são encontrados, sem esperar a árvore inteira ser listada) e a
+ * fila de arquivos pendentes tem tamanho limitado — isso mantém o
+ * uso de memória sob controle mesmo em árvores com milhões de
+ * arquivos (evita o erro "JavaScript heap out of memory").
  *
- * Reporta início, progresso, tempo estimado, erros e término para o painel
- * "Backup" do sistema, que dispara as notificações via WhatsApp.
+ * USO INTERATIVO:
+ *   node copiar-pastas.js
  *
- * Uso:
- *   node local-backup.js --source "D:\\Dados" --dest "\\\\NAS\\backup\\Dados" [opções]
- *   node local-backup.js --job <id-da-tarefa>       (busca a config no painel)
- *   node local-backup.js --list-jobs
+ * USO POR LINHA DE COMANDO:
+ *   node copiar-pastas.js "C:\pasta1" "\\servidor\pasta2" --destino "D:\backup"
  *
- * Opções:
- *   --source <caminho>     Pasta de origem
- *   --dest <caminho>       Pasta de destino (aceita rede)
- *   --threads <n>          Cópias simultâneas (padrão 8; use 16-32 em rede 1Gb+)
- *   --mirror               Remove no destino arquivos que não existem na origem
- *   --exclude <padrões>    Lista separada por vírgula (ex.: "*.tmp,node_modules")
- *   --dry-run              Simula, sem escrever nada
- *
- * Variáveis de ambiente (telemetria — opcional, mas necessária p/ alertas):
- *   BACKUP_API_URL   https://<projeto>.functions.supabase.co/functions/v1/backup-report
- *   BACKUP_API_KEY   chave do agente gerada no painel
- *
- * Requer apenas Node.js 18+ (sem dependências externas).
+ * OPÇÕES:
+ *   --destino <caminho>   Pasta de destino (obrigatório)
+ *   --concorrencia <N>    Arquivos copiados ao mesmo tempo (padrão: 16)
+ *   --partes <N>          Partes paralelas por arquivo grande ≥64MB (padrão: 4)
+ * ------------------------------------------------------------
  */
 
-"use strict";
-
-const fs = require("fs");
+const fs = require('fs');
 const fsp = fs.promises;
-const path = require("path");
-const os = require("os");
+const path = require('path');
+const readline = require('readline');
 
-// ---------------------------------------------------------------- utilidades
-
-const API_URL = process.env.BACKUP_API_URL || "";
-const API_KEY = process.env.BACKUP_API_KEY || "";
-
-const log = (...args) => console.log(`[${new Date().toISOString()}]`, ...args);
-
-function parseArgs(argv) {
-  const args = { threads: 8, mirror: false, dryRun: false, exclude: [] };
-  for (let i = 2; i < argv.length; i++) {
-    const a = argv[i];
-    switch (a) {
-      case "--source":
-      case "--dir":
-        args.source = argv[++i];
-        break;
-      case "--dest":
-        args.dest = argv[++i];
-        break;
-      case "--threads":
-        args.threads = Math.max(1, Math.min(64, parseInt(argv[++i], 10) || 8));
-        break;
-      case "--mirror":
-        args.mirror = true;
-        break;
-      case "--exclude":
-        args.exclude = String(argv[++i] || "")
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-        break;
-      case "--dry-run":
-        args.dryRun = true;
-        break;
-      case "--job":
-        args.job = argv[++i];
-        break;
-      case "--list-jobs":
-        args.listJobs = true;
-        break;
-      case "--help":
-      case "-h":
-        args.help = true;
-        break;
-      default:
-        if (a.startsWith("--")) console.warn(`Opção desconhecida ignorada: ${a}`);
-    }
+// ============ CONFIGURAÇÕES (ajuste conforme sua rede) ============
+function obterArgConcorrencia() {
+  const args = process.argv.slice(2);
+  const idx = args.indexOf('--concorrencia');
+  if (idx !== -1 && args[idx + 1]) {
+    const valor = parseInt(args[idx + 1], 10);
+    if (!isNaN(valor) && valor > 0) return valor;
   }
-  return args;
+  return 16;
 }
 
-function formatBytes(bytes) {
-  if (!bytes) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+function obterArgPartes() {
+  const args = process.argv.slice(2);
+  const idx = args.indexOf('--partes');
+  if (idx !== -1 && args[idx + 1]) {
+    const valor = parseInt(args[idx + 1], 10);
+    if (!isNaN(valor) && valor > 0) return valor;
+  }
+  return 4;
 }
 
-function matchesExclude(name, patterns) {
-  return patterns.some((p) => {
-    const rx = new RegExp("^" + p.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$", "i");
-    return rx.test(name);
-  });
+const CONCORRENCIA = obterArgConcorrencia();
+const PARTES_ARQUIVO_GRANDE = obterArgPartes();
+const TAMANHO_BUFFER = 4 * 1024 * 1024;
+const LIMITE_ARQUIVO_PEQUENO = 2 * 1024 * 1024;
+const LIMITE_ARQUIVO_DIVIDIR = 64 * 1024 * 1024;
+const TOLERANCIA_MTIME_MS = 2000;
+
+// Tamanho máximo da fila de arquivos pendentes. O mapeamento pausa quando
+// atinge esse limite e só volta a listar mais quando os consumidores (cópia)
+// abrirem espaço. É isso que mantém a memória limitada em árvores enormes.
+const LIMITE_FILA = 5000;
+const LIMITE_TRAVESSIA_PARALELA = Math.min(CONCORRENCIA, 12);
+
+// ============ UTILITÁRIOS ============
+function formatarBytes(bytes) {
+  if (bytes <= 0) return '0 B';
+  const unidades = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${unidades[i]}`;
 }
 
-// ------------------------------------------------------------- API telemetria
+function formatarTempo(segundos) {
+  if (!isFinite(segundos) || segundos < 0) return '--:--:--';
+  const h = Math.floor(segundos / 3600);
+  const m = Math.floor((segundos % 3600) / 60);
+  const s = Math.floor(segundos % 60);
+  return [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
+}
 
-async function api(action, body = {}) {
-  if (!API_URL || !API_KEY) return null;
+function esperar(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function perguntar(pergunta) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise(resolve => rl.question(pergunta, resposta => {
+    rl.close();
+    resolve(resposta.trim());
+  }));
+}
+
+async function existeCaminho(caminho) {
   try {
-    const resp = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
-      body: JSON.stringify({ action, hostname: os.hostname(), ...body }),
-    });
-    if (!resp.ok) {
-      console.error(`Telemetria falhou [${resp.status}]: ${await resp.text()}`);
-      return null;
+    await fsp.access(caminho);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ============ COLETA DE ENTRADA (interativa ou via CLI) ============
+async function coletarEntrada() {
+  const args = process.argv.slice(2);
+  let origens = [];
+  let destino = null;
+
+  const flagsComValor = ['--destino', '--concorrencia', '--partes'];
+  const indicesParaRemover = new Set();
+  for (const flag of flagsComValor) {
+    const idx = args.indexOf(flag);
+    if (idx !== -1) {
+      if (flag === '--destino') destino = args[idx + 1];
+      indicesParaRemover.add(idx);
+      indicesParaRemover.add(idx + 1);
     }
-    return await resp.json();
+  }
+  const restantes = args.filter((_, i) => !indicesParaRemover.has(i));
+  if (restantes.length > 0) origens = restantes;
+
+  if (origens.length > 0 && destino) {
+    return { origens, destino };
+  }
+
+  console.log('=== Copiar Pastas com Progresso ===\n');
+  origens = [];
+  while (true) {
+    const resp = await perguntar(
+      origens.length === 0
+        ? 'Pasta de origem (caminho completo): '
+        : 'Outra pasta de origem (ENTER para continuar): '
+    );
+    if (!resp) {
+      if (origens.length === 0) {
+        console.log('Você precisa informar pelo menos uma pasta de origem.');
+        continue;
+      }
+      break;
+    }
+    origens.push(resp);
+  }
+
+  while (!destino) {
+    destino = await perguntar('\nPasta de destino: ');
+    if (!destino) console.log('Informe um destino válido.');
+  }
+
+  return { origens, destino };
+}
+
+// ============ POOL DE CONCORRÊNCIA GENÉRICO ============
+async function executarComLimite(itens, limite, worker) {
+  let indice = 0;
+  async function proximo() {
+    if (indice >= itens.length) return;
+    const item = itens[indice++];
+    await worker(item);
+    return proximo();
+  }
+  const trabalhadores = [];
+  for (let i = 0; i < Math.min(limite, itens.length); i++) trabalhadores.push(proximo());
+  await Promise.all(trabalhadores);
+}
+
+// ============ CACHE DE DIRETÓRIOS JÁ CRIADOS ============
+const diretoriosCriados = new Set();
+async function garantirDiretorio(dir) {
+  if (diretoriosCriados.has(dir)) return;
+  await fsp.mkdir(dir, { recursive: true });
+  let atual = dir;
+  while (atual && !diretoriosCriados.has(atual)) {
+    diretoriosCriados.add(atual);
+    const pai = path.dirname(atual);
+    if (pai === atual) break;
+    atual = pai;
+  }
+}
+
+// ============ VERIFICAÇÃO DE ARQUIVO JÁ COPIADO ============
+async function arquivoJaCopiado(item) {
+  try {
+    const statDestino = await fsp.stat(item.destino);
+    if (statDestino.size !== item.tamanho) return false;
+    const diffMs = Math.abs(statDestino.mtimeMs - item.mtimeMs);
+    return diffMs <= TOLERANCIA_MTIME_MS;
+  } catch {
+    return false;
+  }
+}
+
+// ============ CÓPIA DIVIDIDA (arquivos grandes, múltiplas partes em paralelo) ============
+async function copiarIntervalo(handleLeitura, handleEscrita, inicio, fim, onProgresso) {
+  const buffer = Buffer.alloc(TAMANHO_BUFFER);
+  let posicao = inicio;
+  while (posicao < fim) {
+    const tamanhoLeitura = Math.min(TAMANHO_BUFFER, fim - posicao);
+    const { bytesRead } = await handleLeitura.read(buffer, 0, tamanhoLeitura, posicao);
+    if (bytesRead === 0) break;
+    await handleEscrita.write(buffer, 0, bytesRead, posicao);
+    onProgresso(bytesRead);
+    posicao += bytesRead;
+  }
+}
+
+async function copiarArquivoDividido(item, onProgresso) {
+  const handleLeitura = await fsp.open(item.origem, 'r');
+  const handleEscrita = await fsp.open(item.destino, 'w');
+  try {
+    const tamanhoParte = Math.ceil(item.tamanho / PARTES_ARQUIVO_GRANDE);
+    const tarefas = [];
+    for (let i = 0; i < PARTES_ARQUIVO_GRANDE; i++) {
+      const inicio = i * tamanhoParte;
+      const fim = Math.min(inicio + tamanhoParte, item.tamanho);
+      if (inicio >= fim) break;
+      tarefas.push(copiarIntervalo(handleLeitura, handleEscrita, inicio, fim, onProgresso));
+    }
+    await Promise.all(tarefas);
+  } finally {
+    await handleLeitura.close();
+    await handleEscrita.close();
+  }
+}
+
+// ============ CÓPIA DE UM ARQUIVO (com callback de progresso) ============
+// Retorna 'copiado' ou 'pulado'
+async function copiarArquivo(item, onProgresso) {
+  if (await arquivoJaCopiado(item)) {
+    onProgresso(item.tamanho);
+    return 'pulado';
+  }
+
+  await garantirDiretorio(path.dirname(item.destino));
+
+  if (item.tamanho <= LIMITE_ARQUIVO_PEQUENO) {
+    await fsp.copyFile(item.origem, item.destino);
+    await fsp.utimes(item.destino, item.atime, item.mtime);
+    onProgresso(item.tamanho);
+    return 'copiado';
+  }
+
+  if (item.tamanho >= LIMITE_ARQUIVO_DIVIDIR) {
+    await copiarArquivoDividido(item, onProgresso);
+    await fsp.utimes(item.destino, item.atime, item.mtime);
+    return 'copiado';
+  }
+
+  await new Promise((resolve, reject) => {
+    const leitura = fs.createReadStream(item.origem, { highWaterMark: TAMANHO_BUFFER });
+    const escrita = fs.createWriteStream(item.destino, { highWaterMark: TAMANHO_BUFFER });
+    leitura.on('data', chunk => onProgresso(chunk.length));
+    leitura.on('error', err => { escrita.destroy(); reject(err); });
+    escrita.on('error', reject);
+    escrita.on('finish', resolve);
+    leitura.pipe(escrita);
+  });
+  await fsp.utimes(item.destino, item.atime, item.mtime);
+  return 'copiado';
+}
+
+// ============ PAINEL DE PROGRESSO (mapeamento + cópia acontecendo juntos) ============
+function criarMonitor() {
+  let pastasVisitadas = 0;
+  let arquivosDescobertos = 0;
+  let arquivosProcessados = 0;
+  let arquivosCopiados = 0;
+  let arquivosPulados = 0;
+  let arquivosComErro = 0;
+  let bytesCopiados = 0;
+  let mapeamentoConcluido = false;
+
+  const inicio = Date.now();
+  let ultimoBytes = 0;
+  let ultimoTempo = inicio;
+
+  const intervalo = setInterval(desenhar, 300);
+
+  function desenhar() {
+    const agora = Date.now();
+    const decorrido = (agora - inicio) / 1000;
+    const deltaBytes = bytesCopiados - ultimoBytes;
+    const deltaTempo = (agora - ultimoTempo) / 1000 || 1;
+    const velocidade = deltaBytes / deltaTempo;
+    ultimoBytes = bytesCopiados;
+    ultimoTempo = agora;
+
+    const statusMapa = mapeamentoConcluido ? 'concluído' : 'em andamento';
+    const percentual = arquivosDescobertos > 0
+      ? (arquivosProcessados / arquivosDescobertos) * 100
+      : 0;
+
+    const largura = (process.stdout.columns || 120) - 1;
+    const linha =
+      `Mapeamento: ${statusMapa} (${pastasVisitadas} pastas, ${arquivosDescobertos} arquivos) | ` +
+      `Copiados: ${arquivosProcessados}/${arquivosDescobertos} (${percentual.toFixed(1)}%) | ` +
+      `${formatarBytes(bytesCopiados)} | ${formatarBytes(velocidade)}/s | ${formatarTempo(decorrido)}`;
+    process.stdout.write('\r' + linha.slice(0, largura).padEnd(largura, ' '));
+  }
+
+  return {
+    registrarPasta() { pastasVisitadas++; },
+    registrarArquivoDescoberto() { arquivosDescobertos++; },
+    marcarMapeamentoConcluido() { mapeamentoConcluido = true; },
+    adicionarBytes(qtd) { bytesCopiados += qtd; },
+    arquivoProcessado(resultado) {
+      arquivosProcessados++;
+      if (resultado === 'copiado') arquivosCopiados++;
+      else if (resultado === 'pulado') arquivosPulados++;
+      else arquivosComErro++;
+    },
+    finalizar() {
+      clearInterval(intervalo);
+      desenhar();
+      process.stdout.write('\n');
+      return {
+        arquivosCopiados, arquivosPulados, arquivosComErro,
+        bytesCopiados, segundos: (Date.now() - inicio) / 1000
+      };
+    }
+  };
+}
+
+// ============ PRODUTOR: mapeia diretórios e enfileira arquivos ============
+// Percorre subpastas em paralelo (várias chamadas readdir simultâneas —
+// reduz o impacto da latência de rede) e aplica "backpressure": se a fila
+// já tem LIMITE_FILA itens pendentes, espera antes de descobrir mais.
+async function mapear(dirOrigem, dirDestino, fila, monitor) {
+  monitor.registrarPasta();
+  let entradas;
+  try {
+    entradas = await fsp.readdir(dirOrigem, { withFileTypes: true });
   } catch (err) {
-    console.error("Telemetria indisponível:", err.message);
-    return null;
+    console.error(`\nNão foi possível ler "${dirOrigem}": ${err.message}`);
+    return;
   }
-}
 
-// ------------------------------------------------------------------ varredura
-
-async function scan(root, exclude) {
-  const files = [];
-  let totalBytes = 0;
-
-  async function walk(dir, rel) {
-    let entries;
-    try {
-      entries = await fsp.readdir(dir, { withFileTypes: true });
-    } catch (err) {
-      console.error(`Não foi possível ler ${dir}: ${err.message}`);
-      return;
-    }
-    for (const entry of entries) {
-      if (matchesExclude(entry.name, exclude)) continue;
-      const full = path.join(dir, entry.name);
-      const relPath = rel ? path.join(rel, entry.name) : entry.name;
-      if (entry.isDirectory()) {
-        await walk(full, relPath);
-      } else if (entry.isFile()) {
-        try {
-          const st = await fsp.stat(full);
-          files.push({ rel: relPath, size: st.size, mtimeMs: st.mtimeMs });
-          totalBytes += st.size;
-        } catch {
-          /* arquivo removido durante a varredura — ignorar */
-        }
-      }
+  const subpastas = [];
+  for (const entrada of entradas) {
+    const origemCompleta = path.join(dirOrigem, entrada.name);
+    const destinoCompleto = path.join(dirDestino, entrada.name);
+    if (entrada.isDirectory()) {
+      subpastas.push({ origemCompleta, destinoCompleto });
+    } else if (entrada.isFile()) {
+      while (fila.length >= LIMITE_FILA) await esperar(20);
+      fila.push({ origem: origemCompleta, destino: destinoCompleto });
+      monitor.registrarArquivoDescoberto();
     }
   }
 
-  await walk(root, "");
-  return { files, totalBytes };
-}
-
-// -------------------------------------------------------------------- backup
-
-async function runBackup(cfg) {
-  const stats = { uploaded: 0, updated: 0, skipped: 0, failed: 0, bytes: 0, processed: 0 };
-  const startedAt = Date.now();
-
-  const source = path.resolve(cfg.source);
-  const dest = cfg.dest; // pode ser UNC — não resolver para não quebrar \\server\share
-
-  if (!fs.existsSync(source)) throw new Error(`Origem inexistente: ${source}`);
-  if (!cfg.dryRun) await fsp.mkdir(dest, { recursive: true });
-
-  log(`Varrendo origem: ${source}`);
-  const { files, totalBytes } = await scan(source, cfg.exclude);
-  log(`${files.length} arquivos · ${formatBytes(totalBytes)}`);
-
-  const started = await api("start", {
-    job_id: cfg.jobId || null,
-    backup_type: "local",
-    source_dir: source,
-    dest_dir: dest,
-    providers: "local",
-    total_files: files.length,
-  });
-  const runId = started?.run_id || null;
-
-  const report = (action, body) => (runId ? api(action, { run_id: runId, ...body }) : Promise.resolve(null));
-
-  let lastReport = 0;
-  let currentFile = "";
-
-  const sendProgress = async (force = false) => {
-    const now = Date.now();
-    if (!force && now - lastReport < 4000) return;
-    lastReport = now;
-    const elapsed = (now - startedAt) / 1000;
-    const speed = elapsed > 0 ? stats.bytes / elapsed : 0;
-    const remainingBytes = Math.max(0, totalBytes - stats.bytes);
-    const eta = speed > 0 ? remainingBytes / speed : null;
-    await report("progress", {
-      processed_files: stats.processed,
-      total_files: files.length,
-      uploaded: stats.uploaded,
-      updated: stats.updated,
-      skipped: stats.skipped,
-      failed: stats.failed,
-      bytes: stats.bytes,
-      current_file: currentFile,
-      speed_bps: Math.round(speed),
-      eta_seconds: eta === null ? null : Math.round(eta),
-    });
-  };
-
-  // pool de cópias paralelas — maximiza o uso da banda em destinos de rede
-  let index = 0;
-  const worker = async () => {
-    while (index < files.length) {
-      const file = files[index++];
-      const src = path.join(source, file.rel);
-      const dst = path.join(dest, file.rel);
-      currentFile = file.rel;
-      try {
-        let needsCopy = true;
-        let isUpdate = false;
-        try {
-          const dstStat = await fsp.stat(dst);
-          isUpdate = true;
-          // incremental: mesmo tamanho e destino não mais antigo → pula
-          if (dstStat.size === file.size && dstStat.mtimeMs >= file.mtimeMs - 2000) needsCopy = false;
-        } catch {
-          /* destino não existe */
-        }
-
-        if (!needsCopy) {
-          stats.skipped++;
-        } else if (cfg.dryRun) {
-          stats.uploaded++;
-          stats.bytes += file.size;
-        } else {
-          await fsp.mkdir(path.dirname(dst), { recursive: true });
-          await fsp.copyFile(src, dst);
-          await fsp.utimes(dst, new Date(), new Date(file.mtimeMs));
-          if (isUpdate) stats.updated++;
-          else stats.uploaded++;
-          stats.bytes += file.size;
-        }
-      } catch (err) {
-        stats.failed++;
-        const msg = `Falha ao copiar ${file.rel}: ${err.message}`;
-        console.error(msg);
-        await report("log", { level: "error", message: msg });
-      } finally {
-        stats.processed++;
-        await sendProgress();
-      }
-    }
-  };
-
-  await Promise.all(Array.from({ length: cfg.threads }, worker));
-
-  // espelhamento: remove no destino o que não existe mais na origem
-  if (cfg.mirror && !cfg.dryRun) {
-    const keep = new Set(files.map((f) => f.rel));
-    const { files: destFiles } = await scan(dest, cfg.exclude);
-    for (const f of destFiles) {
-      if (!keep.has(f.rel)) {
-        try {
-          await fsp.unlink(path.join(dest, f.rel));
-          log(`Removido no destino (mirror): ${f.rel}`);
-        } catch (err) {
-          console.error(`Falha ao remover ${f.rel}: ${err.message}`);
-        }
-      }
-    }
-  }
-
-  await sendProgress(true);
-
-  const elapsed = (Date.now() - startedAt) / 1000;
-  const status = stats.failed === 0 ? "success" : stats.processed > stats.failed ? "partial" : "failed";
-  await report("finish", {
-    status,
-    processed_files: stats.processed,
-    uploaded: stats.uploaded,
-    updated: stats.updated,
-    skipped: stats.skipped,
-    failed: stats.failed,
-    bytes: stats.bytes,
-    speed_bps: elapsed > 0 ? Math.round(stats.bytes / elapsed) : 0,
-    error_message: stats.failed ? `${stats.failed} arquivo(s) com falha` : null,
-  });
-
-  log(
-    `Concluído em ${elapsed.toFixed(1)}s · ${stats.uploaded} novos · ${stats.updated} atualizados · ` +
-      `${stats.skipped} inalterados · ${stats.failed} falhas · ${formatBytes(stats.bytes)}`,
+  await executarComLimite(
+    subpastas,
+    LIMITE_TRAVESSIA_PARALELA,
+    sp => mapear(sp.origemCompleta, sp.destinoCompleto, fila, monitor)
   );
-  return status;
 }
 
-// ---------------------------------------------------------------------- main
-
-(async () => {
-  const args = parseArgs(process.argv);
-
-  if (args.help) {
-    console.log(fs.readFileSync(__filename, "utf8").split("*/")[0]);
-    process.exit(0);
+// ============ CONSUMIDOR: retira da fila e copia ============
+async function trabalhador(fila, monitor, estadoMapeamento) {
+  while (true) {
+    if (fila.length === 0) {
+      if (estadoMapeamento.concluido) return;
+      await esperar(30);
+      continue;
+    }
+    const ref = fila.shift();
+    try {
+      const stat = await fsp.stat(ref.origem);
+      const item = {
+        origem: ref.origem,
+        destino: ref.destino,
+        tamanho: stat.size,
+        mtime: stat.mtime,
+        mtimeMs: stat.mtimeMs,
+        atime: stat.atime
+      };
+      const resultado = await copiarArquivo(item, (bytes) => monitor.adicionarBytes(bytes));
+      monitor.arquivoProcessado(resultado);
+    } catch (err) {
+      console.error(`\nErro ao copiar "${ref.origem}": ${err.message}`);
+      monitor.arquivoProcessado('erro');
+    }
   }
+}
 
-  if (args.listJobs) {
-    const res = await api("jobs");
-    if (!res) {
-      console.error("Configure BACKUP_API_URL e BACKUP_API_KEY para listar as tarefas.");
+// ============ FLUXO PRINCIPAL ============
+async function main() {
+  const { origens, destino } = await coletarEntrada();
+
+  for (const origem of origens) {
+    if (!(await existeCaminho(origem))) {
+      console.error(`\nErro: a pasta de origem não existe: ${origem}`);
       process.exit(1);
     }
-    console.table(res.jobs);
-    process.exit(0);
   }
 
-  let cfg = {
-    source: args.source,
-    dest: args.dest,
-    threads: args.threads,
-    mirror: args.mirror,
-    exclude: args.exclude,
-    dryRun: args.dryRun,
-    jobId: null,
-  };
+  console.log(
+    `\nMapeando e copiando ao mesmo tempo — ${CONCORRENCIA} cópias simultâneas ` +
+    `(--concorrencia N), ${PARTES_ARQUIVO_GRANDE} partes por arquivo grande (--partes N).\n`
+  );
 
-  if (args.job) {
-    const res = await api("jobs");
-    const job = res?.jobs?.find((j) => j.id === args.job || j.name === args.job);
-    if (!job) {
-      console.error(`Tarefa "${args.job}" não encontrada para este agente.`);
-      process.exit(1);
+  const fila = [];
+  const estadoMapeamento = { concluido: false };
+  const monitor = criarMonitor();
+
+  const promessaMapeamento = (async () => {
+    for (const origem of origens) {
+      const nomeBase = path.basename(path.resolve(origem));
+      const destinoDaOrigem = path.join(destino, nomeBase);
+      await mapear(origem, destinoDaOrigem, fila, monitor);
     }
-    cfg = {
-      ...cfg,
-      jobId: job.id,
-      source: job.source_path,
-      dest: job.dest_path,
-      threads: job.threads || cfg.threads,
-      mirror: !!job.mirror,
-    };
-    log(`Tarefa: ${job.name}`);
+    estadoMapeamento.concluido = true;
+    monitor.marcarMapeamentoConcluido();
+  })();
+
+  const trabalhadores = [];
+  for (let i = 0; i < CONCORRENCIA; i++) {
+    trabalhadores.push(trabalhador(fila, monitor, estadoMapeamento));
   }
 
-  if (!cfg.source || !cfg.dest) {
-    console.error('Informe --source e --dest (ou --job <id>). Use --help para detalhes.');
-    process.exit(1);
-  }
+  await Promise.all([promessaMapeamento, ...trabalhadores]);
 
-  try {
-    const status = await runBackup(cfg);
-    process.exit(status === "failed" ? 1 : 0);
-  } catch (err) {
-    console.error("Erro fatal:", err.message);
-    await api("log", { level: "error", message: `Erro fatal: ${err.message}` });
-    process.exit(1);
-  }
-})();
+  const stats = monitor.finalizar();
+  const velocidadeMedia = stats.segundos > 0 ? stats.bytesCopiados / stats.segundos : 0;
+  console.log(
+    `\nConcluído! ${stats.arquivosCopiados} arquivos copiados, ${stats.arquivosPulados} já ` +
+    `estavam atualizados${stats.arquivosComErro ? `, ${stats.arquivosComErro} falharam` : ''}. ` +
+    `Total: ${formatarBytes(stats.bytesCopiados)} em ${formatarTempo(stats.segundos)} ` +
+    `(média de ${formatarBytes(velocidadeMedia)}/s).`
+  );
+}
+
+main().catch(err => {
+  console.error('\nErro fatal:', err);
+  process.exit(1);
+});

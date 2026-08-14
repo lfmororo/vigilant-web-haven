@@ -158,7 +158,7 @@ const AdminBackup = () => {
               Backup
             </h1>
             <p className="text-muted-foreground">
-              Backup em nuvem e backup local/rede, com alertas de início, progresso, término e erros via WhatsApp.
+              use esse modelo de script para script de baclup local
             </p>
           </div>
           <Button variant="outline" onClick={loadData} disabled={loading}>
