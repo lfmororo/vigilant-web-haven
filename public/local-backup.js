@@ -396,6 +396,108 @@ async function trabalhador(fila, monitor, estadoMapeamento) {
   }
 }
 
+// ============ MODO VIGIA (cópia imediata de novos/alterados) ============
+// Observa recursivamente cada pasta de origem. Ao detectar criação ou alteração
+// de um arquivo, copia na hora para o destino correspondente.
+// Exclusões na origem são IGNORADAS de propósito: o destino preserva o histórico.
+function iniciarVigia(origens, destino) {
+  const pendentes = new Map(); // caminho relativo -> timer de debounce
+  let emAndamento = 0;
+
+  function registrar(origemBase, destinoBase, relativo) {
+    if (!relativo) return;
+    const chave = path.join(origemBase, relativo);
+    const timerAnterior = pendentes.get(chave);
+    if (timerAnterior) clearTimeout(timerAnterior);
+    pendentes.set(
+      chave,
+      setTimeout(() => {
+        pendentes.delete(chave);
+        processar(path.join(origemBase, relativo), path.join(destinoBase, relativo));
+      }, DEBOUNCE_VIGIA_MS)
+    );
+  }
+
+  async function processar(origemCompleta, destinoCompleto) {
+    let stat;
+    try {
+      stat = await fsp.stat(origemCompleta);
+    } catch {
+      // Arquivo removido ou renomeado na origem: nada a fazer (destino é preservado).
+      return;
+    }
+    if (stat.isDirectory()) {
+      // Pasta nova: varre e copia o conteúdo.
+      let entradas = [];
+      try {
+        entradas = await fsp.readdir(origemCompleta, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entrada of entradas) {
+        await processar(
+          path.join(origemCompleta, entrada.name),
+          path.join(destinoCompleto, entrada.name)
+        );
+      }
+      return;
+    }
+    if (!stat.isFile()) return;
+
+    const item = {
+      origem: origemCompleta,
+      destino: destinoCompleto,
+      tamanho: stat.size,
+      mtime: stat.mtime,
+      mtimeMs: stat.mtimeMs,
+      atime: stat.atime
+    };
+    emAndamento++;
+    try {
+      const resultado = await copiarArquivo(item, () => {});
+      if (resultado === 'copiado') {
+        console.log(
+          `[${new Date().toLocaleTimeString('pt-BR')}] Atualizado: ${origemCompleta} ` +
+          `(${formatarBytes(stat.size)})`
+        );
+      }
+    } catch (err) {
+      console.error(`[vigia] Erro ao copiar "${origemCompleta}": ${err.message}`);
+    } finally {
+      emAndamento--;
+    }
+  }
+
+  for (const origem of origens) {
+    const nomeBase = path.basename(path.resolve(origem));
+    const destinoDaOrigem = path.join(destino, nomeBase);
+    try {
+      const observador = fs.watch(origem, { recursive: true }, (_evento, nomeArquivo) => {
+        if (!nomeArquivo) return;
+        registrar(origem, destinoDaOrigem, nomeArquivo.toString());
+      });
+      observador.on('error', err => console.error(`[vigia] ${origem}: ${err.message}`));
+      console.log(`Vigiando: ${origem} -> ${destinoDaOrigem}`);
+    } catch (err) {
+      console.error(
+        `[vigia] Não foi possível vigiar "${origem}": ${err.message}. ` +
+        `Em Linux com pastas de rede o modo recursivo pode não ser suportado.`
+      );
+    }
+  }
+
+  console.log(
+    '\nModo vigia ativo. Novos arquivos e alterações são copiados na hora; ' +
+    'arquivos apagados na origem permanecem no destino. Pressione Ctrl+C para sair.\n'
+  );
+
+  process.on('SIGINT', () => {
+    console.log(`\nEncerrando vigia${emAndamento ? ` (${emAndamento} cópias em andamento)` : ''}...`);
+    process.exit(0);
+  });
+}
+
+
 // ============ FLUXO PRINCIPAL ============
 async function main() {
   const { origens, destino } = await coletarEntrada();
