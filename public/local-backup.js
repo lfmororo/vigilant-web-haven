@@ -543,6 +543,8 @@ async function main() {
     `Total: ${formatarBytes(stats.bytesCopiados)} em ${formatarTempo(stats.segundos)} ` +
     `(média de ${formatarBytes(velocidadeMedia)}/s).`
   );
+
+  if (MODO_VIGIA) iniciarVigia(origens, destino);
 }
 
 main().catch(err => {
