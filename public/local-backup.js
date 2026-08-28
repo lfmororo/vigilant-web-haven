@@ -60,6 +60,10 @@ function obterArgPartes() {
 
 const CONCORRENCIA = obterArgConcorrencia();
 const PARTES_ARQUIVO_GRANDE = obterArgPartes();
+// Modo vigia: após a cópia inicial, continua monitorando a origem e copia
+// imediatamente qualquer arquivo criado ou alterado. Nunca apaga no destino.
+const MODO_VIGIA = process.argv.slice(2).some(a => a === '--vigiar' || a === '--watch');
+const DEBOUNCE_VIGIA_MS = 800;
 const TAMANHO_BUFFER = 4 * 1024 * 1024;
 const LIMITE_ARQUIVO_PEQUENO = 2 * 1024 * 1024;
 const LIMITE_ARQUIVO_DIVIDIR = 64 * 1024 * 1024;
