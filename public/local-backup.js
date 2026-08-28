@@ -128,7 +128,9 @@ async function coletarEntrada() {
       indicesParaRemover.add(idx + 1);
     }
   }
-  const restantes = args.filter((_, i) => !indicesParaRemover.has(i));
+  const restantes = args.filter(
+    (a, i) => !indicesParaRemover.has(i) && a !== '--vigiar' && a !== '--watch'
+  );
   if (restantes.length > 0) origens = restantes;
 
   if (origens.length > 0 && destino) {
