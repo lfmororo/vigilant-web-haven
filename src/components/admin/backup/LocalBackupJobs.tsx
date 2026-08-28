@@ -250,12 +250,18 @@ node local-backup.js --job <id da tarefa>
 # Linux / macOS
 export BACKUP_API_URL="${endpoint}"
 export BACKUP_API_KEY="<chave do agente>"
-node local-backup.js --source /dados --dest /mnt/nas/backup --threads 16`}
+node local-backup.js --source /dados --dest /mnt/nas/backup --threads 16
+
+# Monitoramento contínuo (copia na hora todo arquivo novo ou alterado)
+node local-backup.js "C:\\dados" --destino "\\\\servidor\\backup" --vigiar`}
           </pre>
           <p className="text-xs text-muted-foreground">
             Agende no Agendador de Tarefas do Windows ou no cron. Para destinos de rede, monte o compartilhamento
-            com o usuário que tem permissão de escrita e use o caminho UNC completo.
+            com o usuário que tem permissão de escrita e use o caminho UNC completo. Com <code>--vigiar</code>, o
+            agente faz a cópia inicial e depois fica monitorando a origem, copiando imediatamente arquivos novos ou
+            alterados. Arquivos apagados na origem são sempre preservados no destino.
           </p>
+
         </div>
       </CardContent>
 
