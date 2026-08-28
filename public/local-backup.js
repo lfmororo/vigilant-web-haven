@@ -24,8 +24,13 @@
  *   --destino <caminho>   Pasta de destino (obrigatório)
  *   --concorrencia <N>    Arquivos copiados ao mesmo tempo (padrão: 16)
  *   --partes <N>          Partes paralelas por arquivo grande ≥64MB (padrão: 4)
+ *   --vigiar              Após a cópia inicial, continua rodando e copia
+ *                         imediatamente todo arquivo novo ou alterado na origem
+ *
+ * IMPORTANTE: arquivos apagados na origem NUNCA são apagados no destino.
  * ------------------------------------------------------------
  */
+
 
 const fs = require('fs');
 const fsp = fs.promises;
