@@ -446,7 +446,16 @@ Deno.serve(async (req) => {
         await notifyAdmins(supabase, lines.join("\n"));
       }
 
-      return new Response(JSON.stringify({ success: true, new_critical: newCritical.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          new_critical: newCritical.length,
+          sensor_alerts_new: sensorAlerts.novos,
+          sensor_alerts_resolved: sensorAlerts.resolvidos,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+
     }
 
     /**
