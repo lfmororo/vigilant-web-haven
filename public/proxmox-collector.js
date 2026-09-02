@@ -165,11 +165,34 @@ async function autenticar(node) {
 
 /** GET autenticado na API do Proxmox; devolve `data` já desembrulhado. */
 async function api(auth, path) {
-  const resp = await httpJson(`${auth.base}/api2/json${path}`, {
-    headers: auth.headers,
-    rejectUnauthorized: !ARGS.inseguro,
-  });
-  return resp?.data;
+  try {
+    const resp = await httpJson(`${auth.base}/api2/json${path}`, {
+      headers: auth.headers,
+      rejectUnauthorized: !ARGS.inseguro,
+    });
+    return resp?.data;
+  } catch (err) {
+    // 596 = "no such resource"/tunnel error: o pveproxy nao conseguiu falar com o no
+    // (nome de no incorreto, no do cluster offline ou sem quorum).
+    if (/HTTP 59[0-9]/.test(err.message)) {
+      throw new Error(
+        `${err.message} — o Proxmox nao conseguiu alcancar o recurso "${path}". ` +
+          "Verifique se o nome do no esta correto (Datacenter > o nome exibido na arvore), " +
+          "se o no esta online e se o cluster tem quorum (pvecm status).",
+      );
+    }
+    throw err;
+  }
+}
+
+/** GET tolerante a falha: devolve `fallback` em vez de interromper a coleta. */
+async function apiOpcional(auth, path, fallback = null) {
+  try {
+    return await api(auth, path);
+  } catch (err) {
+    console.warn(`  aviso: falha em ${path} — ${err.message}`);
+    return fallback;
+  }
 }
 
 // ---------------------------------------------------------------- coleta
@@ -178,12 +201,40 @@ async function coletarNo(node) {
 
   // Descobre o nome do nó no cluster quando não informado no cadastro.
   const nodesList = (await api(auth, "/nodes")) || [];
-  const nodeName =
-    node.node_name || nodesList.find((n) => n.status === "online")?.node || nodesList[0]?.node;
-  if (!nodeName) throw new Error("Nenhum nó encontrado na API do Proxmox.");
+  const nomesDisponiveis = nodesList.map((n) => n.node).filter(Boolean);
 
-  const status = (await api(auth, `/nodes/${nodeName}/status`)) || {};
-  const version = (await api(auth, "/version")) || {};
+  // Ordem de tentativa: nome cadastrado, nós online, demais nós.
+  const candidatos = [
+    node.node_name,
+    ...nodesList.filter((n) => n.status === "online").map((n) => n.node),
+    ...nomesDisponiveis,
+  ].filter((v, i, arr) => v && arr.indexOf(v) === i);
+
+  if (candidatos.length === 0) throw new Error("Nenhum nó encontrado na API do Proxmox.");
+
+  let nodeName = null;
+  let status = null;
+  let ultimoErro = null;
+  for (const candidato of candidatos) {
+    try {
+      status = (await api(auth, `/nodes/${candidato}/status`)) || {};
+      nodeName = candidato;
+      break;
+    } catch (err) {
+      ultimoErro = err;
+    }
+  }
+
+  if (!nodeName) {
+    throw new Error(
+      `Nao foi possivel ler o status de nenhum no (${candidatos.join(", ")}). ` +
+        `Nos visiveis na API: ${nomesDisponiveis.join(", ") || "nenhum"}. ` +
+        `Ultimo erro: ${ultimoErro?.message || "desconhecido"}`,
+    );
+  }
+
+  const version = (await apiOpcional(auth, "/version", {})) || {};
+
 
   const ramTotal = status?.memory?.total;
   const ramUsed = status?.memory?.used;
@@ -209,7 +260,7 @@ async function coletarNo(node) {
   };
 
   // Armazenamentos do nó (datastores equivalentes ao VMware).
-  const storagesRaw = (await api(auth, `/nodes/${nodeName}/storage`)) || [];
+  const storagesRaw = (await apiOpcional(auth, `/nodes/${nodeName}/storage`, [])) || [];
   const storages = storagesRaw
     .filter((s) => s.active !== 0)
     .map((s) => ({
@@ -222,8 +273,8 @@ async function coletarNo(node) {
     }));
 
   // VMs (qemu) e containers (lxc).
-  const qemu = (await api(auth, `/nodes/${nodeName}/qemu`)) || [];
-  const lxc = (await api(auth, `/nodes/${nodeName}/lxc`)) || [];
+  const qemu = (await apiOpcional(auth, `/nodes/${nodeName}/qemu`, [])) || [];
+  const lxc = (await apiOpcional(auth, `/nodes/${nodeName}/lxc`, [])) || [];
 
   const guests = [...qemu.map((g) => ({ ...g, _type: "qemu" })), ...lxc.map((g) => ({ ...g, _type: "lxc" }))].map(
     (g) => ({
