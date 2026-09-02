@@ -304,7 +304,7 @@ const ServerMonitor = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Monitoramento de Servidores</h1>
-            <p className="text-muted-foreground mt-1">Windows Server & VMware ESXi</p>
+            <p className="text-muted-foreground mt-1">Windows Server, VMware ESXi & HP iLO4</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => {
