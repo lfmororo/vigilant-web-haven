@@ -86,18 +86,36 @@ function httpJson(urlStr, options = {}, body = null) {
   });
 }
 
-/** Monta o cabeçalho de autenticação do Proxmox (token ou ticket por senha). */
-async function autenticar(node) {
-  const base = `https://${node.host}:${node.port || 8006}`;
-  if (node.auth_mode !== "password" && node.token_name && node.token_secret) {
-    return {
-      base,
-      headers: { Authorization: `PVEAPIToken=${node.username}!${node.token_name}=${node.token_secret}` },
-    };
-  }
-  if (!node.password) throw new Error("Sem token nem senha configurada para autenticação.");
+/**
+ * Normaliza as credenciais informadas no painel.
+ * Aceita variações comuns de digitação:
+ *  - usuário sem realm ("root")            -> "root@pam"
+ *  - token colado inteiro ("root@pam!monitor") -> usuário + token separados
+ *  - token com prefixo "PVEAPIToken=" ou "!"
+ */
+function normalizarCredenciais(node) {
+  let username = String(node.username || "root@pam").trim();
+  let tokenName = String(node.token_name || "").trim().replace(/^PVEAPIToken=/i, "");
 
-  const form = `username=${encodeURIComponent(node.username)}&password=${encodeURIComponent(node.password)}`;
+  if (tokenName.includes("!")) {
+    const [u, t] = tokenName.split("!");
+    if (u) username = u.trim();
+    tokenName = (t || "").trim();
+  }
+  if (username.includes("!")) {
+    const [u, t] = username.split("!");
+    username = u.trim();
+    if (!tokenName && t) tokenName = t.trim();
+  }
+  if (!username.includes("@")) username = `${username}@pam`;
+
+  const tokenSecret = String(node.token_secret || "").trim();
+  return { username, tokenName, tokenSecret };
+}
+
+/** Autentica por senha (ticket) e devolve os headers correspondentes. */
+async function autenticarPorSenha(base, username, password) {
+  const form = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
   const resp = await httpJson(
     `${base}/api2/json/access/ticket`,
     {
@@ -108,9 +126,42 @@ async function autenticar(node) {
     form,
   );
   const ticket = resp?.data?.ticket;
-  if (!ticket) throw new Error("Não foi possível obter o ticket de autenticação.");
-  return { base, headers: { Cookie: `PVEAuthCookie=${ticket}` } };
+  if (!ticket) throw new Error("Nao foi possivel obter o ticket de autenticacao.");
+  return { Cookie: `PVEAuthCookie=${ticket}` };
 }
+
+/** Monta o cabeçalho de autenticação do Proxmox (token ou ticket por senha). */
+async function autenticar(node) {
+  const base = `https://${node.host}:${node.port || 8006}`;
+  const { username, tokenName, tokenSecret } = normalizarCredenciais(node);
+  const usarToken = node.auth_mode !== "password" && tokenName && tokenSecret;
+
+  if (usarToken) {
+    const headers = { Authorization: `PVEAPIToken=${username}!${tokenName}=${tokenSecret}` };
+    try {
+      // Valida o token antes de seguir: a API responde 401 quando invalido.
+      await httpJson(`${base}/api2/json/version`, { headers, rejectUnauthorized: !ARGS.inseguro });
+      return { base, headers };
+    } catch (err) {
+      const auth401 = /HTTP 401/.test(err.message);
+      if (!auth401) throw err;
+      if (node.password) {
+        // Fallback automatico: tenta usuario/senha quando o token falha.
+        return { base, headers: await autenticarPorSenha(base, username, node.password) };
+      }
+      throw new Error(
+        `Token rejeitado pelo Proxmox (401) para ${username}!${tokenName}. ` +
+          "Verifique: 1) o Token ID existe em Datacenter > Permissions > API Tokens; " +
+          "2) o Secret esta correto (so aparece na criacao); " +
+          "3) se 'Privilege Separation' estiver marcado, conceda PVEAuditor em / ao token.",
+      );
+    }
+  }
+
+  if (!node.password) throw new Error("Sem token nem senha configurada para autenticacao.");
+  return { base, headers: await autenticarPorSenha(base, username, node.password) };
+}
+
 
 /** GET autenticado na API do Proxmox; devolve `data` já desembrulhado. */
 async function api(auth, path) {
