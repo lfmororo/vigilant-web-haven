@@ -88,12 +88,31 @@ export async function getEvolutionConfig(
   };
 }
 
-/** Normaliza destinatário: grupos mantêm o sufixo, números ficam só com dígitos. */
+/**
+ * Normaliza destinatário para o formato aceito pela Evolution API.
+ * - Grupos (@g.us) e JIDs completos passam sem alteração.
+ * - Números brasileiros sem DDI recebem o prefixo 55 (a Evolution devolve
+ *   `exists:false` quando o DDI está ausente, ex.: 85986801458).
+ */
 export function toEvolutionNumber(raw: string): string {
   const value = String(raw || "").trim();
   if (value.includes("@")) return value; // grupo (@g.us) ou jid completo
-  return value.replace(/\D/g, "");
+
+  let digits = value.replace(/\D/g, "");
+  // Remove zeros de discagem nacional (ex.: 085 9xxxx-xxxx)
+  digits = digits.replace(/^0+/, "");
+
+  // Já possui DDI do Brasil (55 + DDD + 8/9 dígitos)
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
+    return digits;
+  }
+  // DDD + número, sem DDI
+  if (digits.length === 10 || digits.length === 11) {
+    return `55${digits}`;
+  }
+  return digits;
 }
+
 
 function jsonResponse(status: number, payload: unknown): Response {
   return new Response(JSON.stringify(payload), {
