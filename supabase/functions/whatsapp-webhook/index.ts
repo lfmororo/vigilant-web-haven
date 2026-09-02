@@ -427,16 +427,24 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const eventType = body.EventType || body.eventType || "";
+    const { eventType } = normalizeEvent(body);
     console.log(`whatsapp-webhook eventType=${eventType} body:`, JSON.stringify(body).substring(0, 2000));
 
-    if (eventType === "messages_update" || eventType === "message_revoke" || eventType === "presence" ||
-        eventType === "chats" || eventType === "chats_update" || eventType === "contacts" ||
-        eventType === "connection" || eventType === "history" || eventType === "call") {
+    // Eventos da Evolution API que não interessam ao fluxo de suporte.
+    const ignoredEvents = [
+      "message_revoke", "messages.delete", "messages_delete", "presence.update", "presence",
+      "chats", "chats.update", "chats_update", "chats.upsert", "chats.delete",
+      "contacts", "contacts.update", "contacts.upsert",
+      "connection", "connection.update", "qrcode.updated", "history", "call",
+      "send.message", "groups.upsert", "groups.update", "group-participants.update",
+      "labels.edit", "labels.association", "chats.set", "messages.set", "contacts.set",
+    ];
+    if (ignoredEvents.includes(eventType)) {
       return new Response(JSON.stringify({ success: true, skipped: "irrelevant_event", eventType }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
