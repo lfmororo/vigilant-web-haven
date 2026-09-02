@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { AgentDownloadButton } from "@/components/admin/AgentDownloadButton";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +79,12 @@ const statusBadge = (status: string) => {
 };
 
 const AdminBackup = () => {
+  // Parâmetros usados para pré-configurar os pacotes ZIP dos agentes.
+  const bundleOptions = {
+    url: import.meta.env.VITE_SUPABASE_URL,
+    key: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    interval: 300,
+  };
   const [agents, setAgents] = useState<BackupAgent[]>([]);
   const [runs, setRuns] = useState<BackupRun[]>([]);
   const [newAgentName, setNewAgentName] = useState("");
@@ -183,19 +190,15 @@ const AdminBackup = () => {
                 <CardDescription>Baixe e execute no servidor que possui a pasta a ser copiada.</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-3">
-                <Button asChild>
-                  <a href="/cloud-backup.js" download>
-                    <Download className="w-4 h-4 mr-2" /> cloud-backup.js
-                  </a>
-                </Button>
-                <Button variant="outline" asChild>
-                  <a href="/cloud-backup-README.md" download>
-                    <Download className="w-4 h-4 mr-2" /> README (instalação)
-                  </a>
-                </Button>
+                <AgentDownloadButton
+                  agent="cloudBackup"
+                  label="Baixar Agente de Backup em Nuvem (.zip)"
+                  variant="default"
+                  options={bundleOptions}
+                />
                 <Button variant="outline" asChild>
                   <a href="/instalar-agente-servico.ps1" download>
-                    <Download className="w-4 h-4 mr-2" /> instalar-agente-servico.ps1
+                    <Download className="w-4 h-4 mr-2" /> Somente o instalador (.ps1)
                   </a>
                 </Button>
                 <Button variant="ghost" asChild>
@@ -219,14 +222,15 @@ const AdminBackup = () => {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-3">
-              <Button asChild>
-                <a href="/local-backup.js" download>
-                  <Download className="w-4 h-4 mr-2" /> local-backup.js
-                </a>
-              </Button>
+              <AgentDownloadButton
+                agent="localBackup"
+                label="Baixar Agente de Backup Local (.zip)"
+                variant="default"
+                options={bundleOptions}
+              />
               <Button variant="outline" asChild>
                 <a href="/instalar-agente-servico.ps1" download>
-                  <Download className="w-4 h-4 mr-2" /> instalar-agente-servico.ps1
+                  <Download className="w-4 h-4 mr-2" /> Somente o instalador (.ps1)
                 </a>
               </Button>
             </div>

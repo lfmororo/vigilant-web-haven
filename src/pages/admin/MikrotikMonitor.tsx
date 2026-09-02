@@ -17,6 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download, Server, ScrollText, Globe, TrendingUp, Thermometer, Cpu, CalendarDays, Clock, MoreHorizontal, Zap, MemoryStick, BookOpen, Copy, Check, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { downloadAgentBundle } from "@/lib/agentBundle";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
 
 interface MikrotikDevice {
@@ -113,7 +114,7 @@ const formatBitsPerSec = (bps: number) => {
   return bps + " bps";
 };
 
-const generateCollectorScript = (device: MikrotikDevice) => {
+const generateCollectorScript = async (device: MikrotikDevice) => {
   const isSNMP = device.device_type === 'snmp';
 
   const snmpScript = `#!/usr/bin/env node
@@ -667,14 +668,35 @@ main().catch(err => { console.error('Erro fatal:', err); process.exit(1); });
 `;
 
   const script = isSNMP ? snmpScript : mikrotikScript;
-  const blob = new Blob([script], { type: 'text/javascript' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${isSNMP ? 'snmp' : 'mikrotik'}-collector-${device.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.js`;
-  a.click();
-  URL.revokeObjectURL(url);
-  toast.success(`Script ${isSNMP ? 'SNMP' : 'MikroTik'} baixado com sucesso!`);
+  const slug = device.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+  const fileName = `${isSNMP ? 'snmp' : 'mikrotik'}-collector-${slug}.js`;
+
+  try {
+    // Empacota o coletor gerado + instalador de serviço + LEIA-ME em um ZIP.
+    await downloadAgentBundle(
+      {
+        id: 'mikrotik',
+        label: `Coletor ${isSNMP ? 'SNMP' : 'MikroTik'} - ${device.name}`,
+        zipName: `agente-${isSNMP ? 'snmp' : 'mikrotik'}-${slug}`,
+        files: [],
+        mainScript: fileName,
+        runtime: 'node',
+        notes: [
+          'O coletor já vem configurado com o dispositivo selecionado.',
+          isSNMP ? 'Requer o pacote net-snmp: npm install net-snmp' : 'Requer acesso à API REST do MikroTik (porta 80/443).',
+        ],
+      },
+      {
+        url: import.meta.env.VITE_SUPABASE_URL,
+        key: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        extraFiles: { [fileName]: script },
+      },
+    );
+    toast.success(`Pacote ${isSNMP ? 'SNMP' : 'MikroTik'} baixado com sucesso!`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Falha desconhecida';
+    toast.error('Erro ao gerar o pacote', { description: message });
+  }
 };
 
 const MikrotikMonitor = () => {
@@ -2502,6 +2524,9 @@ const MikrotikMonitor = () => {
                     <Download className="w-4 h-4 mr-1" /> Baixar instalador de serviço (.ps1)
                   </a>
                 </Button>
+                <span className="text-muted-foreground text-xs">
+                  O botão de download de cada dispositivo já entrega um .zip com coletor + instalador + LEIA-ME.
+                </span>
                 <span className="text-muted-foreground text-xs">
                   Salve na mesma pasta do coletor e rode como Administrador: <code className="bg-muted px-1 rounded">.\instalar-agente-servico.ps1 -Script mikrotik-vps-collector.js</code>
                 </span>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { AgentDownloadButton } from "@/components/admin/AgentDownloadButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -224,6 +225,7 @@ const ServerMonitor = () => {
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const bundleOptions = { url: supabaseUrl, key: anonKey, interval: 300 };
 
   // Generate alerts
   const STALE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
@@ -973,32 +975,20 @@ WantedBy=multi-user.target`}</code>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  <Button variant="outline" asChild>
-                    <a href="/windows-server-collector.ps1" download>
-                      <Download className="w-4 h-4 mr-1" /> Baixar Coletor Windows (.ps1)
-                    </a>
-                  </Button>
-                  <Button variant="outline" asChild>
-                    <a href="/vmware-collector.js" download>
-                      <Download className="w-4 h-4 mr-1" /> Baixar Coletor VMware (.js)
-                    </a>
-                  </Button>
-                  <Button variant="outline" asChild>
-                    <a href="/ilo-collector.js" download>
-                      <Download className="w-4 h-4 mr-1" /> Baixar Coletor HP iLO4 (.js)
-                    </a>
-                  </Button>
-                  <Button variant="outline" asChild>
-                    <a href="/proxmox-collector.js" download>
-                      <Download className="w-4 h-4 mr-1" /> Baixar Coletor Proxmox (.js)
-                    </a>
-                  </Button>
+                  <AgentDownloadButton agent="windows" label="Baixar Agente Windows (.zip)" options={bundleOptions} />
+                  <AgentDownloadButton agent="vmware" label="Baixar Agente VMware (.zip)" options={bundleOptions} />
+                  <AgentDownloadButton agent="ilo" label="Baixar Agente HP iLO4 (.zip)" options={bundleOptions} />
+                  <AgentDownloadButton agent="proxmox" label="Baixar Agente Proxmox (.zip)" options={bundleOptions} />
                   <Button asChild>
                     <a href="/instalar-agente-servico.ps1" download>
-                      <Download className="w-4 h-4 mr-1" /> Baixar Instalador de Serviço (.ps1)
+                      <Download className="w-4 h-4 mr-1" /> Somente o Instalador (.ps1)
                     </a>
                   </Button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Cada .zip contém o coletor, o instalador de serviço, o atalho <code>instalar.cmd</code> já
+                  preenchido com URL e chave, e um LEIA-ME com os comandos.
+                </p>
 
 
 
