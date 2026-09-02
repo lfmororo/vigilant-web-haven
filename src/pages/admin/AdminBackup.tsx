@@ -211,13 +211,26 @@ const AdminBackup = () => {
               Copia para disco ou rede usando várias cópias simultâneas e reporta o progresso em tempo real.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
-            <Button asChild>
-              <a href="/local-backup.js" download>
-                <Download className="w-4 h-4 mr-2" /> local-backup.js
-              </a>
-            </Button>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-3">
+              <Button asChild>
+                <a href="/local-backup.js" download>
+                  <Download className="w-4 h-4 mr-2" /> local-backup.js
+                </a>
+              </Button>
+              <Button variant="outline" asChild>
+                <a href="/instalar-agente-servico.ps1" download>
+                  <Download className="w-4 h-4 mr-2" /> instalar-agente-servico.ps1
+                </a>
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Coloque o instalador na mesma pasta do script e execute no PowerShell como Administrador:{" "}
+              <code>.\instalar-agente-servico.ps1 -Script local-backup.js</code>. O agente passa a rodar como
+              serviço do Windows a partir dessa pasta, com reinício automático e logs em <code>.\logs\</code>.
+            </p>
           </CardContent>
+
         </Card>
 
 
