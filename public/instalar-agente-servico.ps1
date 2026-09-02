@@ -117,6 +117,37 @@ if (-not $Nome) {
 Write-Ok "Coletor: $Script"
 Write-Ok "Serviço: $Nome"
 
+# Coletores de infraestrutura precisam destas credenciais para permanecerem
+# em execução. Sem elas, o Node.js encerra imediatamente e o Windows informa
+# apenas que o serviço falhou ao iniciar.
+$COLETORES_BACKEND = @(
+    "proxmox-collector.js",
+    "ilo-collector.js",
+    "vmware-collector.js",
+    "mikrotik-vps-collector.js"
+)
+$requerBackend = $COLETORES_BACKEND -contains $Script.ToLower()
+
+if (-not $Desinstalar -and $requerBackend) {
+    if (-not $Url) {
+        $Url = Read-Host "Informe a URL do backend"
+    }
+    if (-not $Key) {
+        $chaveProtegida = Read-Host "Informe a chave publica do backend" -AsSecureString
+        $ponteiroChave = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($chaveProtegida)
+        try {
+            $Key = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ponteiroChave)
+        } finally {
+            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ponteiroChave)
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($Url) -or [string]::IsNullOrWhiteSpace($Key)) {
+        Write-Erro "URL e chave sao obrigatorias para o coletor $Script. Nada foi instalado."
+        Write-Host "    Exemplo: .\instalar-agente-servico.ps1 -Url `"https://...`" -Key `"...`""
+        exit 1
+    }
+}
+
 # ---------------------------------------------------------- desinstalação
 if ($Desinstalar) {
     Write-Passo "Removendo instalação anterior"
@@ -202,6 +233,7 @@ function Instalar-ComNssm {
     }
 
     & $Nssm install $Nome $Executavel $linha | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "O NSSM nao conseguiu registrar o servico (codigo $LASTEXITCODE)." }
     & $Nssm set $Nome AppDirectory      $Pasta                                   | Out-Null
     & $Nssm set $Nome DisplayName       "Coletor - $Script"                      | Out-Null
     & $Nssm set $Nome Description       "Agente coletor executando em $Pasta"    | Out-Null
@@ -213,9 +245,26 @@ function Instalar-ComNssm {
     & $Nssm set $Nome AppExit Default   Restart                                  | Out-Null
     & $Nssm set $Nome AppRestartDelay   10000                                    | Out-Null
 
-    Start-Service -Name $Nome
-    Start-Sleep -Seconds 3
+    try {
+        Start-Service -Name $Nome
+        Start-Sleep -Seconds 4
+    } catch {
+        $logErro = Join-Path $PastaLogs "servico-erro.log"
+        $detalhe = $_.Exception.Message
+        if (Test-Path $logErro) {
+            $ultimasLinhas = Get-Content $logErro -Tail 12 -ErrorAction SilentlyContinue
+            if ($ultimasLinhas) { $detalhe += "`n`nUltimas linhas do log:`n" + ($ultimasLinhas -join "`n") }
+        }
+        throw "Falha ao iniciar o servico. $detalhe`nConsulte: $logErro"
+    }
+
     $estado = (Get-Service -Name $Nome).Status
+    if ($estado -ne "Running") {
+        $logErro = Join-Path $PastaLogs "servico-erro.log"
+        $ultimasLinhas = if (Test-Path $logErro) { Get-Content $logErro -Tail 12 -ErrorAction SilentlyContinue } else { @() }
+        $detalheLog = if ($ultimasLinhas) { "`n" + ($ultimasLinhas -join "`n") } else { "" }
+        throw "O servico encerrou logo apos iniciar. Verifique URL, chave e conectividade. Log: $logErro$detalheLog"
+    }
     Write-Ok "Serviço '$Nome' instalado e $estado."
     return $true
 }
