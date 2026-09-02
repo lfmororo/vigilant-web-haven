@@ -17,6 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity, ArrowUpDown, Network, Target, AlertTriangle, Download, Server, ScrollText, Globe, TrendingUp, Thermometer, Cpu, CalendarDays, Clock, MoreHorizontal, Zap, MemoryStick, BookOpen, Copy, Check, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { downloadAgentBundle } from "@/lib/agentBundle";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
 
 interface MikrotikDevice {
@@ -113,7 +114,7 @@ const formatBitsPerSec = (bps: number) => {
   return bps + " bps";
 };
 
-const generateCollectorScript = (device: MikrotikDevice) => {
+const generateCollectorScript = async (device: MikrotikDevice) => {
   const isSNMP = device.device_type === 'snmp';
 
   const snmpScript = `#!/usr/bin/env node
@@ -2523,6 +2524,9 @@ const MikrotikMonitor = () => {
                     <Download className="w-4 h-4 mr-1" /> Baixar instalador de serviço (.ps1)
                   </a>
                 </Button>
+                <span className="text-muted-foreground text-xs">
+                  O botão de download de cada dispositivo já entrega um .zip com coletor + instalador + LEIA-ME.
+                </span>
                 <span className="text-muted-foreground text-xs">
                   Salve na mesma pasta do coletor e rode como Administrador: <code className="bg-muted px-1 rounded">.\instalar-agente-servico.ps1 -Script mikrotik-vps-collector.js</code>
                 </span>
