@@ -762,6 +762,11 @@ const ServerMonitor = () => {
             <IloServersTab clients={clients || []} />
           </TabsContent>
 
+          <TabsContent value="proxmox">
+            <ProxmoxTab clients={clients || []} />
+          </TabsContent>
+
+
 
 
           {/* Guide Tab */}
