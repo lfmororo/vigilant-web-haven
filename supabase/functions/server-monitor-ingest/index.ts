@@ -1,9 +1,50 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { getEvolutionConfig, waFetch } from "../_shared/whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+/**
+ * Envia um alerta de hardware por WhatsApp para todos os administradores que
+ * possuem telefone cadastrado. Falhas de envio nunca derrubam a ingestão.
+ */
+async function notifyAdmins(supabase: any, text: string): Promise<void> {
+  try {
+    const cfg = await getEvolutionConfig();
+    if (!cfg.enabled || !cfg.baseUrl || !cfg.apiKey) return;
+
+    const { data: adminRoles } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "admin");
+    if (!adminRoles?.length) return;
+
+    const ids = adminRoles.map((r: any) => r.user_id);
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("phone")
+      .in("id", ids);
+
+    const phones = new Set<string>(
+      (profiles || [])
+        .map((p: any) => String(p.phone || "").replace(/[\s\-()+]/g, ""))
+        .filter((p: string) => p.length >= 10),
+    );
+
+    for (const number of phones) {
+      await waFetch(`${cfg.baseUrl}/send/text`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token: cfg.apiKey },
+        body: JSON.stringify({ number, text, linkPreview: false }),
+      });
+    }
+  } catch (err) {
+    console.error("notifyAdmins error:", err);
+  }
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -106,6 +147,123 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    /**
+     * HP iLO4 (Redfish). O coletor roda na rede do cliente e envia o snapshot
+     * completo do servidor: saúde, sensores e eventos de hardware (IML).
+     */
+    if (type === "ilo") {
+      const {
+        server_id,
+        status: iloStatus,
+        last_error: iloError,
+        info,
+        health,
+        sensors,
+        events,
+      } = body;
+
+      if (!server_id) {
+        return new Response(JSON.stringify({ error: "server_id required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // Estado anterior — usado para notificar apenas mudanças para crítico.
+      const { data: previous } = await supabase
+        .from("ilo_servers")
+        .select("id, name, status, health_summary, client_id")
+        .eq("id", server_id)
+        .maybeSingle();
+
+      if (!previous) {
+        return new Response(JSON.stringify({ error: "Server not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const updateData: Record<string, any> = {
+        status: iloStatus || "online",
+        last_error: iloError || null,
+        last_polled_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const infoFields = [
+        "server_model", "serial_number", "ilo_version", "ilo_firmware", "bios_version",
+        "cpu_model", "cpu_count", "ram_total_gb", "power_state", "post_state",
+        "indicator_led", "uptime_seconds", "health_summary",
+      ];
+      for (const field of infoFields) {
+        if (info && info[field] !== undefined) updateData[field] = info[field];
+      }
+
+      const healthFields = [
+        "health_processor", "health_memory", "health_storage",
+        "health_fans", "health_power", "health_temperature", "health_network",
+      ];
+      for (const field of healthFields) {
+        if (health && health[field] !== undefined) updateData[field] = health[field];
+      }
+
+      const { error: srvErr } = await supabase.from("ilo_servers").update(updateData).eq("id", server_id);
+      if (srvErr) throw srvErr;
+
+      // Sensores: substituição total do snapshot (mesma estratégia usada nas VMs).
+      if (Array.isArray(sensors)) {
+        await supabase.from("ilo_sensors").delete().eq("server_id", server_id);
+        if (sensors.length > 0) {
+          const rows = sensors.slice(0, 500).map((s: any) => ({
+            server_id,
+            sensor_type: String(s.sensor_type || "other"),
+            name: String(s.name || "—"),
+            reading: s.reading ?? null,
+            unit: s.unit ?? null,
+            status: s.status ?? null,
+            health: s.health ?? null,
+            upper_critical: s.upper_critical ?? null,
+            location: s.location ?? null,
+            details: s.details ?? null,
+          }));
+          const { error: sensorErr } = await supabase.from("ilo_sensors").insert(rows);
+          if (sensorErr) throw sensorErr;
+        }
+      }
+
+      // Eventos IML: upsert por chave única para não duplicar a cada coleta.
+      const newCritical: string[] = [];
+      if (Array.isArray(events) && events.length > 0) {
+        const rows = events.slice(0, 200).map((e: any) => ({
+          server_id,
+          event_key: String(e.event_key ?? `${e.recorded_at}-${e.message}`).substring(0, 200),
+          severity: String(e.severity || "info"),
+          category: e.category ?? null,
+          message: String(e.message || "").substring(0, 2000),
+          recorded_at: e.recorded_at || new Date().toISOString(),
+        }));
+
+        const { data: inserted, error: evErr } = await supabase
+          .from("ilo_events")
+          .upsert(rows, { onConflict: "server_id,event_key", ignoreDuplicates: true })
+          .select("id, severity, message");
+        if (evErr) console.error("ilo events upsert error:", evErr.message);
+
+        (inserted || []).forEach((e: any) => {
+          if (e.severity === "critical") newCritical.push(e.message);
+        });
+      }
+
+      // Alertas: apenas em transições (evita spam a cada coleta).
+      const becameOffline = iloStatus === "offline" && previous.status !== "offline";
+      const becameCritical =
+        updateData.health_summary === "Critical" && previous.health_summary !== "Critical";
+
+      if (becameOffline || becameCritical || newCritical.length > 0) {
+        const lines = [`🖥️ *Alerta iLO — ${previous.name}*`, ""];
+        if (becameOffline) lines.push("🔴 Servidor iLO inacessível (offline).");
+        if (becameCritical) lines.push("🔥 Saúde geral do hardware em estado CRÍTICO.");
+        newCritical.slice(0, 5).forEach((m) => lines.push(`⚠️ ${m}`));
+        await notifyAdmins(supabase, lines.join("\n"));
+      }
+
+      return new Response(JSON.stringify({ success: true, new_critical: newCritical.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // List servers/hosts for collector script
     if (type === "list-windows") {
       const { data } = await supabase.from("windows_servers").select("id, name, host").eq("is_active", true);
@@ -116,6 +274,15 @@ Deno.serve(async (req) => {
       const { data } = await supabase.from("vmware_hosts").select("id, name, host, username, password, port").eq("is_active", true);
       return new Response(JSON.stringify(data || []), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
+    if (type === "list-ilo") {
+      const { data } = await supabase
+        .from("ilo_servers")
+        .select("id, name, host, username, password, port")
+        .eq("is_active", true);
+      return new Response(JSON.stringify(data || []), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
 
     return new Response(JSON.stringify({ error: "Unknown type" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {

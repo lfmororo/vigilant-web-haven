@@ -17,8 +17,10 @@ import { formatTimeAgo } from "@/lib/formatTimeAgo";
 import {
   Server, Monitor, Plus, RefreshCw, Trash2, Edit, HardDrive,
   Cpu, MemoryStick, Activity, Clock, ChevronDown, ChevronRight,
-  Power, AlertTriangle, CheckCircle, XCircle, Download
+  Power, AlertTriangle, CheckCircle, XCircle, Download, ServerCog
 } from "lucide-react";
+import IloServersTab from "@/components/admin/servers/IloServersTab";
+
 
 const statusColor = (status: string) => {
   switch (status) {
@@ -104,6 +106,21 @@ const ServerMonitor = () => {
     },
     refetchInterval: 30000
   });
+
+  // Servidores HP iLO — usado para os cartões de resumo e para o painel de alertas.
+  const { data: iloServers } = useQuery({
+    queryKey: ["ilo-servers-summary"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("ilo_servers")
+        .select("id, name, status, health_summary, last_polled_at, health_storage, health_power, health_fans, health_temperature")
+        .order("name");
+      return data || [];
+    },
+    refetchInterval: 30000
+  });
+
+
 
   const addWindowsServer = useMutation({
     mutationFn: async (data: any) => {
@@ -236,6 +253,32 @@ const ServerMonitor = () => {
     });
   });
 
+  // Alertas de hardware HP iLO
+  const HEALTH_LABELS: Record<string, string> = {
+    health_storage: "Armazenamento",
+    health_power: "Fontes",
+    health_fans: "Ventiladores",
+    health_temperature: "Temperatura",
+  };
+
+  iloServers?.forEach(srv => {
+    if (srv.status === "offline") alerts.push({ type: "critical", message: `🔴 iLO ${srv.name} inacessível` });
+    if (srv.health_summary === "Critical") alerts.push({ type: "critical", message: `🔥 iLO ${srv.name} — saúde do hardware CRÍTICA` });
+    else if (srv.health_summary === "Warning") alerts.push({ type: "warning", message: `⚠️ iLO ${srv.name} — hardware em atenção` });
+
+    Object.entries(HEALTH_LABELS).forEach(([field, label]) => {
+      const value = (srv as any)[field];
+      if (value === "Critical") alerts.push({ type: "critical", message: `🔥 iLO ${srv.name} — ${label} em estado crítico` });
+      else if (value === "Warning") alerts.push({ type: "warning", message: `⚠️ iLO ${srv.name} — ${label} em atenção` });
+    });
+
+    if (srv.last_polled_at && (now - new Date(srv.last_polled_at).getTime()) > STALE_THRESHOLD_MS) {
+      alerts.push({ type: "warning", message: `⏰ iLO ${srv.name} — Coletor sem atualização há ${formatTimeAgo(srv.last_polled_at)}` });
+    }
+  });
+
+
+
   // Sort: critical first, then warning, then info
   alerts.sort((a, b) => {
     const order = { critical: 0, warning: 1, info: 2 };
@@ -261,7 +304,7 @@ const ServerMonitor = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Monitoramento de Servidores</h1>
-            <p className="text-muted-foreground mt-1">Windows Server & VMware ESXi</p>
+            <p className="text-muted-foreground mt-1">Windows Server, VMware ESXi & HP iLO4</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => {
@@ -273,8 +316,12 @@ const ServerMonitor = () => {
             </Button>
             <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
               <DialogTrigger asChild>
-                <Button onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Adicionar</Button>
+                {/* Nas abas iLO e Guia o cadastro é feito dentro da própria aba. */}
+                <Button onClick={openAdd} disabled={activeTab === "ilo" || activeTab === "guide"}>
+                  <Plus className="w-4 h-4 mr-1" /> Adicionar
+                </Button>
               </DialogTrigger>
+
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>{editingItem ? "Editar" : "Adicionar"} {activeTab === "windows" ? "Servidor Windows" : "Host VMware"}</DialogTitle>
@@ -377,6 +424,18 @@ const ServerMonitor = () => {
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-orange-500/10"><ServerCog className="w-5 h-5 text-orange-400" /></div>
+              <div>
+                <p className="text-sm text-muted-foreground">Servidores iLO</p>
+                <p className="text-2xl font-bold">
+                  {iloServers?.filter(s => s.health_summary === "OK" && s.status !== "offline").length || 0}/{iloServers?.length || 0}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
               <div className="p-2 rounded-lg bg-cyan-500/10"><Power className="w-5 h-5 text-cyan-400" /></div>
               <div>
                 <p className="text-sm text-muted-foreground">VMs Rodando</p>
@@ -428,7 +487,9 @@ const ServerMonitor = () => {
           <TabsList>
             <TabsTrigger value="windows"><Server className="w-4 h-4 mr-1" /> Windows</TabsTrigger>
             <TabsTrigger value="vmware"><Monitor className="w-4 h-4 mr-1" /> VMware</TabsTrigger>
+            <TabsTrigger value="ilo"><ServerCog className="w-4 h-4 mr-1" /> HP iLO4</TabsTrigger>
             <TabsTrigger value="guide"><Download className="w-4 h-4 mr-1" /> Guia Coletor</TabsTrigger>
+
           </TabsList>
 
           {/* Windows Tab */}
@@ -696,6 +757,13 @@ const ServerMonitor = () => {
             </div>
           </TabsContent>
 
+          {/* HP iLO4 Tab */}
+          <TabsContent value="ilo">
+            <IloServersTab clients={clients || []} />
+          </TabsContent>
+
+
+
           {/* Guide Tab */}
           <TabsContent value="guide">
             <Card>
@@ -763,7 +831,42 @@ WantedBy=multi-user.target`}</code>
                   </div>
                 </div>
 
-                <div className="flex gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><ServerCog className="w-5 h-5 text-orange-400" /> Coletor HP iLO4 (Node.js via Redfish/HTTPS)</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Um único script Node.js (sem dependências externas) roda em uma VPS ou máquina com acesso à
+                    <strong> rede de gerenciamento dos iLOs</strong> e coleta temperaturas, ventiladores, fontes, voltagens,
+                    discos/RAID (SmartStorage) e o log de eventos de hardware (IML) de todos os servidores cadastrados na aba HP iLO4.
+                  </p>
+                  <div className="bg-muted rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-medium">1. Configure o iLO4 de cada servidor:</p>
+                    <div className="text-xs bg-background p-2 rounded space-y-1">
+                      <p>• Crie um usuário dedicado somente-leitura (permissão apenas de <strong>Login</strong>)</p>
+                      <p>• Mantenha a API Redfish/REST habilitada em <em>Security → Access Settings</em> (padrão no iLO4 2.3+)</p>
+                      <p>• Use HTTPS na porta 443 e libere o firewall entre a máquina coletora e o iLO</p>
+                      <p>• Recomendado: firmware do iLO4 na versão 2.55 ou superior</p>
+                    </div>
+                    <p className="text-sm font-medium mt-3">2. Baixe o script na máquina coletora:</p>
+                    <code className="text-xs block bg-background p-2 rounded">
+                      curl -o ilo-collector.js {window.location.origin}/ilo-collector.js
+                    </code>
+                    <p className="text-sm font-medium mt-3">3. Execute (coleta contínua a cada 5 minutos):</p>
+                    <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`node ilo-collector.js \\
+  --url "${supabaseUrl}" \\
+  --key "${anonKey}" \\
+  --intervalo 300`}</code>
+                    <p className="text-sm font-medium mt-3">4. Ou agende via cron (execução única por ciclo):</p>
+                    <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`*/5 * * * * /usr/bin/node /opt/collectors/ilo-collector.js --url "${supabaseUrl}" --key "SUA_ANON_KEY" --uma-vez`}</code>
+                    <p className="text-sm font-medium mt-3">5. Alertas:</p>
+                    <div className="text-xs bg-background p-2 rounded space-y-1">
+                      <p>• Servidor inacessível, saúde crítica e novos eventos críticos do IML disparam WhatsApp para os administradores</p>
+                      <p>• As condições de atenção/crítico também aparecem no painel de alertas desta página</p>
+                      <p>• Certificados autoassinados do iLO são aceitos por padrão; use <code>--seguro</code> para exigir certificado válido</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
                   <Button variant="outline" asChild>
                     <a href="/windows-server-collector.ps1" download>
                       <Download className="w-4 h-4 mr-1" /> Baixar Coletor Windows (.ps1)
@@ -774,7 +877,13 @@ WantedBy=multi-user.target`}</code>
                       <Download className="w-4 h-4 mr-1" /> Baixar Coletor VMware (.js)
                     </a>
                   </Button>
+                  <Button variant="outline" asChild>
+                    <a href="/ilo-collector.js" download>
+                      <Download className="w-4 h-4 mr-1" /> Baixar Coletor HP iLO4 (.js)
+                    </a>
+                  </Button>
                 </div>
+
               </CardContent>
             </Card>
           </TabsContent>
