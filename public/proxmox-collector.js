@@ -260,7 +260,7 @@ async function coletarNo(node) {
   };
 
   // Armazenamentos do nó (datastores equivalentes ao VMware).
-  const storagesRaw = (await api(auth, `/nodes/${nodeName}/storage`)) || [];
+  const storagesRaw = (await apiOpcional(auth, `/nodes/${nodeName}/storage`, [])) || [];
   const storages = storagesRaw
     .filter((s) => s.active !== 0)
     .map((s) => ({
@@ -273,8 +273,8 @@ async function coletarNo(node) {
     }));
 
   // VMs (qemu) e containers (lxc).
-  const qemu = (await api(auth, `/nodes/${nodeName}/qemu`)) || [];
-  const lxc = (await api(auth, `/nodes/${nodeName}/lxc`)) || [];
+  const qemu = (await apiOpcional(auth, `/nodes/${nodeName}/qemu`, [])) || [];
+  const lxc = (await apiOpcional(auth, `/nodes/${nodeName}/lxc`, [])) || [];
 
   const guests = [...qemu.map((g) => ({ ...g, _type: "qemu" })), ...lxc.map((g) => ({ ...g, _type: "lxc" }))].map(
     (g) => ({
