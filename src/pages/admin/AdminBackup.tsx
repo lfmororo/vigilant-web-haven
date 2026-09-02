@@ -193,11 +193,17 @@ const AdminBackup = () => {
                     <Download className="w-4 h-4 mr-2" /> README (instalação)
                   </a>
                 </Button>
+                <Button variant="outline" asChild>
+                  <a href="/instalar-agente-servico.ps1" download>
+                    <Download className="w-4 h-4 mr-2" /> instalar-agente-servico.ps1
+                  </a>
+                </Button>
                 <Button variant="ghost" asChild>
                   <a href="/cloud-backup-README.md" target="_blank" rel="noreferrer">
                     Ver documentação
                   </a>
                 </Button>
+
               </CardContent>
             </Card>
           </TabsContent>
