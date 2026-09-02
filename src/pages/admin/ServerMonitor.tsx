@@ -424,6 +424,18 @@ const ServerMonitor = () => {
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-orange-500/10"><ServerCog className="w-5 h-5 text-orange-400" /></div>
+              <div>
+                <p className="text-sm text-muted-foreground">Servidores iLO</p>
+                <p className="text-2xl font-bold">
+                  {iloServers?.filter(s => s.health_summary === "OK" && s.status !== "offline").length || 0}/{iloServers?.length || 0}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
               <div className="p-2 rounded-lg bg-cyan-500/10"><Power className="w-5 h-5 text-cyan-400" /></div>
               <div>
                 <p className="text-sm text-muted-foreground">VMs Rodando</p>
