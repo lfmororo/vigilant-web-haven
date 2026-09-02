@@ -314,28 +314,38 @@ const SystemSettings = () => {
 
   const handleTestWhatsapp = async () => {
     if (!whatsappForm.whatsapp_api_url || !whatsappForm.whatsapp_api_token) {
-      toast({ title: "Preencha a URL e o Token antes de testar", variant: "destructive" });
+      toast({ title: "Preencha a URL e a API Key antes de testar", variant: "destructive" });
+      return;
+    }
+    if (!whatsappForm.whatsapp_instance) {
+      toast({ title: "Informe o nome da instância da Evolution API", variant: "destructive" });
       return;
     }
     setTestingWhatsapp(true);
     try {
-      const statusUrl = `${whatsappForm.whatsapp_api_url.replace(/\/+$/, "")}/instance/status`;
+      // Evolution API: GET /instance/connectionState/{instance} com header apikey
+      const statusUrl = `${whatsappForm.whatsapp_api_url.replace(/\/+$/, "")}/instance/connectionState/${encodeURIComponent(
+        whatsappForm.whatsapp_instance.trim(),
+      )}`;
       const res = await fetch(statusUrl, {
         method: "GET",
-        headers: { token: whatsappForm.whatsapp_api_token },
+        headers: { apikey: whatsappForm.whatsapp_api_token },
       });
       const result = await res.json();
       if (res.ok) {
-        const statusText = typeof result === "object"
-          ? (result.status ? String(result.status) : result.message ? String(result.message) : JSON.stringify(result))
-          : String(result);
-        toast({ title: "Conexão WhatsApp OK", description: statusText });
+        const state = result?.instance?.state || result?.state || JSON.stringify(result);
+        toast({
+          title: state === "open" ? "Evolution API conectada" : "Evolution API respondeu",
+          description: `Estado da instância: ${state}`,
+          variant: state === "open" ? "default" : "destructive",
+        });
       } else {
         const errText = typeof result === "object"
           ? (result.error ? String(result.error) : result.message ? String(result.message) : `Status: ${res.status}`)
           : String(result);
-        toast({ title: "Falha na conexão WhatsApp", description: errText, variant: "destructive" });
+        toast({ title: "Falha na conexão com a Evolution API", description: errText, variant: "destructive" });
       }
+
     } catch (err: any) {
       toast({
         title: "Erro ao testar conexão WhatsApp",
