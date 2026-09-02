@@ -667,14 +667,35 @@ main().catch(err => { console.error('Erro fatal:', err); process.exit(1); });
 `;
 
   const script = isSNMP ? snmpScript : mikrotikScript;
-  const blob = new Blob([script], { type: 'text/javascript' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${isSNMP ? 'snmp' : 'mikrotik'}-collector-${device.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.js`;
-  a.click();
-  URL.revokeObjectURL(url);
-  toast.success(`Script ${isSNMP ? 'SNMP' : 'MikroTik'} baixado com sucesso!`);
+  const slug = device.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+  const fileName = `${isSNMP ? 'snmp' : 'mikrotik'}-collector-${slug}.js`;
+
+  try {
+    // Empacota o coletor gerado + instalador de serviço + LEIA-ME em um ZIP.
+    await downloadAgentBundle(
+      {
+        id: 'mikrotik',
+        label: `Coletor ${isSNMP ? 'SNMP' : 'MikroTik'} - ${device.name}`,
+        zipName: `agente-${isSNMP ? 'snmp' : 'mikrotik'}-${slug}`,
+        files: [],
+        mainScript: fileName,
+        runtime: 'node',
+        notes: [
+          'O coletor já vem configurado com o dispositivo selecionado.',
+          isSNMP ? 'Requer o pacote net-snmp: npm install net-snmp' : 'Requer acesso à API REST do MikroTik (porta 80/443).',
+        ],
+      },
+      {
+        url: import.meta.env.VITE_SUPABASE_URL,
+        key: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        extraFiles: { [fileName]: script },
+      },
+    );
+    toast.success(`Pacote ${isSNMP ? 'SNMP' : 'MikroTik'} baixado com sucesso!`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Falha desconhecida';
+    toast.error('Erro ao gerar o pacote', { description: message });
+  }
 };
 
 const MikrotikMonitor = () => {
