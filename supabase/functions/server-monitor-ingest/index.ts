@@ -45,6 +45,178 @@ async function notifyAdmins(supabase: any, text: string): Promise<void> {
   }
 }
 
+/** Sensor recebido do coletor (Redfish/iLO). */
+interface SensorPayload {
+  sensor_type?: string;
+  name?: string;
+  reading?: number | null;
+  unit?: string | null;
+  status?: string | null;
+  health?: string | null;
+  upper_critical?: number | null;
+  location?: string | null;
+}
+
+/** Saúde considerada normal pelo Redfish. */
+const SAUDE_OK = new Set(["ok", "enabled", "absent", "n/a", ""]);
+
+/**
+ * Classifica um sensor. Devolve `null` quando ele está saudável.
+ * Regras:
+ *  - health "Critical" -> alerta crítico
+ *  - health "Warning" / status não habilitado -> alerta de atenção
+ *  - leitura acima do limite crítico informado pelo hardware -> alerta crítico
+ */
+function classificarSensor(s: SensorPayload): { severity: "warning" | "critical"; motivo: string } | null {
+  const health = String(s.health || "").trim().toLowerCase();
+  const status = String(s.status || "").trim().toLowerCase();
+
+  if (health === "critical") return { severity: "critical", motivo: "saúde crítica" };
+  if (
+    typeof s.reading === "number" &&
+    typeof s.upper_critical === "number" &&
+    s.upper_critical > 0 &&
+    s.reading >= s.upper_critical
+  ) {
+    return { severity: "critical", motivo: `leitura acima do limite (${s.upper_critical}${s.unit || ""})` };
+  }
+  if (health === "warning") return { severity: "warning", motivo: "saúde em atenção" };
+  if (health && !SAUDE_OK.has(health)) return { severity: "warning", motivo: `saúde "${s.health}"` };
+  if (status && !SAUDE_OK.has(status)) return { severity: "warning", motivo: `estado "${s.status}"` };
+  return null;
+}
+
+/** Rótulos amigáveis por tipo de sensor. */
+const TIPO_LABEL: Record<string, string> = {
+  temperature: "🌡️ Temperatura",
+  fan: "🌀 Ventilador",
+  power: "🔌 Fonte",
+  voltage: "⚡ Tensão",
+  storage: "💽 Armazenamento",
+  memory: "🧠 Memória",
+  processor: "🖳 Processador",
+  network: "🌐 Rede",
+  other: "🔧 Sensor",
+};
+
+/**
+ * Reconcilia o estado dos sensores com a tabela `server_sensor_alerts` e envia
+ * UMA notificação de WhatsApp por sensor que entrou em alerta (e uma por
+ * normalização). O estado persistido evita reenvio a cada coleta.
+ */
+async function processarAlertasDeSensores(
+  supabase: any,
+  serverId: string,
+  serverName: string,
+  sensors: SensorPayload[],
+): Promise<{ novos: number; resolvidos: number }> {
+  const atuais = new Map<string, { s: SensorPayload; c: { severity: "warning" | "critical"; motivo: string } }>();
+
+  for (const s of sensors) {
+    const classificacao = classificarSensor(s);
+    if (!classificacao) continue;
+    const key = `${String(s.sensor_type || "other")}:${String(s.name || "—")}`.substring(0, 200);
+    atuais.set(key, { s, c: classificacao });
+  }
+
+  const { data: existentes, error: exErr } = await supabase
+    .from("server_sensor_alerts")
+    .select("id, sensor_key, sensor_name, severity, status")
+    .eq("server_id", serverId);
+  if (exErr) {
+    console.error("server_sensor_alerts select error:", exErr.message);
+    return { novos: 0, resolvidos: 0 };
+  }
+
+  const porChave = new Map<string, any>((existentes || []).map((r: any) => [r.sensor_key, r]));
+  const agora = new Date().toISOString();
+  let novos = 0;
+  let resolvidos = 0;
+
+  // 1) Sensores em alerta -> cria/atualiza e notifica somente na abertura ou piora.
+  for (const [key, { s, c }] of atuais) {
+    const anterior = porChave.get(key);
+    const deveNotificar =
+      !anterior || anterior.status === "resolved" || (anterior.severity !== "critical" && c.severity === "critical");
+
+    const leitura = typeof s.reading === "number" ? `${s.reading}${s.unit ? ` ${s.unit}` : ""}` : "—";
+    const mensagem = `${c.motivo} (leitura: ${leitura})`;
+
+    const { error: upErr } = await supabase.from("server_sensor_alerts").upsert(
+      {
+        server_id: serverId,
+        sensor_key: key,
+        sensor_name: String(s.name || "—").substring(0, 200),
+        sensor_type: String(s.sensor_type || "other"),
+        severity: c.severity,
+        status: "active",
+        reading: typeof s.reading === "number" ? s.reading : null,
+        unit: s.unit ?? null,
+        message: mensagem.substring(0, 500),
+        last_seen_at: agora,
+        resolved_at: null,
+        ...(deveNotificar ? { last_notified_at: agora, first_detected_at: agora } : {}),
+      },
+      { onConflict: "server_id,sensor_key" },
+    );
+    if (upErr) {
+      console.error("server_sensor_alerts upsert error:", upErr.message);
+      continue;
+    }
+
+    if (deveNotificar) {
+      novos++;
+      const icone = c.severity === "critical" ? "🔥" : "⚠️";
+      const tipo = TIPO_LABEL[String(s.sensor_type || "other")] || TIPO_LABEL.other;
+      await notifyAdmins(
+        supabase,
+        [
+          `${icone} *Alerta de sensor — ${serverName}*`,
+          "",
+          `${tipo}: *${s.name || "—"}*`,
+          `Severidade: ${c.severity === "critical" ? "CRÍTICO" : "Atenção"}`,
+          `Motivo: ${c.motivo}`,
+          `Leitura: ${leitura}`,
+          s.location ? `Local: ${s.location}` : "",
+          "",
+          `_Detectado em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}_`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      );
+    }
+  }
+
+  // 2) Sensores que voltaram ao normal -> marca resolvido e avisa uma única vez.
+  for (const anterior of existentes || []) {
+    if (atuais.has(anterior.sensor_key) || anterior.status === "resolved") continue;
+
+    const { error: resErr } = await supabase
+      .from("server_sensor_alerts")
+      .update({ status: "resolved", resolved_at: agora, last_notified_at: agora })
+      .eq("id", anterior.id);
+    if (resErr) {
+      console.error("server_sensor_alerts resolve error:", resErr.message);
+      continue;
+    }
+
+    resolvidos++;
+    await notifyAdmins(
+      supabase,
+      [
+        `✅ *Sensor normalizado — ${serverName}*`,
+        "",
+        `Sensor: *${anterior.sensor_name}*`,
+        "O hardware voltou a reportar estado saudável.",
+      ].join("\n"),
+    );
+  }
+
+  return { novos, resolvidos };
+}
+
+
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -225,6 +397,19 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Alertas individuais por sensor (uma notificação por sensor em falha).
+      let sensorAlerts = { novos: 0, resolvidos: 0 };
+      if (Array.isArray(sensors) && iloStatus !== "offline") {
+        sensorAlerts = await processarAlertasDeSensores(
+          supabase,
+          server_id,
+          previous.name,
+          sensors.slice(0, 500) as SensorPayload[],
+        );
+      }
+
+
+
       // Eventos IML: upsert por chave única para não duplicar a cada coleta.
       const newCritical: string[] = [];
       if (Array.isArray(events) && events.length > 0) {
@@ -261,7 +446,16 @@ Deno.serve(async (req) => {
         await notifyAdmins(supabase, lines.join("\n"));
       }
 
-      return new Response(JSON.stringify({ success: true, new_critical: newCritical.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          new_critical: newCritical.length,
+          sensor_alerts_new: sensorAlerts.novos,
+          sensor_alerts_resolved: sensorAlerts.resolvidos,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+
     }
 
     /**
