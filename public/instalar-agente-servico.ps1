@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Instala qualquer coletor/agente desta plataforma como SERVIÇO DO WINDOWS,
     executando a partir da MESMA PASTA onde o arquivo foi extraído.
@@ -10,7 +10,7 @@
     cloud-backup.js ou windows-server-collector.ps1) ou aceita o nome via -Script.
 
     Estratégia de instalação (nesta ordem):
-      1. NSSM (Non-Sucking Service Manager) — baixado automaticamente se ausente.
+      1. NSSM (Non-Sucking Service Manager) - baixado automaticamente se ausente.
          Gera um serviço real, com reinício automático e logs em .\logs\.
       2. Fallback: Tarefa Agendada executada no boot com a conta SYSTEM,
          caso o download do NSSM não seja possível (rede restrita).
@@ -19,7 +19,7 @@
     garantindo que .env, tokens e logs fiquem junto do agente.
 
 .PARAMETER Script
-    Nome do arquivo do coletor (opcional — detectado automaticamente).
+    Nome do arquivo do coletor (opcional - detectado automaticamente).
 
 .PARAMETER Nome
     Nome do serviço no Windows. Padrão: derivado do nome do coletor.
@@ -195,7 +195,7 @@ function Instalar-ComNssm {
     Write-Passo "Instalando o serviço via NSSM"
     $svc = Get-Service -Name $Nome -ErrorAction SilentlyContinue
     if ($svc) {
-        Write-Aviso "Serviço já existe — recriando."
+        Write-Aviso "Serviço já existe - recriando."
         if ($svc.Status -ne "Stopped") { Stop-Service -Name $Nome -Force -ErrorAction SilentlyContinue }
         & $Nssm remove $Nome confirm | Out-Null
         Start-Sleep -Seconds 2
