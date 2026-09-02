@@ -866,6 +866,35 @@ WantedBy=multi-user.target`}</code>
                   </div>
                 </div>
 
+                <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-2"><Boxes className="w-4 h-4" /> Proxmox VE (API REST)</h3>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Coletor Node.js que consulta a API do Proxmox VE e envia métricas do nó, storages e VMs/containers.
+                  </p>
+                  <div className="bg-muted rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-medium">1. Crie um API Token no Proxmox (recomendado):</p>
+                    <div className="text-xs bg-background p-2 rounded space-y-1">
+                      <p>• Datacenter → Permissions → API Tokens → Add (ex.: <code>root@pam!monitor</code>)</p>
+                      <p>• Desmarque “Privilege Separation” ou conceda a role <strong>PVEAuditor</strong> em <code>/</code></p>
+                      <p>• Copie o Secret exibido uma única vez e cadastre-o na aba Proxmox</p>
+                    </div>
+                    <p className="text-sm font-medium mt-3">2. Baixe o script na máquina coletora:</p>
+                    <code className="text-xs block bg-background p-2 rounded">
+                      curl -o proxmox-collector.js {window.location.origin}/proxmox-collector.js
+                    </code>
+                    <p className="text-sm font-medium mt-3">3. Execute (coleta contínua a cada 5 minutos):</p>
+                    <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`node proxmox-collector.js \\
+  --url "${supabaseUrl}" \\
+  --key "${anonKey}" \\
+  --intervalo 300`}</code>
+                    <p className="text-sm font-medium mt-3">4. Ou agende via cron (execução única por ciclo):</p>
+                    <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`*/5 * * * * /usr/bin/node /opt/collectors/proxmox-collector.js --url "${supabaseUrl}" --key "SUA_ANON_KEY" --uma-vez`}</code>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Certificados autoassinados do Proxmox são aceitos por padrão; use <code>--seguro</code> para exigir certificado válido.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="flex flex-wrap gap-3">
                   <Button variant="outline" asChild>
                     <a href="/windows-server-collector.ps1" download>
@@ -882,7 +911,13 @@ WantedBy=multi-user.target`}</code>
                       <Download className="w-4 h-4 mr-1" /> Baixar Coletor HP iLO4 (.js)
                     </a>
                   </Button>
+                  <Button variant="outline" asChild>
+                    <a href="/proxmox-collector.js" download>
+                      <Download className="w-4 h-4 mr-1" /> Baixar Coletor Proxmox (.js)
+                    </a>
+                  </Button>
                 </div>
+
 
               </CardContent>
             </Card>
