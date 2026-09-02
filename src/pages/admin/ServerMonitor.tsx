@@ -277,6 +277,22 @@ const ServerMonitor = () => {
     }
   });
 
+  // Alertas de nós Proxmox VE (indisponibilidade, disco cheio e coleta parada).
+  proxmoxNodes?.forEach(node => {
+    if (node.status === "offline") alerts.push({ type: "critical", message: `🔴 Proxmox ${node.name} inacessível` });
+    if (node.disk_usage_pct != null && node.disk_usage_pct >= 90) {
+      alerts.push({ type: "critical", message: `💾 Proxmox ${node.name} — disco do nó em ${Number(node.disk_usage_pct).toFixed(0)}%` });
+    }
+    if (node.ram_usage_pct != null && node.ram_usage_pct >= 90) {
+      alerts.push({ type: "warning", message: `🧠 Proxmox ${node.name} — memória em ${Number(node.ram_usage_pct).toFixed(0)}%` });
+    }
+    if (node.last_polled_at && (now - new Date(node.last_polled_at).getTime()) > STALE_THRESHOLD_MS) {
+      alerts.push({ type: "warning", message: `⏰ Proxmox ${node.name} — Coletor sem atualização há ${formatTimeAgo(node.last_polled_at)}` });
+    }
+  });
+
+
+
 
 
   // Sort: critical first, then warning, then info
