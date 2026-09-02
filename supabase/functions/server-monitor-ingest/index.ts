@@ -397,6 +397,19 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Alertas individuais por sensor (uma notificação por sensor em falha).
+      let sensorAlerts = { novos: 0, resolvidos: 0 };
+      if (Array.isArray(sensors) && iloStatus !== "offline") {
+        sensorAlerts = await processarAlertasDeSensores(
+          supabase,
+          server_id,
+          previous.name,
+          sensors.slice(0, 500) as SensorPayload[],
+        );
+      }
+
+
+
       // Eventos IML: upsert por chave única para não duplicar a cada coleta.
       const newCritical: string[] = [];
       if (Array.isArray(events) && events.length > 0) {
