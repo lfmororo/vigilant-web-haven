@@ -79,6 +79,12 @@ const statusBadge = (status: string) => {
 };
 
 const AdminBackup = () => {
+  // Parâmetros usados para pré-configurar os pacotes ZIP dos agentes.
+  const bundleOptions = {
+    url: import.meta.env.VITE_SUPABASE_URL,
+    key: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    interval: 300,
+  };
   const [agents, setAgents] = useState<BackupAgent[]>([]);
   const [runs, setRuns] = useState<BackupRun[]>([]);
   const [newAgentName, setNewAgentName] = useState("");
