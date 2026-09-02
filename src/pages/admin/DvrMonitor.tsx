@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { AgentDownloadButton } from "@/components/admin/AgentDownloadButton";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -745,18 +746,16 @@ const DvrMonitor = () => {
             <ScrollArea className="max-h-[65vh] pr-4">
               <div className="space-y-2">
                 <div className="flex gap-2 mb-4 flex-wrap">
-                  <Button
-                    variant="outline"
+                  <AgentDownloadButton
+                    agent="dvr"
+                    label="Baixar Agente DVR (.zip)"
                     size="sm"
-                    onClick={() => {
-                      const a = document.createElement("a");
-                      a.href = "/dvr-collector.py";
-                      a.download = "dvr-collector.py";
-                      a.click();
+                    options={{
+                      url: import.meta.env.VITE_SUPABASE_URL,
+                      key: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                      interval: 300,
                     }}
-                  >
-                    <Download className="w-4 h-4 mr-1" /> Baixar Coletor Python
-                  </Button>
+                  />
                   <Button
                     variant="outline"
                     size="sm"
