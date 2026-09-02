@@ -1919,6 +1919,71 @@ export type Database = {
           },
         ]
       }
+      server_sensor_alerts: {
+        Row: {
+          created_at: string
+          first_detected_at: string
+          id: string
+          last_notified_at: string | null
+          last_seen_at: string
+          message: string | null
+          reading: number | null
+          resolved_at: string | null
+          sensor_key: string
+          sensor_name: string
+          sensor_type: string | null
+          server_id: string
+          severity: string
+          status: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          first_detected_at?: string
+          id?: string
+          last_notified_at?: string | null
+          last_seen_at?: string
+          message?: string | null
+          reading?: number | null
+          resolved_at?: string | null
+          sensor_key: string
+          sensor_name: string
+          sensor_type?: string | null
+          server_id: string
+          severity?: string
+          status?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          first_detected_at?: string
+          id?: string
+          last_notified_at?: string | null
+          last_seen_at?: string
+          message?: string | null
+          reading?: number | null
+          resolved_at?: string | null
+          sensor_key?: string
+          sensor_name?: string
+          sensor_type?: string | null
+          server_id?: string
+          severity?: string
+          status?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "server_sensor_alerts_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "ilo_servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_orders: {
         Row: {
           arrival_date: string | null
