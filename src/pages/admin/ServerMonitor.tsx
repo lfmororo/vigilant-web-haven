@@ -20,6 +20,7 @@ import {
   Power, AlertTriangle, CheckCircle, XCircle, Download, ServerCog
 } from "lucide-react";
 import IloServersTab from "@/components/admin/servers/IloServersTab";
+import ProxmoxTab from "@/components/admin/servers/ProxmoxTab";
 
 
 const statusColor = (status: string) => {
