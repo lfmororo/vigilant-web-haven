@@ -488,6 +488,8 @@ const ServerMonitor = () => {
             <TabsTrigger value="windows"><Server className="w-4 h-4 mr-1" /> Windows</TabsTrigger>
             <TabsTrigger value="vmware"><Monitor className="w-4 h-4 mr-1" /> VMware</TabsTrigger>
             <TabsTrigger value="ilo"><ServerCog className="w-4 h-4 mr-1" /> HP iLO4</TabsTrigger>
+            <TabsTrigger value="proxmox"><Boxes className="w-4 h-4 mr-1" /> Proxmox</TabsTrigger>
+
             <TabsTrigger value="guide"><Download className="w-4 h-4 mr-1" /> Guia Coletor</TabsTrigger>
 
           </TabsList>
