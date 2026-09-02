@@ -34,7 +34,7 @@ const formatDuration = (seconds: number | null | undefined): string => {
 const cleanPhone = (phone: string) => phone.replace(/[\s\-()+]/g, "");
 
 /**
- * Sends a plain-text WhatsApp message through the uazapi instance configured
+ * Sends a plain-text WhatsApp message through the Evolution API instance configured
  * in system_settings. Never throws — notification failures must not break the
  * backup telemetry pipeline.
  */
