@@ -947,6 +947,31 @@ WantedBy=multi-user.target`}</code>
                   </div>
                 </div>
 
+                <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-2"><Download className="w-4 h-4" /> Instalar como serviço do Windows</h3>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    O script <code>instalar-agente-servico.ps1</code> acompanha todos os coletores. Coloque-o na
+                    <strong> mesma pasta em que o agente foi extraído</strong>: ele detecta o coletor, registra o serviço
+                    apontando para essa pasta, cria logs em <code>.\logs\</code> e reinicia automaticamente em caso de falha.
+                  </p>
+                  <div className="bg-muted rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-medium">1. Abra o PowerShell como Administrador na pasta do agente e execute:</p>
+                    <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`.\\instalar-agente-servico.ps1 \`
+  -Url "${supabaseUrl}" \`
+  -Key "${anonKey}" \`
+  -Intervalo 300`}</code>
+                    <p className="text-sm font-medium mt-3">2. Instalando um coletor específico (quando há vários na pasta):</p>
+                    <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`.\\instalar-agente-servico.ps1 -Script proxmox-collector.js -Nome "ColetorProxmox" -Url "${supabaseUrl}" -Key "SUA_ANON_KEY"`}</code>
+                    <p className="text-sm font-medium mt-3">3. Gerenciar o serviço:</p>
+                    <div className="text-xs bg-background p-2 rounded space-y-1">
+                      <p>• Status: <code>Get-Service Agente_proxmoxcollector</code></p>
+                      <p>• Parar/Iniciar: <code>Stop-Service …</code> / <code>Start-Service …</code></p>
+                      <p>• Desinstalar: <code>.\instalar-agente-servico.ps1 -Desinstalar</code></p>
+                      <p>• Requer Node.js instalado para coletores <code>.js</code>; usa NSSM (baixado automaticamente) e, sem internet, cria uma Tarefa Agendada no boot como SYSTEM</p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex flex-wrap gap-3">
                   <Button variant="outline" asChild>
                     <a href="/windows-server-collector.ps1" download>
@@ -968,7 +993,13 @@ WantedBy=multi-user.target`}</code>
                       <Download className="w-4 h-4 mr-1" /> Baixar Coletor Proxmox (.js)
                     </a>
                   </Button>
+                  <Button asChild>
+                    <a href="/instalar-agente-servico.ps1" download>
+                      <Download className="w-4 h-4 mr-1" /> Baixar Instalador de Serviço (.ps1)
+                    </a>
+                  </Button>
                 </div>
+
 
 
               </CardContent>

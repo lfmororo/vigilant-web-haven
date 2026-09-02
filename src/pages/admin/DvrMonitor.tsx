@@ -762,6 +762,19 @@ const DvrMonitor = () => {
                     size="sm"
                     onClick={() => {
                       const a = document.createElement("a");
+                      a.href = "/instalar-agente-servico.ps1";
+                      a.download = "instalar-agente-servico.ps1";
+                      a.click();
+                    }}
+                  >
+                    <Download className="w-4 h-4 mr-1" /> Instalador de Serviço (.ps1)
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const a = document.createElement("a");
                       a.href = "/simplay-importer.js";
                       a.download = "simplay-importer.js";
                       a.click();
