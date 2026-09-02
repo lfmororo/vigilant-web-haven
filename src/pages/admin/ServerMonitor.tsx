@@ -349,7 +349,7 @@ const ServerMonitor = () => {
             <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
               <DialogTrigger asChild>
                 {/* Nas abas iLO e Guia o cadastro é feito dentro da própria aba. */}
-                <Button onClick={openAdd} disabled={activeTab === "ilo" || activeTab === "guide"}>
+                <Button onClick={openAdd} disabled={activeTab === "ilo" || activeTab === "proxmox" || activeTab === "guide"}>
                   <Plus className="w-4 h-4 mr-1" /> Adicionar
                 </Button>
               </DialogTrigger>
