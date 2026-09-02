@@ -232,8 +232,12 @@ function Instalar-ComNssm {
         Start-Sleep -Seconds 2
     }
 
-    & $Nssm install $Nome $Executavel $linha | Out-Null
+    # Registra primeiro apenas o executavel e grava os parametros separadamente.
+    # Isso evita que o NSSM duplique aspas em caminhos e argumentos extensos.
+    & $Nssm install $Nome $Executavel | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "O NSSM nao conseguiu registrar o servico (codigo $LASTEXITCODE)." }
+    & $Nssm set $Nome AppParameters $linha | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "O NSSM nao conseguiu configurar os argumentos (codigo $LASTEXITCODE)." }
     & $Nssm set $Nome AppDirectory      $Pasta                                   | Out-Null
     & $Nssm set $Nome DisplayName       "Coletor - $Script"                      | Out-Null
     & $Nssm set $Nome Description       "Agente coletor executando em $Pasta"    | Out-Null
