@@ -1604,6 +1604,187 @@ export type Database = {
           },
         ]
       }
+      proxmox_guests: {
+        Row: {
+          cpu_count: number | null
+          cpu_usage_pct: number | null
+          created_at: string
+          disk_total_gb: number | null
+          disk_used_gb: number | null
+          guest_type: string
+          id: string
+          name: string
+          node_id: string
+          ram_total_gb: number | null
+          ram_usage_pct: number | null
+          ram_used_gb: number | null
+          status: string
+          tags: string | null
+          updated_at: string
+          uptime_seconds: number | null
+          vmid: number
+        }
+        Insert: {
+          cpu_count?: number | null
+          cpu_usage_pct?: number | null
+          created_at?: string
+          disk_total_gb?: number | null
+          disk_used_gb?: number | null
+          guest_type?: string
+          id?: string
+          name: string
+          node_id: string
+          ram_total_gb?: number | null
+          ram_usage_pct?: number | null
+          ram_used_gb?: number | null
+          status?: string
+          tags?: string | null
+          updated_at?: string
+          uptime_seconds?: number | null
+          vmid: number
+        }
+        Update: {
+          cpu_count?: number | null
+          cpu_usage_pct?: number | null
+          created_at?: string
+          disk_total_gb?: number | null
+          disk_used_gb?: number | null
+          guest_type?: string
+          id?: string
+          name?: string
+          node_id?: string
+          ram_total_gb?: number | null
+          ram_usage_pct?: number | null
+          ram_used_gb?: number | null
+          status?: string
+          tags?: string | null
+          updated_at?: string
+          uptime_seconds?: number | null
+          vmid?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proxmox_guests_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: false
+            referencedRelation: "proxmox_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proxmox_nodes: {
+        Row: {
+          auth_mode: string
+          client_id: string
+          cpu_cores: number | null
+          cpu_model: string | null
+          cpu_usage_pct: number | null
+          created_at: string
+          disk_total_gb: number | null
+          disk_usage_pct: number | null
+          disk_used_gb: number | null
+          host: string
+          id: string
+          is_active: boolean
+          last_error: string | null
+          last_polled_at: string | null
+          load_avg: number | null
+          name: string
+          node_name: string | null
+          password: string | null
+          port: number
+          pve_version: string | null
+          ram_total_gb: number | null
+          ram_usage_pct: number | null
+          ram_used_gb: number | null
+          status: string
+          storages: Json | null
+          swap_total_gb: number | null
+          swap_used_gb: number | null
+          token_name: string | null
+          token_secret: string | null
+          updated_at: string
+          uptime_seconds: number | null
+          username: string
+        }
+        Insert: {
+          auth_mode?: string
+          client_id: string
+          cpu_cores?: number | null
+          cpu_model?: string | null
+          cpu_usage_pct?: number | null
+          created_at?: string
+          disk_total_gb?: number | null
+          disk_usage_pct?: number | null
+          disk_used_gb?: number | null
+          host: string
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_polled_at?: string | null
+          load_avg?: number | null
+          name: string
+          node_name?: string | null
+          password?: string | null
+          port?: number
+          pve_version?: string | null
+          ram_total_gb?: number | null
+          ram_usage_pct?: number | null
+          ram_used_gb?: number | null
+          status?: string
+          storages?: Json | null
+          swap_total_gb?: number | null
+          swap_used_gb?: number | null
+          token_name?: string | null
+          token_secret?: string | null
+          updated_at?: string
+          uptime_seconds?: number | null
+          username?: string
+        }
+        Update: {
+          auth_mode?: string
+          client_id?: string
+          cpu_cores?: number | null
+          cpu_model?: string | null
+          cpu_usage_pct?: number | null
+          created_at?: string
+          disk_total_gb?: number | null
+          disk_usage_pct?: number | null
+          disk_used_gb?: number | null
+          host?: string
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_polled_at?: string | null
+          load_avg?: number | null
+          name?: string
+          node_name?: string | null
+          password?: string | null
+          port?: number
+          pve_version?: string | null
+          ram_total_gb?: number | null
+          ram_usage_pct?: number | null
+          ram_used_gb?: number | null
+          status?: string
+          storages?: Json | null
+          swap_total_gb?: number | null
+          swap_used_gb?: number | null
+          token_name?: string | null
+          token_secret?: string | null
+          updated_at?: string
+          uptime_seconds?: number | null
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proxmox_nodes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quote_items: {
         Row: {
           created_at: string | null
