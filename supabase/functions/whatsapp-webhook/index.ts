@@ -99,12 +99,16 @@ function extractTextMessage(body: any): { phone: string; text: string; fromMe: b
   const msg = eventData.message || eventData.Message || eventData;
 
 
+  // Evolution API: data.key.fromMe / data.key.remoteJid
   const fromMe = Boolean(
+    eventData.key?.fromMe ?? eventData.Key?.FromMe ??
     eventData.fromMe ?? eventData.FromMe ?? eventData.isFromMe ?? eventData.IsFromMe ??
     msg?.fromMe ?? msg?.FromMe ?? msg?.key?.fromMe ?? msg?.Key?.FromMe ?? false
   );
 
   const remoteJid: string =
+    eventData.key?.remoteJid ||
+    eventData.Key?.RemoteJid ||
     eventData.chatid ||
     eventData.chatId ||
     eventData.Chat ||
@@ -117,6 +121,7 @@ function extractTextMessage(body: any): { phone: string; text: string; fromMe: b
     msg?.key?.remoteJid ||
     msg?.Key?.RemoteJid ||
     "";
+
   const isGroup = String(remoteJid).includes("@g.us");
   const phone = cleanPhone(String(remoteJid).replace(/@.*/, ""));
 
