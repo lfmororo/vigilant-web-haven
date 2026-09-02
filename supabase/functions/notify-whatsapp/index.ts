@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { waFetch } from "../_shared/whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -338,7 +339,7 @@ Deno.serve(async (req) => {
     const sendToNumber = async (number: string) => {
       try {
         // Send text message
-        const textResp = await fetch(sendTextUrl, {
+        const textResp = await waFetch(sendTextUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json", token: apiToken },
           body: JSON.stringify({ number, text, linkPreview: false }),
@@ -355,7 +356,7 @@ Deno.serve(async (req) => {
 
         // Send support button
         try {
-          const menuResp = await fetch(sendMenuUrl, {
+          const menuResp = await waFetch(sendMenuUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json", token: apiToken },
             body: JSON.stringify({
@@ -378,7 +379,7 @@ Deno.serve(async (req) => {
 
         // Send PDF document if available (only for resolved/closed tickets)
         if (pdf_url && (notification_type === "ticket_resolved" || notification_type === "ticket_closed")) {
-          const docResp = await fetch(sendMediaUrl, {
+          const docResp = await waFetch(sendMediaUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json", token: apiToken },
             body: JSON.stringify({

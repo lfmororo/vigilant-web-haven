@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { waFetch } from "../_shared/whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -474,7 +475,7 @@ async function sendConnectionFailureAlert(
   let sent = false;
   for (const phone of allPhones) {
     try {
-      const res = await fetch(`${apiUrl}/send/text`, {
+      const res = await waFetch(`${apiUrl}/send/text`, {
         method: "POST",
         headers: { "Content-Type": "application/json", token: apiToken },
         body: JSON.stringify({ number: phone, text, linkPreview: false }),
@@ -500,7 +501,7 @@ async function sendConnectionFailureAlert(
 
   if (client?.whatsapp_group_id) {
     try {
-      await fetch(`${apiUrl}/send/text`, {
+      await waFetch(`${apiUrl}/send/text`, {
         method: "POST",
         headers: { "Content-Type": "application/json", token: apiToken },
         body: JSON.stringify({ number: client.whatsapp_group_id, text, linkPreview: false }),
@@ -777,7 +778,7 @@ async function sendWhatsAppAlert(
   let sent = false;
   for (const recipient of allPhones) {
     try {
-      const res = await fetch(`${apiUrl}/send/text`, {
+      const res = await waFetch(`${apiUrl}/send/text`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -817,7 +818,7 @@ async function sendWhatsAppAlert(
   // Send to client WhatsApp group if configured
   if (fullClient?.whatsapp_group_id) {
     try {
-      await fetch(`${apiUrl}/send/text`, {
+      await waFetch(`${apiUrl}/send/text`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

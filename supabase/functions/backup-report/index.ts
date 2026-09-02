@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
+import { waFetch } from "../_shared/whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,7 +34,7 @@ const formatDuration = (seconds: number | null | undefined): string => {
 const cleanPhone = (phone: string) => phone.replace(/[\s\-()+]/g, "");
 
 /**
- * Sends a plain-text WhatsApp message through the uazapi instance configured
+ * Sends a plain-text WhatsApp message through the Evolution API instance configured
  * in system_settings. Never throws — notification failures must not break the
  * backup telemetry pipeline.
  */
@@ -56,7 +57,7 @@ async function sendWhatsApp(
     if (!apiUrl || !apiToken) return;
 
     const number = cleanPhone(phone);
-    const resp = await fetch(`${apiUrl.replace(/\/+$/, "")}/send/text`, {
+    const resp = await waFetch(`${apiUrl.replace(/\/+$/, "")}/send/text`, {
       method: "POST",
       headers: { "Content-Type": "application/json", token: apiToken },
       body: JSON.stringify({ number, text, linkPreview: false }),

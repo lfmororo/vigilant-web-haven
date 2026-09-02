@@ -51,6 +51,7 @@ const SystemSettings = () => {
   const [whatsappForm, setWhatsappForm] = useState({
     whatsapp_api_url: "",
     whatsapp_api_token: "",
+    whatsapp_instance: "",
     whatsapp_enabled: "false",
     admin_contact_phone: "",
   });
@@ -129,6 +130,7 @@ const SystemSettings = () => {
       setWhatsappForm({
         whatsapp_api_url: map.whatsapp_api_url || "",
         whatsapp_api_token: map.whatsapp_api_token || "",
+        whatsapp_instance: map.whatsapp_instance || "",
         whatsapp_enabled: map.whatsapp_enabled || "false",
         admin_contact_phone: map.admin_contact_phone || "",
       });
@@ -314,28 +316,38 @@ const SystemSettings = () => {
 
   const handleTestWhatsapp = async () => {
     if (!whatsappForm.whatsapp_api_url || !whatsappForm.whatsapp_api_token) {
-      toast({ title: "Preencha a URL e o Token antes de testar", variant: "destructive" });
+      toast({ title: "Preencha a URL e a API Key antes de testar", variant: "destructive" });
+      return;
+    }
+    if (!whatsappForm.whatsapp_instance) {
+      toast({ title: "Informe o nome da instância da Evolution API", variant: "destructive" });
       return;
     }
     setTestingWhatsapp(true);
     try {
-      const statusUrl = `${whatsappForm.whatsapp_api_url.replace(/\/+$/, "")}/instance/status`;
+      // Evolution API: GET /instance/connectionState/{instance} com header apikey
+      const statusUrl = `${whatsappForm.whatsapp_api_url.replace(/\/+$/, "")}/instance/connectionState/${encodeURIComponent(
+        whatsappForm.whatsapp_instance.trim(),
+      )}`;
       const res = await fetch(statusUrl, {
         method: "GET",
-        headers: { token: whatsappForm.whatsapp_api_token },
+        headers: { apikey: whatsappForm.whatsapp_api_token },
       });
       const result = await res.json();
       if (res.ok) {
-        const statusText = typeof result === "object"
-          ? (result.status ? String(result.status) : result.message ? String(result.message) : JSON.stringify(result))
-          : String(result);
-        toast({ title: "Conexão WhatsApp OK", description: statusText });
+        const state = result?.instance?.state || result?.state || JSON.stringify(result);
+        toast({
+          title: state === "open" ? "Evolution API conectada" : "Evolution API respondeu",
+          description: `Estado da instância: ${state}`,
+          variant: state === "open" ? "default" : "destructive",
+        });
       } else {
         const errText = typeof result === "object"
           ? (result.error ? String(result.error) : result.message ? String(result.message) : `Status: ${res.status}`)
           : String(result);
-        toast({ title: "Falha na conexão WhatsApp", description: errText, variant: "destructive" });
+        toast({ title: "Falha na conexão com a Evolution API", description: errText, variant: "destructive" });
       }
+
     } catch (err: any) {
       toast({
         title: "Erro ao testar conexão WhatsApp",
@@ -694,25 +706,35 @@ const SystemSettings = () => {
           <TabsContent value="whatsapp">
             <Card>
               <CardHeader>
-                <CardTitle>WhatsApp (Whatsapi.my)</CardTitle>
+                <CardTitle>WhatsApp (Evolution API)</CardTitle>
                 <CardDescription>
-                  Configure a integração com WhatsApp para enviar notificações automáticas de chamados via WhatsApp.
+                  Configure a instância da Evolution API usada para enviar e receber mensagens de WhatsApp.
+                  Webhook a cadastrar na instância: <code className="text-xs">{`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`}</code>
+                  {" "}(eventos <code className="text-xs">MESSAGES_UPSERT</code> e <code className="text-xs">MESSAGES_UPDATE</code>).
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="whatsapp_api_url">URL da API</Label>
-                  <Input id="whatsapp_api_url" placeholder="https://ipazua.uazapi.com" value={whatsappForm.whatsapp_api_url} onChange={(e) => setWhatsappForm((f) => ({ ...f, whatsapp_api_url: e.target.value }))} />
+                  <Label htmlFor="whatsapp_api_url">URL da Evolution API</Label>
+                  <Input id="whatsapp_api_url" placeholder="https://evolution.seudominio.com.br" value={whatsappForm.whatsapp_api_url} onChange={(e) => setWhatsappForm((f) => ({ ...f, whatsapp_api_url: e.target.value }))} />
+                  <p className="text-xs text-muted-foreground">Sem barra final. Ex.: https://evolution.seudominio.com.br</p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="whatsapp_api_token">Token da Instância</Label>
+                  <Label htmlFor="whatsapp_instance">Nome da Instância</Label>
+                  <Input id="whatsapp_instance" placeholder="suporte" value={whatsappForm.whatsapp_instance} onChange={(e) => setWhatsappForm((f) => ({ ...f, whatsapp_instance: e.target.value }))} />
+                  <p className="text-xs text-muted-foreground">Exatamente como aparece no Evolution Manager.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="whatsapp_api_token">API Key (header apikey)</Label>
                   <div className="relative">
                     <Input id="whatsapp_api_token" type={showPasswords.whatsapp ? "text" : "password"} placeholder="••••••••" value={whatsappForm.whatsapp_api_token} onChange={(e) => setWhatsappForm((f) => ({ ...f, whatsapp_api_token: e.target.value }))} />
                     <button type="button" onClick={() => togglePassword("whatsapp")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                       {showPasswords.whatsapp ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  <p className="text-xs text-muted-foreground">Pode ser a API Key global ou a chave da própria instância.</p>
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="admin_contact_phone">Telefone de Contato (exibido nas notificações)</Label>
                   <Input id="admin_contact_phone" placeholder="5585986801458" value={whatsappForm.admin_contact_phone} onChange={(e) => setWhatsappForm((f) => ({ ...f, admin_contact_phone: e.target.value }))} />

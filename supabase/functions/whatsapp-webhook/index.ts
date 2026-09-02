@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { waFetch } from "../_shared/whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,11 +21,31 @@ function cleanPhone(phone: string): string {
   return (phone || "").replace(/[\s\-\(\)\+]/g, "");
 }
 
+/**
+ * Normaliza o payload do webhook. Na Evolution API o corpo é
+ * `{ event: "messages.upsert", instance, data: {...} }` — ou seja, `event` é uma
+ * STRING e os dados ficam em `data`. Formatos legados enviavam objetos em `event`.
+ */
+function normalizeEvent(body: any): { eventType: string; eventData: any } {
+  const rawEvent = body?.event;
+  const eventType = String(
+    (typeof rawEvent === "string" ? rawEvent : "") ||
+      body?.EventType || body?.eventType || body?.event_type || "",
+  ).toLowerCase();
+  const eventData =
+    body?.data ||
+    (rawEvent && typeof rawEvent === "object" ? rawEvent : null) ||
+    body?.message ||
+    body ||
+    {};
+  return { eventType, eventData };
+}
+
 function extractPollData(body: any): { voterPhone: string; selectedOption: string } {
   let voterPhone = "";
   let selectedOption = "";
-  const eventType = body.EventType || body.eventType || body.event_type || "";
-  const eventData = body.event || body.data || body;
+  const { eventType, eventData } = normalizeEvent(body);
+
 
   if (eventType === "poll_vote" || eventType === "poll.vote") {
     if (eventData.Voter) voterPhone = cleanPhone(String(eventData.Voter).replace(/@.*/, ""));
@@ -44,8 +65,13 @@ function extractPollData(body: any): { voterPhone: string; selectedOption: strin
     }
   }
 
-  if (!selectedOption && (eventType === "messages.upsert" || eventType === "messages_upsert")) {
+  if (
+    !selectedOption &&
+    ["messages.upsert", "messages_upsert", "messages.update", "messages_update"].includes(eventType)
+  ) {
+    // Na Evolution o voto chega em data.message.pollUpdateMessage
     const msg = eventData.message || eventData.Message || eventData;
+
     const pollUpdate = msg.pollUpdateMessage || msg.PollUpdateMessage || msg.pollUpdate || msg.PollUpdate;
     if (pollUpdate) {
       if (msg.key?.remoteJid) voterPhone = cleanPhone(String(msg.key.remoteJid).replace(/@.*/, ""));
@@ -57,24 +83,32 @@ function extractPollData(body: any): { voterPhone: string; selectedOption: strin
   }
 
   if (!voterPhone) {
-    const from = body.from || body.From || eventData.from || eventData.From || "";
+    const from =
+      eventData.key?.remoteJid || eventData.Key?.RemoteJid ||
+      body.from || body.From || eventData.from || eventData.From || "";
     if (from) voterPhone = cleanPhone(String(from).replace(/@.*/, ""));
   }
+
   if (!selectedOption) selectedOption = body.selectedOption || body.SelectedOption || body.vote || body.Vote || "";
 
   return { voterPhone, selectedOption: String(selectedOption).trim() };
 }
 
 function extractTextMessage(body: any): { phone: string; text: string; fromMe: boolean; isGroup: boolean; messageType: string } {
-  const eventData = body.event || body.data || body.message || body;
+  const { eventData } = normalizeEvent(body);
   const msg = eventData.message || eventData.Message || eventData;
 
+
+  // Evolution API: data.key.fromMe / data.key.remoteJid
   const fromMe = Boolean(
+    eventData.key?.fromMe ?? eventData.Key?.FromMe ??
     eventData.fromMe ?? eventData.FromMe ?? eventData.isFromMe ?? eventData.IsFromMe ??
     msg?.fromMe ?? msg?.FromMe ?? msg?.key?.fromMe ?? msg?.Key?.FromMe ?? false
   );
 
   const remoteJid: string =
+    eventData.key?.remoteJid ||
+    eventData.Key?.RemoteJid ||
     eventData.chatid ||
     eventData.chatId ||
     eventData.Chat ||
@@ -87,6 +121,7 @@ function extractTextMessage(body: any): { phone: string; text: string; fromMe: b
     msg?.key?.remoteJid ||
     msg?.Key?.RemoteJid ||
     "";
+
   const isGroup = String(remoteJid).includes("@g.us");
   const phone = cleanPhone(String(remoteJid).replace(/@.*/, ""));
 
@@ -123,7 +158,7 @@ async function loadSettings(supabaseAdmin: any) {
 
 async function sendWhatsApp(apiUrl: string, apiToken: string, number: string, text: string) {
   const base = apiUrl.replace(/\/+$/, "");
-  const resp = await fetch(`${base}/send/text`, {
+  const resp = await waFetch(`${base}/send/text`, {
     method: "POST",
     headers: { "Content-Type": "application/json", token: apiToken },
     body: JSON.stringify({ number, text, linkPreview: false }),
@@ -392,16 +427,24 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const eventType = body.EventType || body.eventType || "";
+    const { eventType } = normalizeEvent(body);
     console.log(`whatsapp-webhook eventType=${eventType} body:`, JSON.stringify(body).substring(0, 2000));
 
-    if (eventType === "messages_update" || eventType === "message_revoke" || eventType === "presence" ||
-        eventType === "chats" || eventType === "chats_update" || eventType === "contacts" ||
-        eventType === "connection" || eventType === "history" || eventType === "call") {
+    // Eventos da Evolution API que não interessam ao fluxo de suporte.
+    const ignoredEvents = [
+      "message_revoke", "messages.delete", "messages_delete", "presence.update", "presence",
+      "chats", "chats.update", "chats_update", "chats.upsert", "chats.delete",
+      "contacts", "contacts.update", "contacts.upsert",
+      "connection", "connection.update", "qrcode.updated", "history", "call",
+      "send.message", "groups.upsert", "groups.update", "group-participants.update",
+      "labels.edit", "labels.association", "chats.set", "messages.set", "contacts.set",
+    ];
+    if (ignoredEvents.includes(eventType)) {
       return new Response(JSON.stringify({ success: true, skipped: "irrelevant_event", eventType }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,

@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { waFetch } from "../_shared/whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -146,7 +147,7 @@ Deno.serve(async (req) => {
       for (const phone of phonesToSend) {
         if (phone.length >= 10) {
           try {
-            const resp = await fetch(sendTextUrl, {
+            const resp = await waFetch(sendTextUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json", token: whatsappApiToken },
               body: JSON.stringify({ number: phone, text: whatsappText, linkPreview: false }),
@@ -168,7 +169,7 @@ Deno.serve(async (req) => {
           .single();
         if (clientRecord?.whatsapp_group_id) {
           try {
-            const resp = await fetch(sendTextUrl, {
+            const resp = await waFetch(sendTextUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json", token: whatsappApiToken },
               body: JSON.stringify({ number: clientRecord.whatsapp_group_id, text: whatsappText, linkPreview: false }),
