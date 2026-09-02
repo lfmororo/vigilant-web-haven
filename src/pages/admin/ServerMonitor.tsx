@@ -17,9 +17,10 @@ import { formatTimeAgo } from "@/lib/formatTimeAgo";
 import {
   Server, Monitor, Plus, RefreshCw, Trash2, Edit, HardDrive,
   Cpu, MemoryStick, Activity, Clock, ChevronDown, ChevronRight,
-  Power, AlertTriangle, CheckCircle, XCircle, Download, ServerCog
+  Power, AlertTriangle, CheckCircle, XCircle, Download, ServerCog, Boxes
 } from "lucide-react";
 import IloServersTab from "@/components/admin/servers/IloServersTab";
+import ProxmoxTab from "@/components/admin/servers/ProxmoxTab";
 
 
 const statusColor = (status: string) => {
@@ -119,6 +120,21 @@ const ServerMonitor = () => {
     },
     refetchInterval: 30000
   });
+
+  // Nós Proxmox VE — usado para os cartões de resumo e para o painel de alertas.
+  const { data: proxmoxNodes } = useQuery({
+    queryKey: ["proxmox-nodes-summary"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("proxmox_nodes")
+        .select("id, name, status, cpu_usage_pct, ram_usage_pct, disk_usage_pct, last_polled_at")
+        .order("name");
+      return data || [];
+    },
+    refetchInterval: 30000
+  });
+
+
 
 
 
@@ -277,6 +293,22 @@ const ServerMonitor = () => {
     }
   });
 
+  // Alertas de nós Proxmox VE (indisponibilidade, disco cheio e coleta parada).
+  proxmoxNodes?.forEach(node => {
+    if (node.status === "offline") alerts.push({ type: "critical", message: `🔴 Proxmox ${node.name} inacessível` });
+    if (node.disk_usage_pct != null && node.disk_usage_pct >= 90) {
+      alerts.push({ type: "critical", message: `💾 Proxmox ${node.name} — disco do nó em ${Number(node.disk_usage_pct).toFixed(0)}%` });
+    }
+    if (node.ram_usage_pct != null && node.ram_usage_pct >= 90) {
+      alerts.push({ type: "warning", message: `🧠 Proxmox ${node.name} — memória em ${Number(node.ram_usage_pct).toFixed(0)}%` });
+    }
+    if (node.last_polled_at && (now - new Date(node.last_polled_at).getTime()) > STALE_THRESHOLD_MS) {
+      alerts.push({ type: "warning", message: `⏰ Proxmox ${node.name} — Coletor sem atualização há ${formatTimeAgo(node.last_polled_at)}` });
+    }
+  });
+
+
+
 
 
   // Sort: critical first, then warning, then info
@@ -317,7 +349,7 @@ const ServerMonitor = () => {
             <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
               <DialogTrigger asChild>
                 {/* Nas abas iLO e Guia o cadastro é feito dentro da própria aba. */}
-                <Button onClick={openAdd} disabled={activeTab === "ilo" || activeTab === "guide"}>
+                <Button onClick={openAdd} disabled={activeTab === "ilo" || activeTab === "proxmox" || activeTab === "guide"}>
                   <Plus className="w-4 h-4 mr-1" /> Adicionar
                 </Button>
               </DialogTrigger>
@@ -433,6 +465,19 @@ const ServerMonitor = () => {
               </div>
             </CardContent>
           </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-500/10"><Boxes className="w-5 h-5 text-emerald-400" /></div>
+              <div>
+                <p className="text-sm text-muted-foreground">Nós Proxmox</p>
+                <p className="text-2xl font-bold">
+                  {proxmoxNodes?.filter(n => n.status === "online").length || 0}/{proxmoxNodes?.length || 0}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+
 
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
@@ -488,6 +533,8 @@ const ServerMonitor = () => {
             <TabsTrigger value="windows"><Server className="w-4 h-4 mr-1" /> Windows</TabsTrigger>
             <TabsTrigger value="vmware"><Monitor className="w-4 h-4 mr-1" /> VMware</TabsTrigger>
             <TabsTrigger value="ilo"><ServerCog className="w-4 h-4 mr-1" /> HP iLO4</TabsTrigger>
+            <TabsTrigger value="proxmox"><Boxes className="w-4 h-4 mr-1" /> Proxmox</TabsTrigger>
+
             <TabsTrigger value="guide"><Download className="w-4 h-4 mr-1" /> Guia Coletor</TabsTrigger>
 
           </TabsList>
@@ -762,6 +809,11 @@ const ServerMonitor = () => {
             <IloServersTab clients={clients || []} />
           </TabsContent>
 
+          <TabsContent value="proxmox">
+            <ProxmoxTab clients={clients || []} />
+          </TabsContent>
+
+
 
 
           {/* Guide Tab */}
@@ -866,6 +918,35 @@ WantedBy=multi-user.target`}</code>
                   </div>
                 </div>
 
+                <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-2"><Boxes className="w-4 h-4" /> Proxmox VE (API REST)</h3>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Coletor Node.js que consulta a API do Proxmox VE e envia métricas do nó, storages e VMs/containers.
+                  </p>
+                  <div className="bg-muted rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-medium">1. Crie um API Token no Proxmox (recomendado):</p>
+                    <div className="text-xs bg-background p-2 rounded space-y-1">
+                      <p>• Datacenter → Permissions → API Tokens → Add (ex.: <code>root@pam!monitor</code>)</p>
+                      <p>• Desmarque “Privilege Separation” ou conceda a role <strong>PVEAuditor</strong> em <code>/</code></p>
+                      <p>• Copie o Secret exibido uma única vez e cadastre-o na aba Proxmox</p>
+                    </div>
+                    <p className="text-sm font-medium mt-3">2. Baixe o script na máquina coletora:</p>
+                    <code className="text-xs block bg-background p-2 rounded">
+                      curl -o proxmox-collector.js {window.location.origin}/proxmox-collector.js
+                    </code>
+                    <p className="text-sm font-medium mt-3">3. Execute (coleta contínua a cada 5 minutos):</p>
+                    <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`node proxmox-collector.js \\
+  --url "${supabaseUrl}" \\
+  --key "${anonKey}" \\
+  --intervalo 300`}</code>
+                    <p className="text-sm font-medium mt-3">4. Ou agende via cron (execução única por ciclo):</p>
+                    <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`*/5 * * * * /usr/bin/node /opt/collectors/proxmox-collector.js --url "${supabaseUrl}" --key "SUA_ANON_KEY" --uma-vez`}</code>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Certificados autoassinados do Proxmox são aceitos por padrão; use <code>--seguro</code> para exigir certificado válido.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="flex flex-wrap gap-3">
                   <Button variant="outline" asChild>
                     <a href="/windows-server-collector.ps1" download>
@@ -882,7 +963,13 @@ WantedBy=multi-user.target`}</code>
                       <Download className="w-4 h-4 mr-1" /> Baixar Coletor HP iLO4 (.js)
                     </a>
                   </Button>
+                  <Button variant="outline" asChild>
+                    <a href="/proxmox-collector.js" download>
+                      <Download className="w-4 h-4 mr-1" /> Baixar Coletor Proxmox (.js)
+                    </a>
+                  </Button>
                 </div>
+
 
               </CardContent>
             </Card>

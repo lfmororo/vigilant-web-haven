@@ -264,6 +264,94 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: true, new_critical: newCritical.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    /**
+     * Proxmox VE. O coletor roda na rede do cliente, consulta a API REST do
+     * Proxmox e envia o snapshot do nó (métricas, storages e VMs/containers).
+     */
+    if (type === "proxmox") {
+      const { node_id, status: pveStatus, last_error: pveError, info, storages, guests } = body;
+
+      if (!node_id) {
+        return new Response(JSON.stringify({ error: "node_id required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const { data: previousNode } = await supabase
+        .from("proxmox_nodes")
+        .select("id, name, status")
+        .eq("id", node_id)
+        .maybeSingle();
+
+      if (!previousNode) {
+        return new Response(JSON.stringify({ error: "Node not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const nodeUpdate: Record<string, any> = {
+        status: pveStatus || "online",
+        last_error: pveError || null,
+        last_polled_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const infoFields = [
+        "node_name", "pve_version", "cpu_model", "cpu_cores", "cpu_usage_pct",
+        "ram_total_gb", "ram_used_gb", "ram_usage_pct", "swap_total_gb", "swap_used_gb",
+        "disk_total_gb", "disk_used_gb", "disk_usage_pct", "load_avg", "uptime_seconds",
+      ];
+      for (const field of infoFields) {
+        if (info && info[field] !== undefined) nodeUpdate[field] = info[field];
+      }
+      if (Array.isArray(storages)) nodeUpdate.storages = storages.slice(0, 100);
+
+      const { error: nodeErr } = await supabase.from("proxmox_nodes").update(nodeUpdate).eq("id", node_id);
+      if (nodeErr) throw nodeErr;
+
+      // VMs e containers: substituição total do snapshot (mesma estratégia do VMware).
+      if (Array.isArray(guests)) {
+        await supabase.from("proxmox_guests").delete().eq("node_id", node_id);
+        if (guests.length > 0) {
+          const rows = guests.slice(0, 500).map((g: any) => ({
+            node_id,
+            vmid: Number(g.vmid) || 0,
+            name: String(g.name || `VM ${g.vmid}`).substring(0, 200),
+            guest_type: g.guest_type === "lxc" ? "lxc" : "qemu",
+            status: String(g.status || "unknown"),
+            cpu_count: g.cpu_count ?? null,
+            cpu_usage_pct: g.cpu_usage_pct ?? null,
+            ram_total_gb: g.ram_total_gb ?? null,
+            ram_used_gb: g.ram_used_gb ?? null,
+            ram_usage_pct: g.ram_usage_pct ?? null,
+            disk_total_gb: g.disk_total_gb ?? null,
+            disk_used_gb: g.disk_used_gb ?? null,
+            uptime_seconds: g.uptime_seconds ?? null,
+            tags: g.tags ?? null,
+          }));
+          const { error: guestErr } = await supabase.from("proxmox_guests").insert(rows);
+          if (guestErr) throw guestErr;
+        }
+      }
+
+      // Alertas apenas em transições, evitando spam a cada coleta.
+      const pveBecameOffline = (pveStatus === "offline") && previousNode.status !== "offline";
+      const diskCritical = typeof nodeUpdate.disk_usage_pct === "number" && nodeUpdate.disk_usage_pct >= 90;
+      if (pveBecameOffline || diskCritical) {
+        const lines = [`🧱 *Alerta Proxmox — ${previousNode.name}*`, ""];
+        if (pveBecameOffline) lines.push(`🔴 Nó inacessível: ${pveError || "sem resposta da API"}`);
+        if (diskCritical) lines.push(`💾 Disco do nó em ${nodeUpdate.disk_usage_pct}% de uso.`);
+        await notifyAdmins(supabase, lines.join("\n"));
+      }
+
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (type === "list-proxmox") {
+      const { data } = await supabase
+        .from("proxmox_nodes")
+        .select("id, name, host, port, node_name, auth_mode, username, token_name, token_secret, password")
+        .eq("is_active", true);
+      return new Response(JSON.stringify(data || []), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+
     // List servers/hosts for collector script
     if (type === "list-windows") {
       const { data } = await supabase.from("windows_servers").select("id, name, host").eq("is_active", true);
