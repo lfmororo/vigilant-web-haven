@@ -21,11 +21,31 @@ function cleanPhone(phone: string): string {
   return (phone || "").replace(/[\s\-\(\)\+]/g, "");
 }
 
+/**
+ * Normaliza o payload do webhook. Na Evolution API o corpo é
+ * `{ event: "messages.upsert", instance, data: {...} }` — ou seja, `event` é uma
+ * STRING e os dados ficam em `data`. Formatos legados enviavam objetos em `event`.
+ */
+function normalizeEvent(body: any): { eventType: string; eventData: any } {
+  const rawEvent = body?.event;
+  const eventType = String(
+    (typeof rawEvent === "string" ? rawEvent : "") ||
+      body?.EventType || body?.eventType || body?.event_type || "",
+  ).toLowerCase();
+  const eventData =
+    body?.data ||
+    (rawEvent && typeof rawEvent === "object" ? rawEvent : null) ||
+    body?.message ||
+    body ||
+    {};
+  return { eventType, eventData };
+}
+
 function extractPollData(body: any): { voterPhone: string; selectedOption: string } {
   let voterPhone = "";
   let selectedOption = "";
-  const eventType = body.EventType || body.eventType || body.event_type || "";
-  const eventData = body.event || body.data || body;
+  const { eventType, eventData } = normalizeEvent(body);
+
 
   if (eventType === "poll_vote" || eventType === "poll.vote") {
     if (eventData.Voter) voterPhone = cleanPhone(String(eventData.Voter).replace(/@.*/, ""));
