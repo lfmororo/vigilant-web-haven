@@ -95,8 +95,9 @@ function extractPollData(body: any): { voterPhone: string; selectedOption: strin
 }
 
 function extractTextMessage(body: any): { phone: string; text: string; fromMe: boolean; isGroup: boolean; messageType: string } {
-  const eventData = body.event || body.data || body.message || body;
+  const { eventData } = normalizeEvent(body);
   const msg = eventData.message || eventData.Message || eventData;
+
 
   const fromMe = Boolean(
     eventData.fromMe ?? eventData.FromMe ?? eventData.isFromMe ?? eventData.IsFromMe ??
