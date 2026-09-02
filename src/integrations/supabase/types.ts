@@ -761,6 +761,222 @@ export type Database = {
         }
         Relationships: []
       }
+      ilo_events: {
+        Row: {
+          category: string | null
+          created_at: string
+          event_key: string
+          id: string
+          message: string
+          notified: boolean
+          recorded_at: string
+          server_id: string
+          severity: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          event_key: string
+          id?: string
+          message: string
+          notified?: boolean
+          recorded_at?: string
+          server_id: string
+          severity?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          event_key?: string
+          id?: string
+          message?: string
+          notified?: boolean
+          recorded_at?: string
+          server_id?: string
+          severity?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ilo_events_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "ilo_servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ilo_sensors: {
+        Row: {
+          created_at: string
+          details: Json | null
+          health: string | null
+          id: string
+          location: string | null
+          name: string
+          reading: number | null
+          sensor_type: string
+          server_id: string
+          status: string | null
+          unit: string | null
+          updated_at: string
+          upper_critical: number | null
+        }
+        Insert: {
+          created_at?: string
+          details?: Json | null
+          health?: string | null
+          id?: string
+          location?: string | null
+          name: string
+          reading?: number | null
+          sensor_type: string
+          server_id: string
+          status?: string | null
+          unit?: string | null
+          updated_at?: string
+          upper_critical?: number | null
+        }
+        Update: {
+          created_at?: string
+          details?: Json | null
+          health?: string | null
+          id?: string
+          location?: string | null
+          name?: string
+          reading?: number | null
+          sensor_type?: string
+          server_id?: string
+          status?: string | null
+          unit?: string | null
+          updated_at?: string
+          upper_critical?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ilo_sensors_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "ilo_servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ilo_servers: {
+        Row: {
+          bios_version: string | null
+          client_id: string
+          cpu_count: number | null
+          cpu_model: string | null
+          created_at: string
+          health_fans: string | null
+          health_memory: string | null
+          health_network: string | null
+          health_power: string | null
+          health_processor: string | null
+          health_storage: string | null
+          health_summary: string | null
+          health_temperature: string | null
+          host: string
+          id: string
+          ilo_firmware: string | null
+          ilo_version: string | null
+          indicator_led: string | null
+          is_active: boolean
+          last_error: string | null
+          last_polled_at: string | null
+          name: string
+          password: string
+          port: number
+          post_state: string | null
+          power_state: string | null
+          ram_total_gb: number | null
+          serial_number: string | null
+          server_model: string | null
+          status: string
+          updated_at: string
+          uptime_seconds: number | null
+          username: string
+        }
+        Insert: {
+          bios_version?: string | null
+          client_id: string
+          cpu_count?: number | null
+          cpu_model?: string | null
+          created_at?: string
+          health_fans?: string | null
+          health_memory?: string | null
+          health_network?: string | null
+          health_power?: string | null
+          health_processor?: string | null
+          health_storage?: string | null
+          health_summary?: string | null
+          health_temperature?: string | null
+          host: string
+          id?: string
+          ilo_firmware?: string | null
+          ilo_version?: string | null
+          indicator_led?: string | null
+          is_active?: boolean
+          last_error?: string | null
+          last_polled_at?: string | null
+          name: string
+          password: string
+          port?: number
+          post_state?: string | null
+          power_state?: string | null
+          ram_total_gb?: number | null
+          serial_number?: string | null
+          server_model?: string | null
+          status?: string
+          updated_at?: string
+          uptime_seconds?: number | null
+          username: string
+        }
+        Update: {
+          bios_version?: string | null
+          client_id?: string
+          cpu_count?: number | null
+          cpu_model?: string | null
+          created_at?: string
+          health_fans?: string | null
+          health_memory?: string | null
+          health_network?: string | null
+          health_power?: string | null
+          health_processor?: string | null
+          health_storage?: string | null
+          health_summary?: string | null
+          health_temperature?: string | null
+          host?: string
+          id?: string
+          ilo_firmware?: string | null
+          ilo_version?: string | null
+          indicator_led?: string | null
+          is_active?: boolean
+          last_error?: string | null
+          last_polled_at?: string | null
+          name?: string
+          password?: string
+          port?: number
+          post_state?: string | null
+          power_state?: string | null
+          ram_total_gb?: number | null
+          serial_number?: string | null
+          server_model?: string | null
+          status?: string
+          updated_at?: string
+          uptime_seconds?: number | null
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ilo_servers_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       imap_accounts: {
         Row: {
           client_id: string | null

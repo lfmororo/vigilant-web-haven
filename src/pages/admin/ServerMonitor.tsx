@@ -17,8 +17,10 @@ import { formatTimeAgo } from "@/lib/formatTimeAgo";
 import {
   Server, Monitor, Plus, RefreshCw, Trash2, Edit, HardDrive,
   Cpu, MemoryStick, Activity, Clock, ChevronDown, ChevronRight,
-  Power, AlertTriangle, CheckCircle, XCircle, Download
+  Power, AlertTriangle, CheckCircle, XCircle, Download, ServerCog
 } from "lucide-react";
+import IloServersTab from "@/components/admin/servers/IloServersTab";
+
 
 const statusColor = (status: string) => {
   switch (status) {
@@ -104,6 +106,21 @@ const ServerMonitor = () => {
     },
     refetchInterval: 30000
   });
+
+  // Servidores HP iLO — usado para os cartões de resumo e para o painel de alertas.
+  const { data: iloServers } = useQuery({
+    queryKey: ["ilo-servers-summary"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("ilo_servers")
+        .select("id, name, status, health_summary, last_polled_at, health_storage, health_power, health_fans, health_temperature")
+        .order("name");
+      return data || [];
+    },
+    refetchInterval: 30000
+  });
+
+
 
   const addWindowsServer = useMutation({
     mutationFn: async (data: any) => {
@@ -236,6 +253,32 @@ const ServerMonitor = () => {
     });
   });
 
+  // Alertas de hardware HP iLO
+  const HEALTH_LABELS: Record<string, string> = {
+    health_storage: "Armazenamento",
+    health_power: "Fontes",
+    health_fans: "Ventiladores",
+    health_temperature: "Temperatura",
+  };
+
+  iloServers?.forEach(srv => {
+    if (srv.status === "offline") alerts.push({ type: "critical", message: `🔴 iLO ${srv.name} inacessível` });
+    if (srv.health_summary === "Critical") alerts.push({ type: "critical", message: `🔥 iLO ${srv.name} — saúde do hardware CRÍTICA` });
+    else if (srv.health_summary === "Warning") alerts.push({ type: "warning", message: `⚠️ iLO ${srv.name} — hardware em atenção` });
+
+    Object.entries(HEALTH_LABELS).forEach(([field, label]) => {
+      const value = (srv as any)[field];
+      if (value === "Critical") alerts.push({ type: "critical", message: `🔥 iLO ${srv.name} — ${label} em estado crítico` });
+      else if (value === "Warning") alerts.push({ type: "warning", message: `⚠️ iLO ${srv.name} — ${label} em atenção` });
+    });
+
+    if (srv.last_polled_at && (now - new Date(srv.last_polled_at).getTime()) > STALE_THRESHOLD_MS) {
+      alerts.push({ type: "warning", message: `⏰ iLO ${srv.name} — Coletor sem atualização há ${formatTimeAgo(srv.last_polled_at)}` });
+    }
+  });
+
+
+
   // Sort: critical first, then warning, then info
   alerts.sort((a, b) => {
     const order = { critical: 0, warning: 1, info: 2 };
@@ -273,8 +316,12 @@ const ServerMonitor = () => {
             </Button>
             <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
               <DialogTrigger asChild>
-                <Button onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Adicionar</Button>
+                {/* Nas abas iLO e Guia o cadastro é feito dentro da própria aba. */}
+                <Button onClick={openAdd} disabled={activeTab === "ilo" || activeTab === "guide"}>
+                  <Plus className="w-4 h-4 mr-1" /> Adicionar
+                </Button>
               </DialogTrigger>
+
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>{editingItem ? "Editar" : "Adicionar"} {activeTab === "windows" ? "Servidor Windows" : "Host VMware"}</DialogTitle>
@@ -428,7 +475,9 @@ const ServerMonitor = () => {
           <TabsList>
             <TabsTrigger value="windows"><Server className="w-4 h-4 mr-1" /> Windows</TabsTrigger>
             <TabsTrigger value="vmware"><Monitor className="w-4 h-4 mr-1" /> VMware</TabsTrigger>
+            <TabsTrigger value="ilo"><ServerCog className="w-4 h-4 mr-1" /> HP iLO4</TabsTrigger>
             <TabsTrigger value="guide"><Download className="w-4 h-4 mr-1" /> Guia Coletor</TabsTrigger>
+
           </TabsList>
 
           {/* Windows Tab */}
@@ -695,6 +744,13 @@ const ServerMonitor = () => {
               )}
             </div>
           </TabsContent>
+
+          {/* HP iLO4 Tab */}
+          <TabsContent value="ilo">
+            <IloServersTab clients={clients || []} />
+          </TabsContent>
+
+
 
           {/* Guide Tab */}
           <TabsContent value="guide">
