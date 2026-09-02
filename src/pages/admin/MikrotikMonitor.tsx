@@ -2496,7 +2496,18 @@ const MikrotikMonitor = () => {
               </h3>
               <p className="text-muted-foreground">Clique no botão <Download className="inline w-3.5 h-3.5" /> ao lado do dispositivo desejado na lista. Salve o arquivo <code className="bg-muted px-1 rounded">.js</code> na pasta <code className="bg-muted px-1 rounded">C:\mikrotik-collector\</code>.</p>
               <p className="text-muted-foreground text-xs">Ou use o <code className="bg-muted px-1 rounded">mikrotik-vps-collector.js</code> genérico com <code className="bg-muted px-1 rounded">collector-config.json</code>.</p>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Button size="sm" variant="outline" asChild>
+                  <a href="/instalar-agente-servico.ps1" download>
+                    <Download className="w-4 h-4 mr-1" /> Baixar instalador de serviço (.ps1)
+                  </a>
+                </Button>
+                <span className="text-muted-foreground text-xs">
+                  Salve na mesma pasta do coletor e rode como Administrador: <code className="bg-muted px-1 rounded">.\instalar-agente-servico.ps1 -Script mikrotik-vps-collector.js</code>
+                </span>
+              </div>
             </div>
+
 
             <div className="space-y-2">
               <h3 className="font-semibold text-base flex items-center gap-2">
