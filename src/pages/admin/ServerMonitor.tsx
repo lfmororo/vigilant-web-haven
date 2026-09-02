@@ -433,6 +433,19 @@ const ServerMonitor = () => {
               </div>
             </CardContent>
           </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-500/10"><Boxes className="w-5 h-5 text-emerald-400" /></div>
+              <div>
+                <p className="text-sm text-muted-foreground">Nós Proxmox</p>
+                <p className="text-2xl font-bold">
+                  {proxmoxNodes?.filter(n => n.status === "online").length || 0}/{proxmoxNodes?.length || 0}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+
 
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
