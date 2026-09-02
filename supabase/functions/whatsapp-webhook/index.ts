@@ -65,8 +65,13 @@ function extractPollData(body: any): { voterPhone: string; selectedOption: strin
     }
   }
 
-  if (!selectedOption && (eventType === "messages.upsert" || eventType === "messages_upsert")) {
+  if (
+    !selectedOption &&
+    ["messages.upsert", "messages_upsert", "messages.update", "messages_update"].includes(eventType)
+  ) {
+    // Na Evolution o voto chega em data.message.pollUpdateMessage
     const msg = eventData.message || eventData.Message || eventData;
+
     const pollUpdate = msg.pollUpdateMessage || msg.PollUpdateMessage || msg.pollUpdate || msg.PollUpdate;
     if (pollUpdate) {
       if (msg.key?.remoteJid) voterPhone = cleanPhone(String(msg.key.remoteJid).replace(/@.*/, ""));
