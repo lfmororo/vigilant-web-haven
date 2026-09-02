@@ -819,7 +819,42 @@ WantedBy=multi-user.target`}</code>
                   </div>
                 </div>
 
-                <div className="flex gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><ServerCog className="w-5 h-5 text-orange-400" /> Coletor HP iLO4 (Node.js via Redfish/HTTPS)</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Um único script Node.js (sem dependências externas) roda em uma VPS ou máquina com acesso à
+                    <strong> rede de gerenciamento dos iLOs</strong> e coleta temperaturas, ventiladores, fontes, voltagens,
+                    discos/RAID (SmartStorage) e o log de eventos de hardware (IML) de todos os servidores cadastrados na aba HP iLO4.
+                  </p>
+                  <div className="bg-muted rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-medium">1. Configure o iLO4 de cada servidor:</p>
+                    <div className="text-xs bg-background p-2 rounded space-y-1">
+                      <p>• Crie um usuário dedicado somente-leitura (permissão apenas de <strong>Login</strong>)</p>
+                      <p>• Mantenha a API Redfish/REST habilitada em <em>Security → Access Settings</em> (padrão no iLO4 2.3+)</p>
+                      <p>• Use HTTPS na porta 443 e libere o firewall entre a máquina coletora e o iLO</p>
+                      <p>• Recomendado: firmware do iLO4 na versão 2.55 ou superior</p>
+                    </div>
+                    <p className="text-sm font-medium mt-3">2. Baixe o script na máquina coletora:</p>
+                    <code className="text-xs block bg-background p-2 rounded">
+                      curl -o ilo-collector.js {window.location.origin}/ilo-collector.js
+                    </code>
+                    <p className="text-sm font-medium mt-3">3. Execute (coleta contínua a cada 5 minutos):</p>
+                    <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`node ilo-collector.js \\
+  --url "${supabaseUrl}" \\
+  --key "${anonKey}" \\
+  --intervalo 300`}</code>
+                    <p className="text-sm font-medium mt-3">4. Ou agende via cron (execução única por ciclo):</p>
+                    <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`*/5 * * * * /usr/bin/node /opt/collectors/ilo-collector.js --url "${supabaseUrl}" --key "SUA_ANON_KEY" --uma-vez`}</code>
+                    <p className="text-sm font-medium mt-3">5. Alertas:</p>
+                    <div className="text-xs bg-background p-2 rounded space-y-1">
+                      <p>• Servidor inacessível, saúde crítica e novos eventos críticos do IML disparam WhatsApp para os administradores</p>
+                      <p>• As condições de atenção/crítico também aparecem no painel de alertas desta página</p>
+                      <p>• Certificados autoassinados do iLO são aceitos por padrão; use <code>--seguro</code> para exigir certificado válido</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
                   <Button variant="outline" asChild>
                     <a href="/windows-server-collector.ps1" download>
                       <Download className="w-4 h-4 mr-1" /> Baixar Coletor Windows (.ps1)
@@ -830,7 +865,13 @@ WantedBy=multi-user.target`}</code>
                       <Download className="w-4 h-4 mr-1" /> Baixar Coletor VMware (.js)
                     </a>
                   </Button>
+                  <Button variant="outline" asChild>
+                    <a href="/ilo-collector.js" download>
+                      <Download className="w-4 h-4 mr-1" /> Baixar Coletor HP iLO4 (.js)
+                    </a>
+                  </Button>
                 </div>
+
               </CardContent>
             </Card>
           </TabsContent>
