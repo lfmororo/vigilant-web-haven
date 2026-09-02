@@ -17,7 +17,7 @@ import { formatTimeAgo } from "@/lib/formatTimeAgo";
 import {
   Server, Monitor, Plus, RefreshCw, Trash2, Edit, HardDrive,
   Cpu, MemoryStick, Activity, Clock, ChevronDown, ChevronRight,
-  Power, AlertTriangle, CheckCircle, XCircle, Download, ServerCog
+  Power, AlertTriangle, CheckCircle, XCircle, Download, ServerCog, Boxes
 } from "lucide-react";
 import IloServersTab from "@/components/admin/servers/IloServersTab";
 import ProxmoxTab from "@/components/admin/servers/ProxmoxTab";
