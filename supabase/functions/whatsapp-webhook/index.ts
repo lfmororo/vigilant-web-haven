@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { waFetch } from "../_shared/whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -123,7 +124,7 @@ async function loadSettings(supabaseAdmin: any) {
 
 async function sendWhatsApp(apiUrl: string, apiToken: string, number: string, text: string) {
   const base = apiUrl.replace(/\/+$/, "");
-  const resp = await fetch(`${base}/send/text`, {
+  const resp = await waFetch(`${base}/send/text`, {
     method: "POST",
     headers: { "Content-Type": "application/json", token: apiToken },
     body: JSON.stringify({ number, text, linkPreview: false }),
