@@ -160,6 +160,18 @@ export async function waFetch(
       fileName: String(payload.docName ?? payload.fileName ?? "arquivo"),
       caption: String(payload.text ?? payload.caption ?? ""),
     };
+  } else if (String(payload.type || "") === "poll") {
+    // Enquete de satisfação -> POST /message/sendPoll/{instance}
+    const values = (Array.isArray(payload.choices) ? payload.choices : []).map((c) =>
+      String(c).split("|")[0],
+    );
+    endpoint = `${base}/message/sendPoll/${encodeURIComponent(instance)}`;
+    body = {
+      number,
+      name: String(payload.text ?? "Enquete"),
+      selectableCount: Number(payload.selectableCount ?? 1),
+      values,
+    };
   } else {
     // A Evolution API não tem paridade de "menu/botões" com CTA de link em todas
     // as versões, então os botões viram um texto com os links (comportamento estável).
@@ -175,6 +187,7 @@ export async function waFetch(
     endpoint = `${base}/message/sendText/${encodeURIComponent(instance)}`;
     body = { number, text: lines.join("\n"), linkPreview: false };
   }
+
 
   try {
     return await fetch(endpoint, {
