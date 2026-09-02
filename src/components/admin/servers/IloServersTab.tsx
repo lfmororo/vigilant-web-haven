@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import { Plus, ServerCog } from "lucide-react";
 import IloServerCard from "./IloServerCard";
+import SensorAlertsPanel from "./SensorAlertsPanel";
 import type { IloEvent, IloSensor, IloServer } from "./iloTypes";
 
 interface IloFormState {
@@ -162,8 +163,15 @@ const IloServersTab = ({ clients }: IloServersTabProps) => {
     setDialogOpen(true);
   };
 
+  const serverNames = useMemo(
+    () => Object.fromEntries((servers || []).map((s) => [s.id, s.name])),
+    [servers],
+  );
+
   return (
     <div className="space-y-4">
+      <SensorAlertsPanel serverNames={serverNames} />
+
       <div className="flex justify-end">
         <Button size="sm" onClick={openAdd}>
           <Plus className="w-4 h-4 mr-1" /> Adicionar Servidor iLO
