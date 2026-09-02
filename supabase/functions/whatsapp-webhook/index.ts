@@ -83,9 +83,12 @@ function extractPollData(body: any): { voterPhone: string; selectedOption: strin
   }
 
   if (!voterPhone) {
-    const from = body.from || body.From || eventData.from || eventData.From || "";
+    const from =
+      eventData.key?.remoteJid || eventData.Key?.RemoteJid ||
+      body.from || body.From || eventData.from || eventData.From || "";
     if (from) voterPhone = cleanPhone(String(from).replace(/@.*/, ""));
   }
+
   if (!selectedOption) selectedOption = body.selectedOption || body.SelectedOption || body.vote || body.Vote || "";
 
   return { voterPhone, selectedOption: String(selectedOption).trim() };
