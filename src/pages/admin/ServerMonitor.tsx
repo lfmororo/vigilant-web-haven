@@ -120,6 +120,21 @@ const ServerMonitor = () => {
     refetchInterval: 30000
   });
 
+  // Nós Proxmox VE — usado para os cartões de resumo e para o painel de alertas.
+  const { data: proxmoxNodes } = useQuery({
+    queryKey: ["proxmox-nodes-summary"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("proxmox_nodes")
+        .select("id, name, status, cpu_usage_pct, ram_usage_pct, disk_usage_pct, last_polled_at")
+        .order("name");
+      return data || [];
+    },
+    refetchInterval: 30000
+  });
+
+
+
 
 
   const addWindowsServer = useMutation({
