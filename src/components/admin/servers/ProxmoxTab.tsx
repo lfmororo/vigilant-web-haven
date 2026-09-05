@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import { Boxes, Plus } from "lucide-react";
 import ProxmoxNodeCard from "./ProxmoxNodeCard";
-import type { ProxmoxGuest, ProxmoxNode } from "./proxmoxTypes";
+import type { ProxmoxGuest, ProxmoxInterface, ProxmoxNode } from "./proxmoxTypes";
 
 interface ProxmoxFormState {
   name: string;
@@ -125,6 +125,7 @@ const ProxmoxTab = ({ clients }: ProxmoxTabProps) => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["proxmox-nodes"] });
       queryClient.invalidateQueries({ queryKey: ["proxmox-guests"] });
+      queryClient.invalidateQueries({ queryKey: ["proxmox-interfaces"] });
       toast({ title: "Nó Proxmox removido" });
     },
     onError: (e: Error) => toast({ title: "Erro ao remover", description: e.message, variant: "destructive" }),
@@ -135,6 +136,12 @@ const ProxmoxTab = ({ clients }: ProxmoxTabProps) => {
     (guests || []).forEach((g) => { (map[g.node_id] ||= []).push(g); });
     return map;
   }, [guests]);
+
+  const interfacesByNode = useMemo(() => {
+    const map: Record<string, ProxmoxInterface[]> = {};
+    (interfaces || []).forEach((i) => { (map[i.node_id] ||= []).push(i); });
+    return map;
+  }, [interfaces]);
 
   const openAdd = () => { setEditingId(null); setForm(EMPTY_FORM); setDialogOpen(true); };
 
@@ -160,6 +167,7 @@ const ProxmoxTab = ({ clients }: ProxmoxTabProps) => {
           key={node.id}
           node={node}
           guests={guestsByNode[node.id] || []}
+          interfaces={interfacesByNode[node.id] || []}
           expanded={expandedId === node.id}
           onToggle={() => setExpandedId(expandedId === node.id ? null : node.id)}
           onEdit={() => openEdit(node)}
