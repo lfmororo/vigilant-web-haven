@@ -440,13 +440,16 @@ async function ciclo() {
     return;
   }
 
-  if (!Array.isArray(servidores) || servidores.length === 0) {
-    log("AVISO", "Nenhum servidor iLO ativo cadastrado no painel.");
+  // Servidores Dell sao tratados pelo idrac-collector.js.
+  const hp = (Array.isArray(servidores) ? servidores : []).filter((s) => s.vendor !== "dell");
+
+  if (hp.length === 0) {
+    log("AVISO", "Nenhum servidor HP iLO ativo cadastrado no painel.");
     return;
   }
 
-  log("INFO", `${servidores.length} servidor(es) iLO para coletar.`);
-  for (const s of servidores) {
+  log("INFO", `${hp.length} servidor(es) iLO para coletar.`);
+  for (const s of hp) {
     await processarServidor(s);
   }
   log("INFO", "Ciclo concluído.");
