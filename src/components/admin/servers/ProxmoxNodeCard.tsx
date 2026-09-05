@@ -3,21 +3,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatTimeAgo } from "@/lib/formatTimeAgo";
-import { Boxes, ChevronDown, ChevronRight, Cpu, Edit, HardDrive, MemoryStick, Trash2 } from "lucide-react";
-import type { ProxmoxGuest, ProxmoxNode } from "./proxmoxTypes";
-import { formatGB, formatPct, proxmoxStatusBadge, proxmoxStatusDot, usageBarClass } from "./proxmoxTypes";
+import { ArrowDown, ArrowUp, Boxes, ChevronDown, ChevronRight, Cpu, Edit, HardDrive, MemoryStick, Network, Trash2 } from "lucide-react";
+import type { ProxmoxGuest, ProxmoxInterface, ProxmoxNode } from "./proxmoxTypes";
+import { formatBps, formatBytes, formatGB, formatPct, proxmoxStatusBadge, proxmoxStatusDot, usageBarClass } from "./proxmoxTypes";
 
 export interface ProxmoxNodeCardProps {
   node: ProxmoxNode;
   guests: ProxmoxGuest[];
+  interfaces?: ProxmoxInterface[];
   expanded: boolean;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-/** Cartão expansível de um nó Proxmox VE com métricas, storages e VMs/containers. */
-const ProxmoxNodeCard = ({ node, guests, expanded, onToggle, onEdit, onDelete }: ProxmoxNodeCardProps) => {
+/** Cartão expansível de um nó Proxmox VE com métricas, storages, rede e VMs/containers. */
+const ProxmoxNodeCard = ({ node, guests, interfaces = [], expanded, onToggle, onEdit, onDelete }: ProxmoxNodeCardProps) => {
   const storages = Array.isArray(node.storages) ? (node.storages as Record<string, unknown>[]) : [];
   const running = guests.filter((g) => g.status === "running").length;
 
