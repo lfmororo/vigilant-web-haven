@@ -896,6 +896,7 @@ export type Database = {
           updated_at: string
           uptime_seconds: number | null
           username: string
+          vendor: string
         }
         Insert: {
           bios_version?: string | null
@@ -931,6 +932,7 @@ export type Database = {
           updated_at?: string
           uptime_seconds?: number | null
           username: string
+          vendor?: string
         }
         Update: {
           bios_version?: string | null
@@ -966,6 +968,7 @@ export type Database = {
           updated_at?: string
           uptime_seconds?: number | null
           username?: string
+          vendor?: string
         }
         Relationships: [
           {
