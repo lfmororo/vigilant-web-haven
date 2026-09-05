@@ -63,6 +63,19 @@ export const AGENT_BUNDLES: Record<string, AgentBundleDefinition> = {
     runtime: "node",
     notes: ["Use um usuário iLO somente leitura para a coleta."],
   },
+  idrac: {
+    id: "idrac",
+    label: "Coletor Dell iDRAC9",
+    zipName: "agente-dell-idrac9",
+    files: ["/idrac-collector.js"],
+    mainScript: "idrac-collector.js",
+    runtime: "node",
+    notes: [
+      "Cadastre o servidor no painel com o fabricante Dell (iDRAC9) antes de iniciar a coleta.",
+      "Use um usuario do iDRAC com funcao Read Only.",
+      "Habilite a API Redfish em iDRAC Settings > Services (habilitada por padrao no iDRAC9).",
+    ],
+  },
   windows: {
     id: "windows",
     label: "Coletor Windows Server",

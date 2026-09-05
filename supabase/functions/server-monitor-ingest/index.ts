@@ -615,7 +615,7 @@ Deno.serve(async (req) => {
     if (type === "list-ilo") {
       const { data } = await supabase
         .from("ilo_servers")
-        .select("id, name, host, username, password, port")
+        .select("id, name, host, username, password, port, vendor")
         .eq("is_active", true);
       return new Response(JSON.stringify(data || []), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }

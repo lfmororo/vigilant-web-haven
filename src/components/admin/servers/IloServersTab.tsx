@@ -14,7 +14,11 @@ import IloServerCard from "./IloServerCard";
 import SensorAlertsPanel from "./SensorAlertsPanel";
 import type { IloEvent, IloSensor, IloServer } from "./iloTypes";
 
+/** Fabricante da controladora remota de gerenciamento. */
+type IloVendor = "hp" | "dell";
+
 interface IloFormState {
+  vendor: IloVendor;
   name: string;
   host: string;
   client_id: string;
@@ -25,7 +29,7 @@ interface IloFormState {
 }
 
 const EMPTY_FORM: IloFormState = {
-  name: "", host: "", client_id: "", username: "monitor", password: "", port: 443, is_active: true,
+  vendor: "hp", name: "", host: "", client_id: "", username: "monitor", password: "", port: 443, is_active: true,
 };
 
 export interface IloServersTabProps {
@@ -79,13 +83,14 @@ const IloServersTab = ({ clients }: IloServersTabProps) => {
   const saveServer = useMutation({
     mutationFn: async (payload: IloFormState) => {
       if (!payload.name.trim() || !payload.host.trim() || !payload.client_id) {
-        throw new Error("Cliente, nome e endereço do iLO são obrigatórios.");
+        throw new Error("Cliente, nome e endereço da controladora são obrigatórios.");
       }
       if (!editingId && !payload.password) {
-        throw new Error("Informe a senha do usuário do iLO.");
+        throw new Error("Informe a senha do usuário de gerenciamento.");
       }
 
       const record: Record<string, unknown> = {
+        vendor: payload.vendor,
         name: payload.name.trim(),
         host: payload.host.trim(),
         client_id: payload.client_id,
@@ -152,6 +157,7 @@ const IloServersTab = ({ clients }: IloServersTabProps) => {
   const openEdit = (server: IloServer) => {
     setEditingId(server.id);
     setForm({
+      vendor: (server.vendor === "dell" ? "dell" : "hp"),
       name: server.name,
       host: server.host,
       client_id: server.client_id,
@@ -195,8 +201,8 @@ const IloServersTab = ({ clients }: IloServersTabProps) => {
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground space-y-2">
             <ServerCog className="w-8 h-8 mx-auto opacity-60" />
-            <p>Nenhum servidor HP iLO cadastrado.</p>
-            <p className="text-xs">Cadastre o endereço do iLO e rode o coletor (aba “Guia Coletor”).</p>
+            <p>Nenhum servidor HP iLO4 ou Dell iDRAC9 cadastrado.</p>
+            <p className="text-xs">Cadastre o endereço do iLO/iDRAC e rode o coletor (aba “Guia Coletor”).</p>
           </CardContent>
         </Card>
       )}
@@ -204,9 +210,22 @@ const IloServersTab = ({ clients }: IloServersTabProps) => {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingId ? "Editar" : "Adicionar"} Servidor HP iLO4</DialogTitle>
+            <DialogTitle>{editingId ? "Editar" : "Adicionar"} Servidor (HP iLO4 / Dell iDRAC9)</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div>
+              <Label>Fabricante</Label>
+              <Select value={form.vendor} onValueChange={(v) => setForm((p) => ({ ...p, vendor: v as IloVendor }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hp">HP — iLO4 (Redfish)</SelectItem>
+                  <SelectItem value="dell">Dell — iDRAC9 (Redfish)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Define qual coletor irá monitorar este servidor.
+              </p>
+            </div>
             <div>
               <Label>Cliente</Label>
               <Select value={form.client_id} onValueChange={(v) => setForm((p) => ({ ...p, client_id: v }))}>
@@ -218,11 +237,11 @@ const IloServersTab = ({ clients }: IloServersTabProps) => {
             </div>
             <div>
               <Label>Nome</Label>
-              <Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Ex: ILO-DL380-01" />
+              <Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder={form.vendor === "dell" ? "Ex: IDRAC-R740-01" : "Ex: ILO-DL380-01"} />
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
-                <Label>IP / Host do iLO</Label>
+                <Label>IP / Host do {form.vendor === "dell" ? "iDRAC" : "iLO"}</Label>
                 <Input value={form.host} onChange={(e) => setForm((p) => ({ ...p, host: e.target.value }))} placeholder="192.168.1.50" />
               </div>
               <div>
@@ -232,7 +251,7 @@ const IloServersTab = ({ clients }: IloServersTabProps) => {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Usuário do iLO</Label>
+                <Label>Usuário do {form.vendor === "dell" ? "iDRAC" : "iLO"}</Label>
                 <Input value={form.username} onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))} />
               </div>
               <div>
