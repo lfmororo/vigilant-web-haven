@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatTimeAgo } from "@/lib/formatTimeAgo";
 import { ArrowDown, ArrowUp, Boxes, ChevronDown, ChevronRight, Cpu, Edit, HardDrive, MemoryStick, Network, Trash2 } from "lucide-react";
+import ProxmoxTrafficChart from "./ProxmoxTrafficChart";
 import type { ProxmoxGuest, ProxmoxInterface, ProxmoxNode } from "./proxmoxTypes";
 import { formatBps, formatBytes, formatGB, formatPct, proxmoxStatusBadge, proxmoxStatusDot, usageBarClass } from "./proxmoxTypes";
 
@@ -66,6 +67,8 @@ const ProxmoxNodeCard = ({ node, guests, interfaces = [], expanded, onToggle, on
 
         {expanded && (
           <div className="space-y-4 pt-2 border-t border-border">
+            <ProxmoxTrafficChart nodeId={node.id} nodeName={node.name} totalRx={totalRx} totalTx={totalTx} />
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-muted-foreground">
               <p>Versão: <span className="text-foreground">{node.pve_version || "—"}</span></p>
               <p>CPU: <span className="text-foreground">{node.cpu_model || "—"} ({node.cpu_cores ?? "—"} núcleos)</span></p>
