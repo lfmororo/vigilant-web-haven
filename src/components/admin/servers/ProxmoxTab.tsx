@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -136,6 +136,19 @@ const ProxmoxTab = ({ clients }: ProxmoxTabProps) => {
     (guests || []).forEach((g) => { (map[g.node_id] ||= []).push(g); });
     return map;
   }, [guests]);
+
+  // Tempo real: qualquer nova leitura do coletor atualiza o gráfico na hora.
+  useEffect(() => {
+    const channel = supabase
+      .channel("proxmox-interfaces-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "proxmox_interfaces" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["proxmox-interfaces"] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   const interfacesByNode = useMemo(() => {
     const map: Record<string, ProxmoxInterface[]> = {};
