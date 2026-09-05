@@ -534,7 +534,7 @@ const ServerMonitor = () => {
           <TabsList>
             <TabsTrigger value="windows"><Server className="w-4 h-4 mr-1" /> Windows</TabsTrigger>
             <TabsTrigger value="vmware"><Monitor className="w-4 h-4 mr-1" /> VMware</TabsTrigger>
-            <TabsTrigger value="ilo"><ServerCog className="w-4 h-4 mr-1" /> HP iLO4</TabsTrigger>
+            <TabsTrigger value="ilo"><ServerCog className="w-4 h-4 mr-1" /> iLO4 / iDRAC9</TabsTrigger>
             <TabsTrigger value="proxmox"><Boxes className="w-4 h-4 mr-1" /> Proxmox</TabsTrigger>
 
             <TabsTrigger value="guide"><Download className="w-4 h-4 mr-1" /> Guia Coletor</TabsTrigger>
@@ -921,6 +921,41 @@ WantedBy=multi-user.target`}</code>
                 </div>
 
                 <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-2"><ServerCog className="w-4 h-4" /> Dell iDRAC9 (Redfish)</h3>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Coletor Node.js dedicado aos servidores Dell. Coleta status geral, CPU e memória, temperaturas,
+                    voltagens, ventoinhas, fontes, controladoras RAID, volumes, discos físicos e os eventos do SEL
+                    de todos os servidores cadastrados com o fabricante <strong>Dell (iDRAC9)</strong>.
+                  </p>
+                  <div className="bg-muted rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-medium">1. Configure o iDRAC9 de cada servidor:</p>
+                    <div className="text-xs bg-background p-2 rounded space-y-1">
+                      <p>• Crie um usuário local com função <strong>Read Only</strong> em <em>iDRAC Settings → Users</em></p>
+                      <p>• Mantenha a API Redfish habilitada em <em>iDRAC Settings → Services</em> (padrão no iDRAC9)</p>
+                      <p>• Garanta conectividade HTTPS (porta 443) entre a máquina coletora e o iDRAC</p>
+                      <p>• Opcional: em <em>Configuration → System Settings → Alert Configuration</em> configure e-mail/SNMP traps direto no iDRAC</p>
+                    </div>
+                    <p className="text-sm font-medium mt-3">2. Baixe o script na máquina coletora:</p>
+                    <code className="text-xs block bg-background p-2 rounded">
+                      curl -o idrac-collector.js {window.location.origin}/idrac-collector.js
+                    </code>
+                    <p className="text-sm font-medium mt-3">3. Execute (coleta contínua a cada 5 minutos):</p>
+                    <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`node idrac-collector.js \\
+  --url "${supabaseUrl}" \\
+  --key "${anonKey}" \\
+  --intervalo 300`}</code>
+                    <p className="text-sm font-medium mt-3">4. Ou agende via cron (execução única por ciclo):</p>
+                    <code className="text-xs block bg-background p-2 rounded whitespace-pre">{`*/5 * * * * /usr/bin/node /opt/collectors/idrac-collector.js --url "${supabaseUrl}" --key "SUA_ANON_KEY" --uma-vez`}</code>
+                    <p className="text-sm font-medium mt-3">5. Alertas:</p>
+                    <div className="text-xs bg-background p-2 rounded space-y-1">
+                      <p>• Cada sensor em falha (temperatura, ventoinha, fonte, disco) gera um alerta individual via WhatsApp</p>
+                      <p>• Servidor inacessível, saúde crítica e novos eventos críticos do SEL também notificam os administradores</p>
+                      <p>• Certificados autoassinados do iDRAC são aceitos por padrão; use <code>--seguro</code> para exigir certificado válido</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
                   <h3 className="font-semibold mb-2 flex items-center gap-2"><Boxes className="w-4 h-4" /> Proxmox VE (API REST)</h3>
                   <p className="text-sm text-muted-foreground mb-2">
                     Coletor Node.js que consulta a API do Proxmox VE e envia métricas do nó, storages e VMs/containers.
@@ -978,6 +1013,7 @@ WantedBy=multi-user.target`}</code>
                   <AgentDownloadButton agent="windows" label="Baixar Agente Windows (.zip)" options={bundleOptions} />
                   <AgentDownloadButton agent="vmware" label="Baixar Agente VMware (.zip)" options={bundleOptions} />
                   <AgentDownloadButton agent="ilo" label="Baixar Agente HP iLO4 (.zip)" options={bundleOptions} />
+                  <AgentDownloadButton agent="idrac" label="Baixar Agente Dell iDRAC9 (.zip)" options={bundleOptions} />
                   <AgentDownloadButton agent="proxmox" label="Baixar Agente Proxmox (.zip)" options={bundleOptions} />
                   <Button asChild>
                     <a href="/instalar-agente-servico.ps1" download>
