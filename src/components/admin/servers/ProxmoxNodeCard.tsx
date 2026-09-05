@@ -92,6 +92,52 @@ const ProxmoxNodeCard = ({ node, guests, interfaces = [], expanded, onToggle, on
               </div>
             )}
 
+            <div>
+              <h4 className="text-sm font-medium mb-2 flex items-center gap-1"><Network className="w-4 h-4" /> Tráfego de rede (placas do host)</h4>
+              {interfaces.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Nenhuma interface coletada. Execute o script <span className="font-mono">proxmox-net-collector.sh</span> no host Proxmox.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Interface</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Enlace</TableHead>
+                        <TableHead>Download atual</TableHead>
+                        <TableHead>Upload atual</TableHead>
+                        <TableHead>Total recebido</TableHead>
+                        <TableHead>Total enviado</TableHead>
+                        <TableHead>Erros</TableHead>
+                        <TableHead>Atualizado</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {interfaces.map((iface) => (
+                        <TableRow key={iface.id}>
+                          <TableCell className="font-medium font-mono text-xs">{iface.interface_name}</TableCell>
+                          <TableCell>
+                            {iface.status === "up"
+                              ? <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Ativa</Badge>
+                              : <Badge className="bg-muted text-muted-foreground">{iface.status === "down" ? "Inativa" : iface.status}</Badge>}
+                          </TableCell>
+                          <TableCell>{iface.speed_mbps ? `${iface.speed_mbps} Mbps` : "—"}</TableCell>
+                          <TableCell className="text-cyan-400">{formatBps(iface.rx_rate_bps)}</TableCell>
+                          <TableCell className="text-blue-400">{formatBps(iface.tx_rate_bps)}</TableCell>
+                          <TableCell>{formatBytes(iface.rx_bytes)}</TableCell>
+                          <TableCell>{formatBytes(iface.tx_bytes)}</TableCell>
+                          <TableCell>{(iface.rx_errors ?? 0) + (iface.tx_errors ?? 0)}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{formatTimeAgo(iface.updated_at)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+
             <div className="overflow-x-auto">
               <h4 className="text-sm font-medium mb-2 flex items-center gap-1"><Boxes className="w-4 h-4" /> VMs & Containers</h4>
               <Table>
