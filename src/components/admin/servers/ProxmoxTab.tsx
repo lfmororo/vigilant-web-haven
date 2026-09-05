@@ -63,6 +63,16 @@ const ProxmoxTab = ({ clients }: ProxmoxTabProps) => {
     refetchInterval: 30000,
   });
 
+  const { data: interfaces } = useQuery({
+    queryKey: ["proxmox-interfaces"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("proxmox_interfaces").select("*").order("interface_name");
+      if (error) throw error;
+      return (data || []) as ProxmoxInterface[];
+    },
+    refetchInterval: 15000,
+  });
+
   const saveNode = useMutation({
     mutationFn: async (payload: ProxmoxFormState) => {
       if (!payload.name.trim() || !payload.host.trim() || !payload.client_id) {
