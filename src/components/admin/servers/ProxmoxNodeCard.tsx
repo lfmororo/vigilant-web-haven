@@ -48,10 +48,16 @@ const ProxmoxNodeCard = ({ node, guests, interfaces = [], expanded, onToggle, on
           <div className="flex items-center gap-2"><Cpu className="w-4 h-4 text-blue-400" /> CPU {formatPct(node.cpu_usage_pct)}</div>
           <div className="flex items-center gap-2"><MemoryStick className="w-4 h-4 text-purple-400" /> RAM {formatPct(node.ram_usage_pct)}</div>
           <div className="flex items-center gap-2"><HardDrive className="w-4 h-4 text-amber-400" /> Disco {formatPct(node.disk_usage_pct)}</div>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            Coleta: {node.last_polled_at ? formatTimeAgo(node.last_polled_at) : "Nunca"}
+          <div className="flex items-center gap-2">
+            <Network className="w-4 h-4 text-cyan-400" />
+            <span className="flex items-center gap-1"><ArrowDown className="w-3 h-3" />{formatBps(totalRx)}</span>
+            <span className="flex items-center gap-1"><ArrowUp className="w-3 h-3" />{formatBps(totalTx)}</span>
           </div>
         </div>
+
+        <p className="text-xs text-muted-foreground">
+          Coleta: {node.last_polled_at ? formatTimeAgo(node.last_polled_at) : "Nunca"}
+        </p>
 
         {node.last_error && <p className="text-xs text-destructive">{node.last_error}</p>}
 
