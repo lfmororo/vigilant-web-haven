@@ -3,23 +3,27 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatTimeAgo } from "@/lib/formatTimeAgo";
-import { Boxes, ChevronDown, ChevronRight, Cpu, Edit, HardDrive, MemoryStick, Trash2 } from "lucide-react";
-import type { ProxmoxGuest, ProxmoxNode } from "./proxmoxTypes";
-import { formatGB, formatPct, proxmoxStatusBadge, proxmoxStatusDot, usageBarClass } from "./proxmoxTypes";
+import { ArrowDown, ArrowUp, Boxes, ChevronDown, ChevronRight, Cpu, Edit, HardDrive, MemoryStick, Network, Trash2 } from "lucide-react";
+import type { ProxmoxGuest, ProxmoxInterface, ProxmoxNode } from "./proxmoxTypes";
+import { formatBps, formatBytes, formatGB, formatPct, proxmoxStatusBadge, proxmoxStatusDot, usageBarClass } from "./proxmoxTypes";
 
 export interface ProxmoxNodeCardProps {
   node: ProxmoxNode;
   guests: ProxmoxGuest[];
+  interfaces?: ProxmoxInterface[];
   expanded: boolean;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-/** Cartão expansível de um nó Proxmox VE com métricas, storages e VMs/containers. */
-const ProxmoxNodeCard = ({ node, guests, expanded, onToggle, onEdit, onDelete }: ProxmoxNodeCardProps) => {
+/** Cartão expansível de um nó Proxmox VE com métricas, storages, rede e VMs/containers. */
+const ProxmoxNodeCard = ({ node, guests, interfaces = [], expanded, onToggle, onEdit, onDelete }: ProxmoxNodeCardProps) => {
   const storages = Array.isArray(node.storages) ? (node.storages as Record<string, unknown>[]) : [];
   const running = guests.filter((g) => g.status === "running").length;
+  // Soma das taxas atuais de todas as placas monitoradas do host.
+  const totalRx = interfaces.reduce((acc, i) => acc + (Number(i.rx_rate_bps) || 0), 0);
+  const totalTx = interfaces.reduce((acc, i) => acc + (Number(i.tx_rate_bps) || 0), 0);
 
   return (
     <Card>
@@ -47,10 +51,16 @@ const ProxmoxNodeCard = ({ node, guests, expanded, onToggle, onEdit, onDelete }:
           <div className="flex items-center gap-2"><Cpu className="w-4 h-4 text-blue-400" /> CPU {formatPct(node.cpu_usage_pct)}</div>
           <div className="flex items-center gap-2"><MemoryStick className="w-4 h-4 text-purple-400" /> RAM {formatPct(node.ram_usage_pct)}</div>
           <div className="flex items-center gap-2"><HardDrive className="w-4 h-4 text-amber-400" /> Disco {formatPct(node.disk_usage_pct)}</div>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            Coleta: {node.last_polled_at ? formatTimeAgo(node.last_polled_at) : "Nunca"}
+          <div className="flex items-center gap-2">
+            <Network className="w-4 h-4 text-cyan-400" />
+            <span className="flex items-center gap-1"><ArrowDown className="w-3 h-3" />{formatBps(totalRx)}</span>
+            <span className="flex items-center gap-1"><ArrowUp className="w-3 h-3" />{formatBps(totalTx)}</span>
           </div>
         </div>
+
+        <p className="text-xs text-muted-foreground">
+          Coleta: {node.last_polled_at ? formatTimeAgo(node.last_polled_at) : "Nunca"}
+        </p>
 
         {node.last_error && <p className="text-xs text-destructive">{node.last_error}</p>}
 
@@ -84,6 +94,52 @@ const ProxmoxNodeCard = ({ node, guests, expanded, onToggle, onEdit, onDelete }:
                 </div>
               </div>
             )}
+
+            <div>
+              <h4 className="text-sm font-medium mb-2 flex items-center gap-1"><Network className="w-4 h-4" /> Tráfego de rede (placas do host)</h4>
+              {interfaces.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Nenhuma interface coletada. Execute o script <span className="font-mono">proxmox-net-collector.sh</span> no host Proxmox.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Interface</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Enlace</TableHead>
+                        <TableHead>Download atual</TableHead>
+                        <TableHead>Upload atual</TableHead>
+                        <TableHead>Total recebido</TableHead>
+                        <TableHead>Total enviado</TableHead>
+                        <TableHead>Erros</TableHead>
+                        <TableHead>Atualizado</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {interfaces.map((iface) => (
+                        <TableRow key={iface.id}>
+                          <TableCell className="font-medium font-mono text-xs">{iface.interface_name}</TableCell>
+                          <TableCell>
+                            {iface.status === "up"
+                              ? <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Ativa</Badge>
+                              : <Badge className="bg-muted text-muted-foreground">{iface.status === "down" ? "Inativa" : iface.status}</Badge>}
+                          </TableCell>
+                          <TableCell>{iface.speed_mbps ? `${iface.speed_mbps} Mbps` : "—"}</TableCell>
+                          <TableCell className="text-cyan-400">{formatBps(iface.rx_rate_bps)}</TableCell>
+                          <TableCell className="text-blue-400">{formatBps(iface.tx_rate_bps)}</TableCell>
+                          <TableCell>{formatBytes(iface.rx_bytes)}</TableCell>
+                          <TableCell>{formatBytes(iface.tx_bytes)}</TableCell>
+                          <TableCell>{(iface.rx_errors ?? 0) + (iface.tx_errors ?? 0)}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{formatTimeAgo(iface.updated_at)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
 
             <div className="overflow-x-auto">
               <h4 className="text-sm font-medium mb-2 flex items-center gap-1"><Boxes className="w-4 h-4" /> VMs & Containers</h4>

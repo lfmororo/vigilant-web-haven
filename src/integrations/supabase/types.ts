@@ -1672,6 +1672,65 @@ export type Database = {
           },
         ]
       }
+      proxmox_interfaces: {
+        Row: {
+          created_at: string
+          id: string
+          interface_name: string
+          mac_address: string | null
+          node_id: string
+          rx_bytes: number | null
+          rx_errors: number | null
+          rx_rate_bps: number | null
+          speed_mbps: number | null
+          status: string
+          tx_bytes: number | null
+          tx_errors: number | null
+          tx_rate_bps: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interface_name: string
+          mac_address?: string | null
+          node_id: string
+          rx_bytes?: number | null
+          rx_errors?: number | null
+          rx_rate_bps?: number | null
+          speed_mbps?: number | null
+          status?: string
+          tx_bytes?: number | null
+          tx_errors?: number | null
+          tx_rate_bps?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interface_name?: string
+          mac_address?: string | null
+          node_id?: string
+          rx_bytes?: number | null
+          rx_errors?: number | null
+          rx_rate_bps?: number | null
+          speed_mbps?: number | null
+          status?: string
+          tx_bytes?: number | null
+          tx_errors?: number | null
+          tx_rate_bps?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proxmox_interfaces_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: false
+            referencedRelation: "proxmox_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proxmox_nodes: {
         Row: {
           auth_mode: string
