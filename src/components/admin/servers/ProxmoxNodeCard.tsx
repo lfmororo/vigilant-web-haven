@@ -21,6 +21,9 @@ export interface ProxmoxNodeCardProps {
 const ProxmoxNodeCard = ({ node, guests, interfaces = [], expanded, onToggle, onEdit, onDelete }: ProxmoxNodeCardProps) => {
   const storages = Array.isArray(node.storages) ? (node.storages as Record<string, unknown>[]) : [];
   const running = guests.filter((g) => g.status === "running").length;
+  // Soma das taxas atuais de todas as placas monitoradas do host.
+  const totalRx = interfaces.reduce((acc, i) => acc + (Number(i.rx_rate_bps) || 0), 0);
+  const totalTx = interfaces.reduce((acc, i) => acc + (Number(i.tx_rate_bps) || 0), 0);
 
   return (
     <Card>
