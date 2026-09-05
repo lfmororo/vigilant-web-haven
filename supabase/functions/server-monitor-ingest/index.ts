@@ -537,6 +537,61 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    /**
+     * Trafego de rede das placas do host Proxmox. O script roda no proprio host
+     * e le os contadores do kernel (/proc/net/dev), equivalente ao `nload`.
+     */
+    if (type === "proxmox-net") {
+      const { node_id, hostname, interfaces } = body;
+
+      if (!Array.isArray(interfaces) || interfaces.length === 0) {
+        return new Response(JSON.stringify({ error: "interfaces required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // Resolve o no por id ou, na falta dele, pelo hostname informado.
+      let resolvedId: string | null = node_id || null;
+      if (!resolvedId && hostname) {
+        const { data: candidates } = await supabase
+          .from("proxmox_nodes")
+          .select("id, name, node_name")
+          .eq("is_active", true);
+        const host = String(hostname).toLowerCase();
+        const match = (candidates || []).find(
+          (n: any) => String(n.node_name || "").toLowerCase() === host || String(n.name || "").toLowerCase() === host,
+        );
+        resolvedId = match?.id ?? null;
+      }
+
+      if (!resolvedId) {
+        return new Response(
+          JSON.stringify({ error: `Nó Proxmox não identificado (hostname: ${hostname || "—"}). Informe --node-id.` }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const rows = interfaces.slice(0, 100).map((i: any) => ({
+        node_id: resolvedId,
+        interface_name: String(i.interface_name || "").substring(0, 100),
+        status: String(i.status || "unknown").substring(0, 30),
+        mac_address: i.mac_address ? String(i.mac_address).substring(0, 40) : null,
+        speed_mbps: Number.isFinite(Number(i.speed_mbps)) ? Number(i.speed_mbps) : null,
+        rx_bytes: i.rx_bytes ?? null,
+        tx_bytes: i.tx_bytes ?? null,
+        rx_rate_bps: i.rx_rate_bps ?? null,
+        tx_rate_bps: i.tx_rate_bps ?? null,
+        rx_errors: i.rx_errors ?? null,
+        tx_errors: i.tx_errors ?? null,
+        updated_at: new Date().toISOString(),
+      })).filter((r: any) => r.interface_name);
+
+      const { error: netErr } = await supabase
+        .from("proxmox_interfaces")
+        .upsert(rows, { onConflict: "node_id,interface_name" });
+      if (netErr) throw netErr;
+
+      return new Response(JSON.stringify({ success: true, node_id: resolvedId, interfaces: rows.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (type === "list-proxmox") {
       const { data } = await supabase
         .from("proxmox_nodes")
