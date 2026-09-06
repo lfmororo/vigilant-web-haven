@@ -101,10 +101,18 @@ const IloServerCard = ({ server, sensors, events, expanded, onToggle, onEdit, on
             {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             <div className={`w-2.5 h-2.5 rounded-full ${statusDotClass(server.status)}`} />
             <div>
-              <CardTitle className="text-base">{server.name}</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                {server.name}
+                <Badge variant="outline" className="text-[10px]">
+                  {server.vendor === "dell" ? "Dell iDRAC9" : "HP iLO4"}
+                </Badge>
+              </CardTitle>
               <p className="text-xs text-muted-foreground">
-                {server.clients?.full_name} · {server.host} · {server.server_model || "HP ProLiant"}
-                {server.ilo_firmware ? ` · iLO ${server.ilo_firmware}` : ""}
+                {server.clients?.full_name} · {server.host} ·{" "}
+                {server.server_model || (server.vendor === "dell" ? "Dell PowerEdge" : "HP ProLiant")}
+                {server.ilo_firmware
+                  ? ` · ${server.vendor === "dell" ? "iDRAC" : "iLO"} ${server.ilo_firmware}`
+                  : ""}
               </p>
             </div>
           </div>
