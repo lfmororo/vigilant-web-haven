@@ -396,9 +396,17 @@ async function ciclo() {
   for (const node of nodes) {
     try {
       const snapshot = await coletarNo(node);
-      await enviar({ type: "proxmox", node_id: node.id, status: "online", ...snapshot });
+      const { interfaces, ...dados } = snapshot;
+      await enviar({ type: "proxmox", node_id: node.id, status: "online", ...dados });
+      if (Array.isArray(interfaces) && interfaces.length > 0) {
+        try {
+          await enviar({ type: "proxmox-net", node_id: node.id, interfaces });
+        } catch (errNet) {
+          console.warn(`  aviso: falha ao enviar a rede — ${errNet.message}`);
+        }
+      }
       console.log(
-        `[${new Date().toISOString()}] ${node.name}: OK — ${snapshot.guests.length} VMs/CTs, CPU ${snapshot.info.cpu_usage_pct ?? "—"}%`,
+        `[${new Date().toISOString()}] ${node.name}: OK — ${dados.guests.length} VMs/CTs, CPU ${dados.info.cpu_usage_pct ?? "—"}%`,
       );
     } catch (err) {
       console.error(`[${new Date().toISOString()}] ${node.name}: ERRO — ${err.message}`);
