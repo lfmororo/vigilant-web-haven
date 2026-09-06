@@ -294,8 +294,71 @@ async function coletarNo(node) {
     }),
   );
 
-  return { info, storages, guests };
+  // Rede do nó: lista de interfaces + taxas agregadas vindas do RRD do Proxmox.
+  const interfaces = await coletarRede(auth, nodeName);
+
+  return { info, storages, guests, interfaces };
 }
+
+/**
+ * Monta a lista de interfaces de rede do nó.
+ *
+ * A API do Proxmox nao expoe contadores por interface, apenas o total do no
+ * (netin/netout no RRD). Por isso listamos todas as interfaces reais e
+ * atribuimos as taxas agregadas a interface principal (bridge padrao ou a
+ * primeira interface ativa), de modo que a soma exibida no painel corresponda
+ * ao trafego real do host.
+ */
+async function coletarRede(auth, nodeName) {
+  const redes = (await apiOpcional(auth, `/nodes/${nodeName}/network`, [])) || [];
+  const rrd = (await apiOpcional(auth, `/nodes/${nodeName}/rrddata?timeframe=hour&cf=AVERAGE`, [])) || [];
+
+  // Ultimo ponto do RRD que realmente tenha leitura de rede.
+  let netin = null;
+  let netout = null;
+  for (let i = rrd.length - 1; i >= 0; i -= 1) {
+    if (typeof rrd[i]?.netin === "number" || typeof rrd[i]?.netout === "number") {
+      netin = Number(rrd[i].netin || 0);
+      netout = Number(rrd[i].netout || 0);
+      break;
+    }
+  }
+
+  const ignorar = (nome) => /^(lo|veth|fwln|fwpr|tap|docker|br-)/.test(nome || "");
+
+  const lista = redes
+    .filter((r) => r.iface && !ignorar(r.iface))
+    .map((r) => ({
+      interface_name: r.iface,
+      status: r.active ? "up" : "down",
+      mac_address: r.hwaddr || null,
+      speed_mbps: null,
+      rx_bytes: null,
+      tx_bytes: null,
+      rx_rate_bps: null,
+      tx_rate_bps: null,
+      rx_errors: null,
+      tx_errors: null,
+      ip_address: r.address || r.cidr || null,
+    }));
+
+  if (lista.length === 0) return [];
+
+  // Interface principal: bridge ativa com IP, senao a primeira ativa, senao a primeira.
+  const principal =
+    lista.find((i) => i.status === "up" && i.ip_address && /^vmbr/.test(i.interface_name)) ||
+    lista.find((i) => i.status === "up" && i.ip_address) ||
+    lista.find((i) => i.status === "up") ||
+    lista[0];
+
+  if (netin != null || netout != null) {
+    principal.rx_rate_bps = Math.round((netin || 0) * 8);
+    principal.tx_rate_bps = Math.round((netout || 0) * 8);
+  }
+
+  return lista;
+}
+
 
 // ---------------------------------------------------------------- ingestão
 async function enviar(payload) {
@@ -333,9 +396,17 @@ async function ciclo() {
   for (const node of nodes) {
     try {
       const snapshot = await coletarNo(node);
-      await enviar({ type: "proxmox", node_id: node.id, status: "online", ...snapshot });
+      const { interfaces, ...dados } = snapshot;
+      await enviar({ type: "proxmox", node_id: node.id, status: "online", ...dados });
+      if (Array.isArray(interfaces) && interfaces.length > 0) {
+        try {
+          await enviar({ type: "proxmox-net", node_id: node.id, interfaces });
+        } catch (errNet) {
+          console.warn(`  aviso: falha ao enviar a rede — ${errNet.message}`);
+        }
+      }
       console.log(
-        `[${new Date().toISOString()}] ${node.name}: OK — ${snapshot.guests.length} VMs/CTs, CPU ${snapshot.info.cpu_usage_pct ?? "—"}%`,
+        `[${new Date().toISOString()}] ${node.name}: OK — ${dados.guests.length} VMs/CTs, CPU ${dados.info.cpu_usage_pct ?? "—"}%`,
       );
     } catch (err) {
       console.error(`[${new Date().toISOString()}] ${node.name}: ERRO — ${err.message}`);
