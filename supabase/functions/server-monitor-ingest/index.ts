@@ -453,18 +453,24 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Alertas: apenas em transições (evita spam a cada coleta).
-      const becameOffline = iloStatus === "offline" && previous.status !== "offline";
+      // Alertas: apenas em transições confirmadas (evita spam e falso positivo).
+      const becameOffline = offlineConfirmado && previous.status !== "offline";
+      const voltouOnline = !coletaFalhou && previous.status === "offline";
       const becameCritical =
         updateData.health_summary === "Critical" && previous.health_summary !== "Critical";
 
-      if (becameOffline || becameCritical || newCritical.length > 0) {
+      if (becameOffline || voltouOnline || becameCritical || newCritical.length > 0) {
         const lines = [`🖥️ *Alerta iLO — ${previous.name}*`, ""];
-        if (becameOffline) lines.push("🔴 Servidor iLO inacessível (offline).");
+        if (becameOffline) {
+          lines.push(`🔴 Servidor inacessível após ${falhas} tentativas consecutivas.`);
+          if (iloError) lines.push(`Detalhe: ${String(iloError).substring(0, 200)}`);
+        }
+        if (voltouOnline) lines.push("✅ Servidor voltou a responder (online).");
         if (becameCritical) lines.push("🔥 Saúde geral do hardware em estado CRÍTICO.");
         newCritical.slice(0, 5).forEach((m) => lines.push(`⚠️ ${m}`));
         await notifyAdmins(supabase, lines.join("\n"));
       }
+
 
       return new Response(
         JSON.stringify({
