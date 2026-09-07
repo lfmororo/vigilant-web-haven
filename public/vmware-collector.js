@@ -12,6 +12,8 @@ const https = require("https");
 const SUPABASE_URL = "https://egbusmegupjfxqswdlxq.supabase.co";
 const SUPABASE_ANON_KEY = "COLE_SUA_ANON_KEY_AQUI";
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
+// Versao deste coletor. Mantenha igual a src/lib/agentVersions.ts.
+const AGENT_VERSION = "1.1.0";
 // ---- FIM CONFIGURAÇÃO ----
 
 function log(msg) {
@@ -319,8 +321,22 @@ async function fetchHosts() {
   }
 }
 
+/** Informa ao painel a versao instalada deste agente. */
+async function reportVersion() {
+  try {
+    await supabasePost("/functions/v1/agent-heartbeat", {
+      agent_type: "vmware",
+      version: AGENT_VERSION,
+      host: require("os").hostname(),
+    });
+  } catch (err) {
+    log(`aviso: falha ao reportar versao do agente: ${err.message}`);
+  }
+}
+
 async function runCycle() {
   log("=== Ciclo de coleta VMware (SSH) ===");
+  await reportVersion();
   const hosts = await fetchHosts();
 
   if (hosts.length === 0) {
