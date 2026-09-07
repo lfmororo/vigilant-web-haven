@@ -114,6 +114,24 @@ Deno.serve(async (req) => {
     .update({ last_seen_at: new Date().toISOString(), hostname: payload.hostname ?? null })
     .eq("id", agent.id);
 
+  // Registra a versao do agente para o aviso de "coletor desatualizado".
+  if (payload.agent_version) {
+    const hostname = payload.hostname ? String(payload.hostname) : agent.name;
+    await supabase.from("collector_agent_status").upsert(
+      {
+        agent_type: String(payload.agent_kind ?? "backup-nuvem"),
+        agent_key: hostname,
+        name: agent.name,
+        version: String(payload.agent_version),
+        host: hostname,
+        last_seen_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "agent_type,agent_key" },
+    );
+  }
+
+
   const num = (v: unknown, fallback = 0) => (typeof v === "number" && isFinite(v) ? v : fallback);
   const numOrNull = (v: unknown) => (typeof v === "number" && isFinite(v) ? Math.round(v) : null);
   const str = (v: unknown, max = 500) => (typeof v === "string" ? v.slice(0, max) : null);
