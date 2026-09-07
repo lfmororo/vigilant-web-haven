@@ -158,7 +158,7 @@ const AdminBackup = () => {
 
   return (
     <AdminLayout>
-      <AgentVersionAlert types={{["backup-nuvem", "backup-local"]}} className="mb-4" />
+      <AgentVersionAlert types={["backup-nuvem", "backup-local"]} className="mb-4" />
       <div className="p-4 md:p-8 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
