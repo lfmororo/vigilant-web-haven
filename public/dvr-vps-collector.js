@@ -18,6 +18,8 @@ const SUPABASE_URL = "https://egbusmegupjfxqswdlxq.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVnYnVzbWVndXBqZnhxc3dkbHhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY0MDUxMDYsImV4cCI6MjA4MTk4MTEwNn0.SPh-z2s1UEyacv5ucviiMwWO58JifVKQ8NIYYYcfuQw";
 
 const POLL_INTERVAL = 60000; // 60 segundos
+// Versao deste coletor. Mantenha igual a src/lib/agentVersions.ts.
+const AGENT_VERSION = "1.1.0";
 
 // ================= BUSCAR DVRs DO BANCO =================
 async function fetchDVRs() {
@@ -89,8 +91,29 @@ async function sendData(dvrs) {
 }
 
 // ================= LOOP PRINCIPAL =================
+/** Informa ao painel a versao instalada deste agente. */
+async function reportVersion() {
+  try {
+    await axios.post(
+      `${SUPABASE_URL}/functions/v1/agent-heartbeat`,
+      { agent_type: "dvr", version: AGENT_VERSION, host: require("os").hostname() },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        timeout: 15000,
+      }
+    );
+  } catch (err) {
+    console.warn("Aviso: falha ao reportar versao do agente:", err.message);
+  }
+}
+
 async function monitor() {
   console.log(`[${new Date().toISOString()}] 🔍 Monitorando DVRs...`);
+  await reportVersion();
 
   const dvrList = await fetchDVRs();
   if (dvrList.length === 0) {
