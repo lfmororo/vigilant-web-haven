@@ -418,11 +418,27 @@ async function processarServidor(server) {
     );
   } catch (err) {
     log("ERRO", `${server.name}: ${err.message}`);
+
+    /**
+     * Antes de reportar offline, tentamos novamente algumas vezes. Falhas
+     * pontuais (timeout, iDRAC ocupado, reinício da interface web) não devem
+     * gerar alerta de servidor fora do ar.
+     */
+    let recuperou = false;
+    for (let tentativa = 1; tentativa <= 2 && !recuperou; tentativa++) {
+      await new Promise((r) => setTimeout(r, 8000));
+      const ping = await redfishTry(server, "/redfish/v1/Systems/System.Embedded.1");
+      if (ping) {
+        recuperou = true;
+        log("AVISO", `${server.name}: respondeu na tentativa extra ${tentativa}; sem alerta de offline.`);
+      }
+    }
+
     try {
       await postIngest({
         type: "ilo",
         server_id: server.id,
-        status: "offline",
+        status: recuperou ? "warning" : "offline",
         last_error: err.message.substring(0, 500),
       });
     } catch (e) {
@@ -430,6 +446,7 @@ async function processarServidor(server) {
     }
   }
 }
+
 
 async function ciclo() {
   let servidores;

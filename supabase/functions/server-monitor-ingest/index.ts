@@ -341,7 +341,7 @@ Deno.serve(async (req) => {
       // Estado anterior — usado para notificar apenas mudanças para crítico.
       const { data: previous } = await supabase
         .from("ilo_servers")
-        .select("id, name, status, health_summary, client_id")
+        .select("id, name, status, health_summary, client_id, consecutive_failures")
         .eq("id", server_id)
         .maybeSingle();
 
@@ -349,12 +349,32 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: "Server not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
+      /**
+       * Anti-falso-positivo: uma única coleta com falha (timeout de rede,
+       * iLO/iDRAC reiniciando a interface web, 403 momentâneo) NÃO marca o
+       * servidor como offline. Só consideramos offline após N tentativas
+       * consecutivas sem sucesso.
+       */
+      const LIMITE_FALHAS = 3;
+      const coletaFalhou = iloStatus === "offline";
+      const falhasAnteriores = Number(previous.consecutive_failures ?? 0);
+      const falhas = coletaFalhou ? falhasAnteriores + 1 : 0;
+      const offlineConfirmado = coletaFalhou && falhas >= LIMITE_FALHAS;
+
+      // Enquanto não confirmado, preservamos o status anterior (não piscamos a UI).
+      const statusEfetivo = coletaFalhou
+        ? (offlineConfirmado ? "offline" : (previous.status === "offline" ? "offline" : previous.status || "warning"))
+        : (iloStatus || "online");
+
       const updateData: Record<string, any> = {
-        status: iloStatus || "online",
+        status: statusEfetivo,
         last_error: iloError || null,
+        consecutive_failures: falhas,
         last_polled_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
+      if (!coletaFalhou) updateData.last_success_at = new Date().toISOString();
+
 
       const infoFields = [
         "server_model", "serial_number", "ilo_version", "ilo_firmware", "bios_version",
@@ -433,18 +453,24 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Alertas: apenas em transições (evita spam a cada coleta).
-      const becameOffline = iloStatus === "offline" && previous.status !== "offline";
+      // Alertas: apenas em transições confirmadas (evita spam e falso positivo).
+      const becameOffline = offlineConfirmado && previous.status !== "offline";
+      const voltouOnline = !coletaFalhou && previous.status === "offline";
       const becameCritical =
         updateData.health_summary === "Critical" && previous.health_summary !== "Critical";
 
-      if (becameOffline || becameCritical || newCritical.length > 0) {
+      if (becameOffline || voltouOnline || becameCritical || newCritical.length > 0) {
         const lines = [`🖥️ *Alerta iLO — ${previous.name}*`, ""];
-        if (becameOffline) lines.push("🔴 Servidor iLO inacessível (offline).");
+        if (becameOffline) {
+          lines.push(`🔴 Servidor inacessível após ${falhas} tentativas consecutivas.`);
+          if (iloError) lines.push(`Detalhe: ${String(iloError).substring(0, 200)}`);
+        }
+        if (voltouOnline) lines.push("✅ Servidor voltou a responder (online).");
         if (becameCritical) lines.push("🔥 Saúde geral do hardware em estado CRÍTICO.");
         newCritical.slice(0, 5).forEach((m) => lines.push(`⚠️ ${m}`));
         await notifyAdmins(supabase, lines.join("\n"));
       }
+
 
       return new Response(
         JSON.stringify({

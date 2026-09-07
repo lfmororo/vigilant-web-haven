@@ -865,6 +865,7 @@ export type Database = {
         Row: {
           bios_version: string | null
           client_id: string
+          consecutive_failures: number
           cpu_count: number | null
           cpu_model: string | null
           created_at: string
@@ -884,6 +885,7 @@ export type Database = {
           is_active: boolean
           last_error: string | null
           last_polled_at: string | null
+          last_success_at: string | null
           name: string
           password: string
           port: number
@@ -901,6 +903,7 @@ export type Database = {
         Insert: {
           bios_version?: string | null
           client_id: string
+          consecutive_failures?: number
           cpu_count?: number | null
           cpu_model?: string | null
           created_at?: string
@@ -920,6 +923,7 @@ export type Database = {
           is_active?: boolean
           last_error?: string | null
           last_polled_at?: string | null
+          last_success_at?: string | null
           name: string
           password: string
           port?: number
@@ -937,6 +941,7 @@ export type Database = {
         Update: {
           bios_version?: string | null
           client_id?: string
+          consecutive_failures?: number
           cpu_count?: number | null
           cpu_model?: string | null
           created_at?: string
@@ -956,6 +961,7 @@ export type Database = {
           is_active?: boolean
           last_error?: string | null
           last_polled_at?: string | null
+          last_success_at?: string | null
           name?: string
           password?: string
           port?: number
