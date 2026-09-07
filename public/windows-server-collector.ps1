@@ -27,11 +27,31 @@ $ErrorActionPreference = "SilentlyContinue"
 
 $LOG_FILE = Join-Path $PSScriptRoot "windows-collector.log"
 
+# Versao deste coletor. Mantenha igual a src/lib/agentVersions.ts.
+$AGENT_VERSION = "1.1.0"
+
+function Send-AgentVersion {
+    try {
+        $headers = @{
+            "Content-Type"  = "application/json"
+            "Authorization" = "Bearer $SUPABASE_ANON_KEY"
+            "apikey"        = $SUPABASE_ANON_KEY
+        }
+        $body = @{ agent_type = "windows"; version = $AGENT_VERSION; host = $env:COMPUTERNAME } | ConvertTo-Json
+        Invoke-RestMethod -Uri "$SUPABASE_URL/functions/v1/agent-heartbeat" -Method POST -Body $body -Headers $headers -TimeoutSec 15 | Out-Null
+    }
+    catch {
+        Write-Log "AVISO: falha ao reportar versao do agente: $($_.Exception.Message)"
+    }
+}
+
 function Write-Log($msg) {
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     "$timestamp | $msg" | Out-File -Append -FilePath $LOG_FILE -Encoding UTF8
     Write-Host "$timestamp | $msg"
 }
+
+Send-AgentVersion
 
 function Get-ServerList {
     try {

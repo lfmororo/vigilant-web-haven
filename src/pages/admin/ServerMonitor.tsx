@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { AgentVersionAlert } from "@/components/admin/AgentVersionAlert";
 import { AgentDownloadButton } from "@/components/admin/AgentDownloadButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -334,6 +335,7 @@ const ServerMonitor = () => {
 
   return (
     <AdminLayout>
+      <AgentVersionAlert types={["windows", "vmware", "ilo", "idrac", "proxmox"]} className="mb-4" />
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>

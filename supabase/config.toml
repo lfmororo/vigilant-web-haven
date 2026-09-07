@@ -56,3 +56,9 @@ verify_jwt = false
 
 [functions.dvr-import]
 verify_jwt = false
+
+[functions.agent-heartbeat]
+verify_jwt = false
+
+[functions.agent-version-alert]
+verify_jwt = false

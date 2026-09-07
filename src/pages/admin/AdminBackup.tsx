@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { AgentVersionAlert } from "@/components/admin/AgentVersionAlert";
 import { AgentDownloadButton } from "@/components/admin/AgentDownloadButton";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -157,6 +158,7 @@ const AdminBackup = () => {
 
   return (
     <AdminLayout>
+      <AgentVersionAlert types={["backup-nuvem", "backup-local"]} className="mb-4" />
       <div className="p-4 md:p-8 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>

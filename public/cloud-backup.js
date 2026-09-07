@@ -585,6 +585,8 @@ const PROVIDERS = { google: GoogleDrive, onedrive: OneDrive };
 // Reporter — envia progresso para o painel (Backup em Nuvem)
 // ============================================================================
 
+// Versao deste agente. Mantenha igual a src/lib/agentVersions.ts.
+const AGENT_VERSION = "1.1.0";
 const REPORT_URL = process.env.BACKUP_API_URL || "";
 const REPORT_KEY = process.env.BACKUP_API_KEY || "";
 const REPORT_ENABLED = Boolean(REPORT_URL && REPORT_KEY);
@@ -596,7 +598,7 @@ async function report(action, payload = {}) {
     const res = await fetch(REPORT_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": REPORT_KEY },
-      body: JSON.stringify({ action, hostname: os.hostname(), ...payload }),
+      body: JSON.stringify({ action, hostname: os.hostname(), agent_version: AGENT_VERSION, ...payload }),
     });
     if (!res.ok) {
       log("debug", `Painel respondeu ${res.status} para "${action}"`);

@@ -40,6 +40,9 @@ if (!ARGS.url || !ARGS.key) {
 }
 
 const INGEST_URL = `${ARGS.url.replace(/\/$/, "")}/functions/v1/server-monitor-ingest`;
+const HEARTBEAT_URL = `${ARGS.url.replace(/\/$/, "")}/functions/v1/agent-heartbeat`;
+// Versao deste coletor. Mantenha igual a src/lib/agentVersions.ts.
+const AGENT_VERSION = "1.1.0";
 
 // ------------------------------------------------------------------ helpers
 const GB = 1024 ** 3;
@@ -415,7 +418,34 @@ async function enviar(payload) {
   );
 }
 
+/** Informa ao painel a versao instalada deste agente (nunca derruba o ciclo). */
+async function reportarVersao() {
+  try {
+    const body = JSON.stringify({
+      agent_type: "proxmox",
+      version: AGENT_VERSION,
+      host: require("os").hostname(),
+    });
+    await httpJson(
+      HEARTBEAT_URL,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: ARGS.key,
+          Authorization: `Bearer ${ARGS.key}`,
+          "Content-Length": Buffer.byteLength(body),
+        },
+      },
+      body,
+    );
+  } catch (err) {
+    console.warn("aviso: falha ao reportar a versao do agente —", err.message);
+  }
+}
+
 async function ciclo() {
+  await reportarVersao();
   let nodes = [];
   try {
     nodes = await enviar({ type: "list-proxmox" });

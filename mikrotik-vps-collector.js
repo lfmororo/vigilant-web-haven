@@ -816,6 +816,25 @@ function postJSON(url, data, headers) {
   });
 }
 
+// Versao deste coletor. Mantenha igual a src/lib/agentVersions.ts.
+const AGENT_VERSION = '1.1.0';
+
+/** Informa ao painel a versao instalada deste agente. */
+async function reportVersion(config) {
+  try {
+    await postJSON(
+      `${config.supabase_url}/functions/v1/agent-heartbeat`,
+      { agent_type: 'mikrotik', version: AGENT_VERSION, host: require('os').hostname() },
+      {
+        'Authorization': `Bearer ${config.supabase_anon_key}`,
+        'apikey': config.supabase_anon_key,
+      }
+    );
+  } catch (err) {
+    console.warn(`  aviso: falha ao reportar versao do agente: ${err.message}`);
+  }
+}
+
 async function sendToSystem(config, deviceId, collectedData, changes, logAlerts, dhcpSummary) {
   const functionUrl = `${config.supabase_url}/functions/v1/mikrotik-vps-ingest`;
 
@@ -930,6 +949,8 @@ async function mainLoop() {
   console.log(`  Intervalo: ${config.poll_interval_seconds}s`);
   console.log('='.repeat(60));
 
+  await reportVersion(config);
+
   // Primeiro poll (preencher estados iniciais sem alertar)
   console.log('\n🚀 Coletando estado inicial...');
   for (const device of config.devices) {
@@ -950,6 +971,7 @@ async function mainLoop() {
 
   // Loop contínuo
   const poll = async () => {
+    await reportVersion(config);
     for (const device of config.devices) {
       await pollDevice(config, device);
     }

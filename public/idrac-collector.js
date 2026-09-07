@@ -63,6 +63,9 @@ if (!CONFIG.url || !CONFIG.key) {
 
 const INGEST_URL = `${CONFIG.url.replace(/\/+$/, "")}/functions/v1/server-monitor-ingest`;
 const TIMEOUT_MS = 20000;
+const HEARTBEAT_URL = `${CONFIG.url.replace(/\/+$/, "")}/functions/v1/agent-heartbeat`;
+// Versao deste coletor. Mantenha igual a src/lib/agentVersions.ts.
+const AGENT_VERSION = "1.1.0";
 
 const SYS = "/redfish/v1/Systems/System.Embedded.1";
 const MGR = "/redfish/v1/Managers/iDRAC.Embedded.1";
@@ -75,10 +78,10 @@ function log(nivel, msg) {
 // ------------------------------------------------------------------- HTTP util
 
 /** POST JSON para a Edge Function de ingestão. */
-function postIngest(payload) {
+function postIngest(payload, url = INGEST_URL) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify(payload);
-    const u = new URL(INGEST_URL);
+    const u = new URL(url);
     const req = https.request(
       {
         hostname: u.hostname,
@@ -448,7 +451,20 @@ async function processarServidor(server) {
 }
 
 
+/** Informa ao painel a versao instalada deste agente. */
+async function reportarVersao() {
+  try {
+    await postIngest(
+      { agent_type: "idrac", version: AGENT_VERSION, host: require("os").hostname() },
+      HEARTBEAT_URL,
+    );
+  } catch (err) {
+    log("AVISO", `Falha ao reportar a versao do agente: ${err.message}`);
+  }
+}
+
 async function ciclo() {
+  await reportarVersao();
   let servidores;
   try {
     servidores = await postIngest({ type: "list-ilo" });

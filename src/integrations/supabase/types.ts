@@ -403,6 +403,42 @@ export type Database = {
           },
         ]
       }
+      collector_agent_status: {
+        Row: {
+          agent_key: string
+          agent_type: string
+          created_at: string
+          host: string | null
+          id: string
+          last_seen_at: string
+          name: string | null
+          updated_at: string
+          version: string | null
+        }
+        Insert: {
+          agent_key: string
+          agent_type: string
+          created_at?: string
+          host?: string | null
+          id?: string
+          last_seen_at?: string
+          name?: string | null
+          updated_at?: string
+          version?: string | null
+        }
+        Update: {
+          agent_key?: string
+          agent_type?: string
+          created_at?: string
+          host?: string | null
+          id?: string
+          last_seen_at?: string
+          name?: string | null
+          updated_at?: string
+          version?: string | null
+        }
+        Relationships: []
+      }
       dvr_cameras: {
         Row: {
           camera_type: string | null
