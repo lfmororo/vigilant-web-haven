@@ -42,8 +42,8 @@ export const AGENT_BUNDLES: Record<string, AgentBundleDefinition> = {
     notes: [
       "Configure as credenciais dos nós Proxmox no painel antes de iniciar o coletor.",
       "Certificados autoassinados são aceitos por padrão; use --seguro para exigir certificado válido.",
-      "Tráfego de rede das placas do host: copie proxmox-net-collector.sh para o host Proxmox e rode: chmod +x proxmox-net-collector.sh && ./proxmox-net-collector.sh --url <URL> --key <CHAVE> --intervalo 60",
-      "O script de tráfego lê os contadores do kernel (mesma fonte do nload) e não exige pacotes extras além do curl.",
+      "O coletor principal consulta velocidade atual e volume das últimas 24 horas diretamente pela API do Proxmox.",
+      "proxmox-net-collector.sh é opcional e pode ser executado no host para obter contadores exatos por interface pela mesma fonte do nload.",
     ],
   },
   vmware: {

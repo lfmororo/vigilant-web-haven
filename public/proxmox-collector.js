@@ -295,7 +295,7 @@ async function coletarNo(node) {
   );
 
   // Rede do nó: lista de interfaces + taxas agregadas vindas do RRD do Proxmox.
-  const interfaces = await coletarRede(auth, nodeName);
+  const interfaces = await coletarRede(auth, nodeName, status);
 
   return { info, storages, guests, interfaces };
 }
@@ -303,26 +303,44 @@ async function coletarNo(node) {
 /**
  * Monta a lista de interfaces de rede do nó.
  *
- * A API do Proxmox nao expoe contadores por interface, apenas o total do no
- * (netin/netout no RRD). Por isso listamos todas as interfaces reais e
- * atribuimos as taxas agregadas a interface principal (bridge padrao ou a
- * primeira interface ativa), de modo que a soma exibida no painel corresponda
- * ao trafego real do host.
+ * A API do Proxmox expoe a taxa agregada do no (netin/netout), mas nao os
+ * contadores acumulados por interface. O total das ultimas 24 horas e obtido
+ * integrando os pontos do RRD. As metricas agregadas sao atribuidas a bridge
+ * principal para evitar dupla contagem no painel.
  */
-async function coletarRede(auth, nodeName) {
+async function coletarRede(auth, nodeName, status) {
   const redes = (await apiOpcional(auth, `/nodes/${nodeName}/network`, [])) || [];
-  const rrd = (await apiOpcional(auth, `/nodes/${nodeName}/rrddata?timeframe=hour&cf=AVERAGE`, [])) || [];
+  const rrdHora = (await apiOpcional(auth, `/nodes/${nodeName}/rrddata?timeframe=hour&cf=AVERAGE`, [])) || [];
+  const rrdDia = (await apiOpcional(auth, `/nodes/${nodeName}/rrddata?timeframe=day&cf=AVERAGE`, [])) || [];
 
   // Ultimo ponto do RRD que realmente tenha leitura de rede.
-  let netin = null;
-  let netout = null;
-  for (let i = rrd.length - 1; i >= 0; i -= 1) {
-    if (typeof rrd[i]?.netin === "number" || typeof rrd[i]?.netout === "number") {
-      netin = Number(rrd[i].netin || 0);
-      netout = Number(rrd[i].netout || 0);
+  let netin = typeof status?.netin === "number" ? status.netin : null;
+  let netout = typeof status?.netout === "number" ? status.netout : null;
+  for (let i = rrdHora.length - 1; i >= 0 && netin == null && netout == null; i -= 1) {
+    if (typeof rrdHora[i]?.netin === "number" || typeof rrdHora[i]?.netout === "number") {
+      netin = Number(rrdHora[i].netin || 0);
+      netout = Number(rrdHora[i].netout || 0);
       break;
     }
   }
+
+  // Soma aproximada do volume trafegado nas ultimas 24h. Cada valor do RRD e
+  // uma media em bytes/s; multiplicamos pelo intervalo ate o proximo ponto.
+  function totalRrd(metric) {
+    const pontos = rrdDia
+      .filter((p) => Number.isFinite(Number(p?.time)) && Number.isFinite(Number(p?.[metric])))
+      .sort((a, b) => Number(a.time) - Number(b.time));
+    if (pontos.length < 2) return null;
+    let total = 0;
+    for (let i = 1; i < pontos.length; i += 1) {
+      const segundos = Math.min(1800, Math.max(0, Number(pontos[i].time) - Number(pontos[i - 1].time)));
+      total += Number(pontos[i - 1][metric]) * segundos;
+    }
+    return Math.round(total);
+  }
+
+  const totalRx24h = totalRrd("netin");
+  const totalTx24h = totalRrd("netout");
 
   const ignorar = (nome) => /^(lo|veth|fwln|fwpr|tap|docker|br-)/.test(nome || "");
 
@@ -342,7 +360,23 @@ async function coletarRede(auth, nodeName) {
       ip_address: r.address || r.cidr || null,
     }));
 
-  if (lista.length === 0) return [];
+  // Mesmo sem permissao para consultar /network, publica a metrica agregada.
+  // Assim um token PVEAuditor continua exibindo velocidade e volume no painel.
+  if (lista.length === 0) {
+    lista.push({
+      interface_name: "trafego-total",
+      status: "up",
+      mac_address: null,
+      speed_mbps: null,
+      rx_bytes: null,
+      tx_bytes: null,
+      rx_rate_bps: null,
+      tx_rate_bps: null,
+      rx_errors: null,
+      tx_errors: null,
+      ip_address: null,
+    });
+  }
 
   // Interface principal: bridge ativa com IP, senao a primeira ativa, senao a primeira.
   const principal =
@@ -355,6 +389,8 @@ async function coletarRede(auth, nodeName) {
     principal.rx_rate_bps = Math.round((netin || 0) * 8);
     principal.tx_rate_bps = Math.round((netout || 0) * 8);
   }
+  principal.rx_bytes = totalRx24h;
+  principal.tx_bytes = totalTx24h;
 
   return lista;
 }
@@ -397,7 +433,9 @@ async function ciclo() {
     try {
       const snapshot = await coletarNo(node);
       const { interfaces, ...dados } = snapshot;
-      await enviar({ type: "proxmox", node_id: node.id, status: "online", ...dados });
+      // As interfaces seguem junto da coleta principal. Isso evita que uma
+      // segunda requisicao perdida deixe CPU/RAM atualizados e rede vazia.
+      await enviar({ type: "proxmox", node_id: node.id, status: "online", ...dados, interfaces });
       if (Array.isArray(interfaces) && interfaces.length > 0) {
         try {
           await enviar({ type: "proxmox-net", node_id: node.id, interfaces });

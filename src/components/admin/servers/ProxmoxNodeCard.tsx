@@ -102,7 +102,7 @@ const ProxmoxNodeCard = ({ node, guests, interfaces = [], expanded, onToggle, on
               <h4 className="text-sm font-medium mb-2 flex items-center gap-1"><Network className="w-4 h-4" /> Tráfego de rede (placas do host)</h4>
               {interfaces.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Nenhuma interface coletada. Execute o script <span className="font-mono">proxmox-net-collector.sh</span> no host Proxmox.
+                  Aguardando a primeira leitura de rede do agente Proxmox atualizado.
                 </p>
               ) : (
                 <div className="overflow-x-auto">
@@ -114,8 +114,8 @@ const ProxmoxNodeCard = ({ node, guests, interfaces = [], expanded, onToggle, on
                         <TableHead>Enlace</TableHead>
                         <TableHead>Download atual</TableHead>
                         <TableHead>Upload atual</TableHead>
-                        <TableHead>Total recebido</TableHead>
-                        <TableHead>Total enviado</TableHead>
+                        <TableHead>Recebido (24h)</TableHead>
+                        <TableHead>Enviado (24h)</TableHead>
                         <TableHead>Erros</TableHead>
                         <TableHead>Atualizado</TableHead>
                       </TableRow>

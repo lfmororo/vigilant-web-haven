@@ -489,7 +489,7 @@ Deno.serve(async (req) => {
      * Proxmox e envia o snapshot do nó (métricas, storages e VMs/containers).
      */
     if (type === "proxmox") {
-      const { node_id, status: pveStatus, last_error: pveError, info, storages, guests } = body;
+      const { node_id, status: pveStatus, last_error: pveError, info, storages, guests, interfaces } = body;
 
       if (!node_id) {
         return new Response(JSON.stringify({ error: "node_id required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -547,6 +547,32 @@ Deno.serve(async (req) => {
           }));
           const { error: guestErr } = await supabase.from("proxmox_guests").insert(rows);
           if (guestErr) throw guestErr;
+        }
+      }
+
+      // Rede segue no mesmo snapshot do nó. Mantemos também o endpoint
+      // `proxmox-net` abaixo para compatibilidade com o coletor shell antigo.
+      if (Array.isArray(interfaces) && interfaces.length > 0) {
+        const networkRows = interfaces.slice(0, 100).map((i: any) => ({
+          node_id,
+          interface_name: String(i.interface_name || "").substring(0, 100),
+          status: String(i.status || "unknown").substring(0, 30),
+          mac_address: i.mac_address ? String(i.mac_address).substring(0, 40) : null,
+          speed_mbps: Number.isFinite(Number(i.speed_mbps)) ? Number(i.speed_mbps) : null,
+          rx_bytes: Number.isFinite(Number(i.rx_bytes)) ? Number(i.rx_bytes) : null,
+          tx_bytes: Number.isFinite(Number(i.tx_bytes)) ? Number(i.tx_bytes) : null,
+          rx_rate_bps: Number.isFinite(Number(i.rx_rate_bps)) ? Number(i.rx_rate_bps) : null,
+          tx_rate_bps: Number.isFinite(Number(i.tx_rate_bps)) ? Number(i.tx_rate_bps) : null,
+          rx_errors: Number.isFinite(Number(i.rx_errors)) ? Number(i.rx_errors) : null,
+          tx_errors: Number.isFinite(Number(i.tx_errors)) ? Number(i.tx_errors) : null,
+          updated_at: new Date().toISOString(),
+        })).filter((r: any) => r.interface_name);
+
+        if (networkRows.length > 0) {
+          const { error: networkErr } = await supabase
+            .from("proxmox_interfaces")
+            .upsert(networkRows, { onConflict: "node_id,interface_name" });
+          if (networkErr) throw networkErr;
         }
       }
 
