@@ -270,9 +270,9 @@ export function CloudBackupConfig({ agents, endpoint }: CloudBackupConfigProps) 
         <CardHeader>
           <CardTitle>Pacotes prontos por agente</CardTitle>
           <CardDescription>
-            Cada pacote já vem com credenciais e chave do agente. No servidor, basta extrair e executar{" "}
-            <code>configurar-pastas.cmd</code> (ele pergunta quais pastas salvar), depois{" "}
-            <code>autorizar-google.cmd</code> uma vez e por fim <code>instalar.cmd</code>.
+            Cada pacote já vem com credenciais, chave do agente e <code>package.json</code>. No servidor,
+            basta extrair e executar <code>instalar.cmd</code> como Administrador: ele instala as
+            dependências npm, pergunta quais pastas salvar, autoriza o Google Drive e instala o serviço.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -297,6 +297,8 @@ export function CloudBackupConfig({ agents, endpoint }: CloudBackupConfigProps) 
                     zipName: `agente-backup-nuvem-${agent.name.replace(/[^a-zA-Z0-9-_]+/g, "-").toLowerCase()}`,
                     extraFiles: {
                       ".env": buildEnv(cfg, endpoint, agent.api_key, agent.name),
+                      "package.json": buildPackageJson(),
+                      "instalar.cmd": buildInstallCmd(endpoint, agent.api_key),
                       "configurar-pastas.cmd": buildConfigCmd(),
                       "autorizar-google.cmd": buildAuthCmd(),
                       "executar-backup.cmd": buildRunCmd(),
