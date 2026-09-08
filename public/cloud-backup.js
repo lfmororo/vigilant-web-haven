@@ -6,7 +6,7 @@
  *
  *  Instalação:
  *    npm init -y
- *    npm install googleapis @azure/msal-node yargs dotenv mime-types
+ *    npm install   (instala googleapis e @azure/msal-node, necessários apenas ao acessar a nuvem)
  *
  *  Autenticação (uma vez por provedor):
  *    node cloud-backup.js auth --provider google
