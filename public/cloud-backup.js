@@ -354,6 +354,7 @@ const GoogleDrive = {
 
   /** @returns {Promise<import("googleapis").drive_v3.Drive>} */
   async getClient() {
+    const { google } = loadCloudDeps("google");
     const saved = (await readTokens()).google;
     if (!saved?.refresh_token) {
       throw new Error("Google Drive não autorizado. Rode: node cloud-backup.js auth --provider google");
