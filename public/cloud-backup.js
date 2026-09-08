@@ -55,11 +55,31 @@ const crypto = require("crypto");
 const readline = require("readline");
 const { URL } = require("url");
 
-const yargs = require("yargs/yargs");
-const { hideBin } = require("yargs/helpers");
-const mime = require("mime-types");
-const { google } = require("googleapis");
-const { PublicClientApplication } = require("@azure/msal-node");
+// Bibliotecas de nuvem são carregadas sob demanda (lazy) para que os comandos
+// que não acessam a nuvem (config, status, --help) funcionem sem npm install.
+function loadCloudDeps(provider) {
+  try {
+    if (provider === "google") return { google: require("googleapis").google };
+    return { PublicClientApplication: require("@azure/msal-node").PublicClientApplication };
+  } catch {
+    throw new Error(
+      "Dependências não instaladas. Execute 'instalar.cmd' (ou 'npm install') nesta pasta e tente novamente."
+    );
+  }
+}
+
+/** Detecção simples de Content-Type por extensão (substitui mime-types). */
+const MIME_MAP = {
+  ".txt": "text/plain", ".csv": "text/csv", ".json": "application/json",
+  ".pdf": "application/pdf", ".zip": "application/zip", ".gz": "application/gzip",
+  ".bak": "application/octet-stream", ".sql": "application/sql",
+  ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif",
+  ".mp4": "video/mp4", ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+};
+const mime = { lookup: (p) => MIME_MAP[path.extname(p).toLowerCase()] || null };
 
 // ============================================================================
 // CONFIGURAÇÃO
