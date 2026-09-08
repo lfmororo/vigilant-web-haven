@@ -22,9 +22,31 @@
 
 "use strict";
 
-require("dotenv").config();
-
 const fs = require("fs");
+
+// Carrega variáveis de um arquivo .env local sem depender do pacote dotenv.
+function loadEnv(filePath = ".env") {
+  try {
+    const content = fs.readFileSync(filePath, "utf8");
+    for (const raw of content.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq === -1) continue;
+      const key = line.slice(0, eq).trim();
+      let value = line.slice(eq + 1).trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1).replace(/\\n/g, "\n").replace(/\\"/g, '"');
+      }
+      if (!(key in process.env)) process.env[key] = value;
+    }
+  } catch {
+    // .env é opcional; variáveis já presentes no ambiente prevalecem.
+  }
+}
+
+loadEnv();
+
 const fsp = require("fs/promises");
 const path = require("path");
 const os = require("os");

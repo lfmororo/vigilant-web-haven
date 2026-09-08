@@ -72,12 +72,66 @@ function buildEnv(cfg: CloudBackupSettings, endpoint: string, agentKey: string, 
   ].join("\r\n");
 }
 
+/** package.json com as dependências npm do agente. */
+function buildPackageJson(): string {
+  return JSON.stringify(
+    {
+      name: "agente-backup-nuvem",
+      version: "1.0.0",
+      description: "Agente de backup em nuvem Mororo.Tech",
+      main: "cloud-backup.js",
+      scripts: {
+        start: "node cloud-backup.js run",
+      },
+      dependencies: {
+        "@azure/msal-node": "^2.16.2",
+        googleapis: "^144.0.0",
+        "mime-types": "^2.1.35",
+        yargs: "^17.7.2",
+      },
+    },
+    null,
+    2,
+  );
+}
+
+/** Atalho .cmd que instala as dependências npm e depois instala o serviço. */
+function buildInstallCmd(endpoint: string, agentKey: string): string {
+  return [
+    "@echo off",
+    "chcp 65001 >nul",
+    'cd /d "%~dp0"',
+    "echo ========================================",
+    "echo  Instalador - Agente de Backup em Nuvem",
+    "echo ========================================",
+    "echo.",
+    "echo [1/3] Instalando dependencias npm...",
+    "call npm install",
+    "if %errorlevel% neq 0 (",
+    "  echo [ERRO] Falha ao instalar dependencias npm.",
+    "  pause",
+    "  exit /b 1",
+    ")",
+    "echo.",
+    "echo [2/3] Configurando pastas de origem...",
+    "node cloud-backup.js config",
+    "echo.",
+    "echo [3/3] Autorizando Google Drive (execute apenas uma vez)...",
+    "node cloud-backup.js auth --provider google",
+    "echo.",
+    "echo Instalando servico do Windows...",
+    "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Unblock-File '.\\instalar-agente-servico.ps1'; & '.\\instalar-agente-servico.ps1' -Script 'cloud-backup.js' -Url '" + endpoint + "' -Key '" + agentKey + "' -Intervalo 300\"",
+    "pause",
+    "",
+  ].join("\r\n");
+}
+
 /** Atalho .cmd que pergunta quais pastas serão salvas e grava no .env. */
 function buildConfigCmd(): string {
   return [
     "@echo off",
     'cd /d "%~dp0"',
-    "echo Passo 1 de 2: escolha as pastas que serao salvas no backup.",
+    "echo Escolha as pastas que serao salvas no backup.",
     "node cloud-backup.js config",
     "pause",
     "",
@@ -89,7 +143,7 @@ function buildAuthCmd(): string {
   return [
     "@echo off",
     'cd /d "%~dp0"',
-    "echo Passo 2 de 2: autorizacao do Google Drive - uma unica vez.",
+    "echo Autorizacao do Google Drive - uma unica vez.",
     "node cloud-backup.js auth --provider google",
     "pause",
     "",
@@ -216,9 +270,9 @@ export function CloudBackupConfig({ agents, endpoint }: CloudBackupConfigProps) 
         <CardHeader>
           <CardTitle>Pacotes prontos por agente</CardTitle>
           <CardDescription>
-            Cada pacote já vem com credenciais e chave do agente. No servidor, basta extrair e executar{" "}
-            <code>configurar-pastas.cmd</code> (ele pergunta quais pastas salvar), depois{" "}
-            <code>autorizar-google.cmd</code> uma vez e por fim <code>instalar.cmd</code>.
+            Cada pacote já vem com credenciais, chave do agente e <code>package.json</code>. No servidor,
+            basta extrair e executar <code>instalar.cmd</code> como Administrador: ele instala as
+            dependências npm, pergunta quais pastas salvar, autoriza o Google Drive e instala o serviço.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -243,6 +297,8 @@ export function CloudBackupConfig({ agents, endpoint }: CloudBackupConfigProps) 
                     zipName: `agente-backup-nuvem-${agent.name.replace(/[^a-zA-Z0-9-_]+/g, "-").toLowerCase()}`,
                     extraFiles: {
                       ".env": buildEnv(cfg, endpoint, agent.api_key, agent.name),
+                      "package.json": buildPackageJson(),
+                      "instalar.cmd": buildInstallCmd(endpoint, agent.api_key),
                       "configurar-pastas.cmd": buildConfigCmd(),
                       "autorizar-google.cmd": buildAuthCmd(),
                       "executar-backup.cmd": buildRunCmd(),
