@@ -552,65 +552,87 @@ const OneDrive = {
   label: "OneDrive",
   graph: "https://graph.microsoft.com/v1.0",
 
-  createApp() {
-    const { PublicClientApplication } = loadCloudDeps("onedrive");
-    return new PublicClientApplication({
-      auth: {
-        clientId: requireEnv("MS_CLIENT_ID"),
-        authority: `https://login.microsoftonline.com/${process.env.MS_TENANT_ID || "common"}`,
-      },
-    });
+  authority() {
+    return `https://login.microsoftonline.com/${process.env.MS_TENANT_ID || "common"}`;
   },
 
-  /** Device code flow: ideal para servidores sem navegador. */
+  async tokenRequest(params) {
+    const res = await fetch(`${this.authority()}/oauth2/v2.0/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(params).toString(),
+    });
+    const body = await res.text();
+    let json = {};
+    try { json = JSON.parse(body); } catch { /* resposta não-JSON */ }
+    if (!res.ok) {
+      const err = new Error(`Microsoft OAuth ${res.status}: ${json.error || body.slice(0, 300)}`);
+      err.oauthError = json.error;
+      throw err;
+    }
+    return json;
+  },
+
+  /** Device code flow (REST puro): ideal para servidores sem navegador. */
   async authorize() {
-    const app = this.createApp();
-    const result = await app.acquireTokenByDeviceCode({
-      scopes: MS_SCOPES,
-      deviceCodeCallback: (response) => {
-        console.log(`\n${response.message}\n`);
-      },
-    });
+    const clientId = requireEnv("MS_CLIENT_ID");
+    const scope = MS_SCOPES.join(" ");
 
-    const cache = app.getTokenCache().serialize();
-    await writeTokens("onedrive", {
-      msalCache: cache,
-      homeAccountId: result.account?.homeAccountId ?? null,
+    const res = await fetch(`${this.authority()}/oauth2/v2.0/devicecode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: clientId, scope }).toString(),
     });
-    log("info", "OneDrive autorizado com sucesso.", { user: result.account?.username });
+    const device = await res.json();
+    if (!res.ok) throw new Error(`Microsoft device code: ${device.error_description || res.status}`);
+
+    console.log(`\n${device.message}\n`);
+
+    const deadline = Date.now() + (device.expires_in || 900) * 1000;
+    const interval = (device.interval || 5) * 1000;
+    for (;;) {
+      if (Date.now() > deadline) throw new Error("Tempo esgotado aguardando autorização da Microsoft.");
+      await new Promise((r) => setTimeout(r, interval));
+      try {
+        const tokens = await this.tokenRequest({
+          grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+          client_id: clientId,
+          device_code: device.device_code,
+        });
+        if (!tokens.refresh_token) throw new Error("Microsoft não retornou refresh_token.");
+        await writeTokens("onedrive", { refresh_token: tokens.refresh_token });
+        log("info", "OneDrive autorizado com sucesso.");
+        return;
+      } catch (err) {
+        if (err.oauthError === "authorization_pending" || err.oauthError === "slow_down") continue;
+        throw err;
+      }
+    }
   },
 
-  /** Obtém access token silenciosamente a partir do cache persistido. */
+  /** Obtém access token a partir do refresh token persistido. */
   async getAccessToken() {
     const saved = (await readTokens()).onedrive;
-    if (!saved?.msalCache) {
+    if (!saved?.refresh_token) {
       throw new Error("OneDrive não autorizado. Rode: node cloud-backup.js auth --provider onedrive");
     }
-
-    const app = this.createApp();
-    const cache = app.getTokenCache();
-    await cache.deserialize(saved.msalCache);
-
-    const accounts = await cache.getAllAccounts();
-    const account =
-      accounts.find((a) => a.homeAccountId === saved.homeAccountId) || accounts[0];
-    if (!account) throw new Error("Nenhuma conta Microsoft no cache. Reautorize.");
-
-    const result = await app.acquireTokenSilent({ account, scopes: MS_SCOPES });
-
-    // Persiste o cache atualizado (refresh token rotacionado).
-    await writeTokens("onedrive", {
-      msalCache: cache.serialize(),
-      homeAccountId: account.homeAccountId,
+    const tokens = await this.tokenRequest({
+      grant_type: "refresh_token",
+      client_id: requireEnv("MS_CLIENT_ID"),
+      refresh_token: saved.refresh_token,
+      scope: MS_SCOPES.join(" "),
     });
-
-    return result.accessToken;
+    if (tokens.refresh_token) {
+      await writeTokens("onedrive", { refresh_token: tokens.refresh_token });
+    }
+    return tokens.access_token;
   },
 
   async getClient() {
     const token = await this.getAccessToken();
     return { token };
   },
+
 
   /** Chamada genérica ao Graph com tratamento de erro explícito. */
   async graphFetch(token, url, options = {}) {
