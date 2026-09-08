@@ -55,18 +55,8 @@ const crypto = require("crypto");
 const readline = require("readline");
 const { URL } = require("url");
 
-// Bibliotecas de nuvem são carregadas sob demanda (lazy) para que os comandos
-// que não acessam a nuvem (config, status, --help) funcionem sem npm install.
-function loadCloudDeps(provider) {
-  try {
-    if (provider === "google") return { google: require("googleapis").google };
-    return { PublicClientApplication: require("@azure/msal-node").PublicClientApplication };
-  } catch {
-    throw new Error(
-      "Dependências não instaladas. Execute 'instalar.cmd' (ou 'npm install') nesta pasta e tente novamente."
-    );
-  }
-}
+// Sem dependências externas: Google Drive e OneDrive são acessados por HTTP puro.
+
 
 /** Detecção simples de Content-Type por extensão (substitui mime-types). */
 const MIME_MAP = {
