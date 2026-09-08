@@ -185,7 +185,11 @@ const AdminBackup = () => {
             <LocalBackupJobs agents={agents.map((a) => ({ id: a.id, name: a.name }))} endpoint={FUNCTIONS_URL} />
           </TabsContent>
 
-          <TabsContent value="cloud" className="mt-4">
+          <TabsContent value="cloud" className="mt-4 space-y-4">
+            <CloudBackupConfig
+              agents={agents.map((a) => ({ id: a.id, name: a.name, api_key: a.api_key }))}
+              endpoint={FUNCTIONS_URL}
+            />
             <Card>
               <CardHeader>
                 <CardTitle>Scripts</CardTitle>
