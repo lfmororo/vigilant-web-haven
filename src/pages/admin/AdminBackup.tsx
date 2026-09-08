@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LocalBackupJobs from "@/components/admin/backup/LocalBackupJobs";
+import { CloudBackupConfig } from "@/components/admin/backup/CloudBackupConfig";
 import { toast } from "sonner";
 import { Copy, Download, HardDriveDownload, Plus, RefreshCw, Trash2 } from "lucide-react";
 
