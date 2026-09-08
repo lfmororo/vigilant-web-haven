@@ -71,12 +71,24 @@ function buildEnv(cfg: CloudBackupSettings, endpoint: string, agentKey: string, 
   ].join("\r\n");
 }
 
+/** Atalho .cmd que pergunta quais pastas serão salvas e grava no .env. */
+function buildConfigCmd(): string {
+  return [
+    "@echo off",
+    'cd /d "%~dp0"',
+    "echo Passo 1 de 2: escolha as pastas que serao salvas no backup.",
+    "node cloud-backup.js config",
+    "pause",
+    "",
+  ].join("\r\n");
+}
+
 /** Atalho .cmd que autoriza o Google Drive uma única vez. */
 function buildAuthCmd(): string {
   return [
     "@echo off",
     'cd /d "%~dp0"',
-    "echo Autorizacao do Google Drive - uma unica vez.",
+    "echo Passo 2 de 2: autorizacao do Google Drive - uma unica vez.",
     "node cloud-backup.js auth --provider google",
     "pause",
     "",
