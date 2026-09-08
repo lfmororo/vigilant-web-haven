@@ -604,8 +604,11 @@ const OneDrive = {
   async getAccessToken() {
     const saved = (await readTokens()).onedrive;
     if (!saved?.refresh_token) {
-      throw new Error("OneDrive não autorizado. Rode: node cloud-backup.js auth --provider onedrive");
+      const err = new Error("OneDrive não autorizado. Rode: node cloud-backup.js auth --provider onedrive");
+      err.code = "NOT_AUTHORIZED";
+      throw err;
     }
+
     const tokens = await this.tokenRequest({
       grant_type: "refresh_token",
       client_id: requireEnv("MS_CLIENT_ID"),
