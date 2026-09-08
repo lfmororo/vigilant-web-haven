@@ -103,9 +103,9 @@ function buildInstallCmd(endpoint: string, agentKey: string): string {
     "echo.",
     "echo [1/2] Configurando pastas de origem...",
     "node cloud-backup.js config",
-
     "echo.",
-    "echo [3/3] Autorizando Google Drive (execute apenas uma vez)...",
+    "echo [2/2] Autorizando Google Drive (execute apenas uma vez)...",
+
     "node cloud-backup.js auth --provider google",
     "echo.",
     "echo Instalando servico do Windows...",
