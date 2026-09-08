@@ -22,6 +22,8 @@
 
 "use strict";
 
+const fs = require("fs");
+
 // Carrega variáveis de um arquivo .env local sem depender do pacote dotenv.
 function loadEnv(filePath = ".env") {
   try {
@@ -45,7 +47,6 @@ function loadEnv(filePath = ".env") {
 
 loadEnv();
 
-const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
 const os = require("os");
