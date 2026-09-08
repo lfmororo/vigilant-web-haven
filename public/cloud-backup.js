@@ -877,11 +877,17 @@ Exemplos:
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const command = opts._[0];
+  let command = opts._[0];
 
   // Telemetria via linha de comando (opcional): --url e --key alimentam o painel
   if (opts.url) process.env.BACKUP_API_URL = String(opts.url);
   if (opts.key) process.env.BACKUP_API_KEY = String(opts.key);
+
+  // Atalho: quando o usuário passa apenas opções (sem comando), assume "run".
+  // Ex.: node cloud-backup.js --url <URL> --key <CHAVE> --intervalo 300
+  if (!command && process.argv.length > 2) {
+    command = "run";
+  }
 
   switch (command) {
     case "auth": {
