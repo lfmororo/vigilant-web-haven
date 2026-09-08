@@ -321,6 +321,7 @@ const GoogleDrive = {
   label: "Google Drive",
 
   createOAuthClient() {
+    const { google } = loadCloudDeps("google");
     return new google.auth.OAuth2(
       requireEnv("GOOGLE_CLIENT_ID"),
       requireEnv("GOOGLE_CLIENT_SECRET"),
@@ -457,6 +458,7 @@ const OneDrive = {
   graph: "https://graph.microsoft.com/v1.0",
 
   createApp() {
+    const { PublicClientApplication } = loadCloudDeps("onedrive");
     return new PublicClientApplication({
       auth: {
         clientId: requireEnv("MS_CLIENT_ID"),
