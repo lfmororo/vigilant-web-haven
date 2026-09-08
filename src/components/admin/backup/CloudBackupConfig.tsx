@@ -83,10 +83,8 @@ function buildPackageJson(): string {
       scripts: {
         start: "node cloud-backup.js run",
       },
-      dependencies: {
-        "@azure/msal-node": "^2.16.2",
-        googleapis: "^144.0.0",
-      },
+      dependencies: {},
+
     },
     null,
     2,
