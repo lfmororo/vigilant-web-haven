@@ -105,7 +105,7 @@ export const AGENT_BUNDLES: Record<string, AgentBundleDefinition> = {
     runtime: "node",
     notes: [
       "O pacote inclui package.json. Execute instalar.cmd como Administrador para instalar as dependencias npm automaticamente.",
-      "Requer conexao com a Internet durante a instalacao para baixar googleapis, @azure/msal-node, yargs e mime-types.",
+      "Requer conexao com a Internet durante a instalacao para baixar googleapis e @azure/msal-node.",
     ],
   },
   localBackup: {

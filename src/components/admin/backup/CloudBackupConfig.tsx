@@ -86,8 +86,6 @@ function buildPackageJson(): string {
       dependencies: {
         "@azure/msal-node": "^2.16.2",
         googleapis: "^144.0.0",
-        "mime-types": "^2.1.35",
-        yargs: "^17.7.2",
       },
     },
     null,
