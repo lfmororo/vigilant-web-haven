@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LocalBackupJobs from "@/components/admin/backup/LocalBackupJobs";
+import { CloudBackupConfig } from "@/components/admin/backup/CloudBackupConfig";
 import { toast } from "sonner";
 import { Copy, Download, HardDriveDownload, Plus, RefreshCw, Trash2 } from "lucide-react";
 
@@ -185,7 +186,11 @@ const AdminBackup = () => {
             <LocalBackupJobs agents={agents.map((a) => ({ id: a.id, name: a.name }))} endpoint={FUNCTIONS_URL} />
           </TabsContent>
 
-          <TabsContent value="cloud" className="mt-4">
+          <TabsContent value="cloud" className="mt-4 space-y-4">
+            <CloudBackupConfig
+              agents={agents.map((a) => ({ id: a.id, name: a.name, api_key: a.api_key }))}
+              endpoint={FUNCTIONS_URL}
+            />
             <Card>
               <CardHeader>
                 <CardTitle>Scripts</CardTitle>
