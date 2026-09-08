@@ -838,15 +838,71 @@ async function main() {
             return true;
           }),
       async (argv) => {
-        await runBackup({
-          dir: argv.dir,
-          provider: argv.provider,
-          remote: argv.remote,
-          conflict: argv.conflict,
-          exclude: argv.exclude,
-          incremental: argv.incremental,
-          dryRun: argv["dry-run"],
-        });
+        // Aceita várias pastas separadas por ";" (ex.: C:\dados;D:\arquivos;\\SRV\pasta)
+        const dirs = String(argv.dir)
+          .split(";")
+          .map((d) => d.trim())
+          .filter(Boolean);
+        for (const dir of dirs) {
+          // Com mais de uma pasta, cada uma ganha uma subpasta própria no destino
+          const base = path.basename(dir.replace(/[\\/]+$/, "")) || "backup";
+          const remote = dirs.length > 1 ? `${argv.remote}/${base}` : argv.remote;
+          log("info", `=== Backup da pasta: ${dir} -> ${remote} ===`);
+          await runBackup({
+            dir,
+            provider: argv.provider,
+            remote,
+            conflict: argv.conflict,
+            exclude: argv.exclude,
+            incremental: argv.incremental,
+            dryRun: argv["dry-run"],
+          });
+        }
+      }
+    )
+    .command(
+      "config",
+      "Pergunta quais pastas serão salvas e grava no arquivo .env",
+      () => {},
+      async () => {
+        const envPath = path.resolve(process.cwd(), ".env");
+        let envText = "";
+        try {
+          envText = await fsp.readFile(envPath, "utf8");
+        } catch {
+          // .env ainda não existe: será criado ao salvar
+        }
+        const current = (envText.match(/^BACKUP_DIR=(.*)$/m) || [])[1] || "";
+        console.log("\n=== Configuração das pastas do backup ===");
+        if (current.trim()) console.log(`Pastas atuais: ${current.trim()}`);
+        console.log("Informe as pastas que devem ser salvas, uma por vez.");
+        console.log("Exemplos: C:\\dados   D:\\arquivos   \\\\SERVIDOR\\compartilhamento");
+        console.log("Deixe em branco para terminar.\n");
+        const dirs = [];
+        for (let i = 1; ; i++) {
+          const answer = (await prompt(`Pasta ${i}: `)).trim();
+          if (!answer) break;
+          if (!fs.existsSync(answer)) {
+            console.log(`  ⚠️  Pasta não encontrada: ${answer} (digite novamente ou em branco para terminar)`);
+            i--;
+            continue;
+          }
+          dirs.push(answer);
+        }
+        if (dirs.length === 0) {
+          if (!current.trim()) throw new Error("Nenhuma pasta informada. Configuração não alterada.");
+          return log("info", `Mantendo as pastas atuais: ${current.trim()}`);
+        }
+        const line = `BACKUP_DIR=${dirs.join(";")}`;
+        if (/^BACKUP_DIR=.*$/m.test(envText)) {
+          envText = envText.replace(/^BACKUP_DIR=.*$/m, line);
+        } else {
+          envText += (envText.endsWith("\n") || envText === "" ? "" : "\n") + line + "\n";
+        }
+        await fsp.writeFile(envPath, envText, "utf8");
+        log("info", `Pastas salvas no .env (${dirs.length}):`);
+        for (const d of dirs) console.log(`  - ${d}`);
+        log("info", "Pronto! Execute 'node cloud-backup.js run' para fazer o backup agora.");
       }
     )
     .command(
@@ -876,7 +932,7 @@ async function main() {
         log("info", "Credenciais removidas.");
       }
     )
-    .demandCommand(1, "Informe um comando: auth | run | status | logout")
+    .demandCommand(1, "Informe um comando: auth | config | run | status | logout")
     .strict()
     .help()
     .parseAsync();
