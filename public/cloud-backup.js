@@ -6,7 +6,7 @@
  *
  *  Instalação:
  *    npm init -y
- *    npm install googleapis @azure/msal-node yargs dotenv mime-types
+ *    npm install   (instala googleapis e @azure/msal-node, necessários apenas ao acessar a nuvem)
  *
  *  Autenticação (uma vez por provedor):
  *    node cloud-backup.js auth --provider google
@@ -55,11 +55,31 @@ const crypto = require("crypto");
 const readline = require("readline");
 const { URL } = require("url");
 
-const yargs = require("yargs/yargs");
-const { hideBin } = require("yargs/helpers");
-const mime = require("mime-types");
-const { google } = require("googleapis");
-const { PublicClientApplication } = require("@azure/msal-node");
+// Bibliotecas de nuvem são carregadas sob demanda (lazy) para que os comandos
+// que não acessam a nuvem (config, status, --help) funcionem sem npm install.
+function loadCloudDeps(provider) {
+  try {
+    if (provider === "google") return { google: require("googleapis").google };
+    return { PublicClientApplication: require("@azure/msal-node").PublicClientApplication };
+  } catch {
+    throw new Error(
+      "Dependências não instaladas. Execute 'instalar.cmd' (ou 'npm install') nesta pasta e tente novamente."
+    );
+  }
+}
+
+/** Detecção simples de Content-Type por extensão (substitui mime-types). */
+const MIME_MAP = {
+  ".txt": "text/plain", ".csv": "text/csv", ".json": "application/json",
+  ".pdf": "application/pdf", ".zip": "application/zip", ".gz": "application/gzip",
+  ".bak": "application/octet-stream", ".sql": "application/sql",
+  ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif",
+  ".mp4": "video/mp4", ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+};
+const mime = { lookup: (p) => MIME_MAP[path.extname(p).toLowerCase()] || null };
 
 // ============================================================================
 // CONFIGURAÇÃO
@@ -301,6 +321,7 @@ const GoogleDrive = {
   label: "Google Drive",
 
   createOAuthClient() {
+    const { google } = loadCloudDeps("google");
     return new google.auth.OAuth2(
       requireEnv("GOOGLE_CLIENT_ID"),
       requireEnv("GOOGLE_CLIENT_SECRET"),
@@ -333,6 +354,7 @@ const GoogleDrive = {
 
   /** @returns {Promise<import("googleapis").drive_v3.Drive>} */
   async getClient() {
+    const { google } = loadCloudDeps("google");
     const saved = (await readTokens()).google;
     if (!saved?.refresh_token) {
       throw new Error("Google Drive não autorizado. Rode: node cloud-backup.js auth --provider google");
@@ -437,6 +459,7 @@ const OneDrive = {
   graph: "https://graph.microsoft.com/v1.0",
 
   createApp() {
+    const { PublicClientApplication } = loadCloudDeps("onedrive");
     return new PublicClientApplication({
       auth: {
         clientId: requireEnv("MS_CLIENT_ID"),
@@ -609,17 +632,22 @@ const PROVIDERS = { google: GoogleDrive, onedrive: OneDrive };
 
 // Versao deste agente. Mantenha igual a src/lib/agentVersions.ts.
 const AGENT_VERSION = "1.1.0";
-const REPORT_URL = process.env.BACKUP_API_URL || "";
-const REPORT_KEY = process.env.BACKUP_API_KEY || "";
-const REPORT_ENABLED = Boolean(REPORT_URL && REPORT_KEY);
+// Lidos dinamicamente para permitir definição via --url/--key na linha de comando
+// (os parâmetros são aplicados em process.env dentro de main(), antes do backup).
+function reportConfig() {
+  const url = process.env.BACKUP_API_URL || "";
+  const key = process.env.BACKUP_API_KEY || "";
+  return { url, key, enabled: Boolean(url && key) };
+}
 
 /** Envia um evento ao painel. Nunca interrompe o backup em caso de falha. */
 async function report(action, payload = {}) {
-  if (!REPORT_ENABLED) return null;
+  const { url, key, enabled } = reportConfig();
+  if (!enabled) return null;
   try {
-    const res = await fetch(REPORT_URL, {
+    const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": REPORT_KEY },
+      headers: { "Content-Type": "application/json", "x-api-key": key },
       body: JSON.stringify({ action, hostname: os.hostname(), agent_version: AGENT_VERSION, ...payload }),
     });
     if (!res.ok) {
@@ -793,171 +821,210 @@ async function runBackup(options) {
 // CLI
 // ============================================================================
 
-async function main() {
-  await yargs(hideBin(process.argv))
-    .scriptName("cloud-backup")
-    .usage("$0 <comando> [opções]")
-    .command(
-      "auth",
-      "Autoriza o acesso a um provedor de nuvem (OAuth 2.0)",
-      (y) =>
-        y.option("provider", {
-          alias: "p",
-          choices: ["google", "onedrive"],
-          demandOption: true,
-          describe: "Provedor a autorizar",
-        }),
-      async (argv) => {
-        await PROVIDERS[argv.provider].authorize();
+/** Converte argv em objeto { _: [posicionais], "--opcao": valor } sem dependências. */
+function parseArgs(argv) {
+  const out = { _: [] };
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (!arg.startsWith("--")) {
+      out._.push(arg);
+      continue;
+    }
+    const eq = arg.indexOf("=");
+    if (eq > 2) {
+      out[arg.slice(2, eq)] = arg.slice(eq + 1);
+    } else {
+      const key = arg.slice(2);
+      const next = argv[i + 1];
+      if (next !== undefined && !next.startsWith("--")) {
+        out[key] = next;
+        i++;
+      } else {
+        out[key] = true;
       }
-    )
-    .command(
-      "run",
-      "Executa o backup da pasta local para a(s) nuvem(ns)",
-      (y) =>
-        y
-          .option("dir", {
-            alias: "d",
-            type: "string",
-            default: process.env.BACKUP_DIR,
-            describe: "Pasta local a ser copiada",
-          })
-          .option("provider", {
-            alias: "p",
-            choices: ["google", "onedrive", "both"],
-            default: process.env.BACKUP_PROVIDER || "both",
-          })
-          .option("remote", {
-            alias: "r",
-            type: "string",
-            default: process.env.BACKUP_REMOTE_DIR || "Backups",
-            describe: "Pasta raiz de destino na nuvem",
-          })
-          .option("conflict", {
-            alias: "c",
-            choices: ["overwrite", "skip", "rename"],
-            default: process.env.BACKUP_CONFLICT || "overwrite",
-            describe: "O que fazer com arquivos já existentes",
-          })
-          .option("exclude", {
-            alias: "x",
-            type: "array",
-            default: (process.env.BACKUP_EXCLUDE || "node_modules,.git").split(",").filter(Boolean),
-            describe: "Trechos de caminho a ignorar",
-          })
-          .option("incremental", {
-            type: "boolean",
-            default: true,
-            describe: "Pula arquivos cujo conteúdo não mudou desde o último backup",
-          })
-          .option("dry-run", {
-            type: "boolean",
-            default: false,
-            describe: "Simula a execução sem enviar nada",
-          })
-          .check((argv) => {
-            if (!argv.dir) throw new Error("Informe --dir ou defina BACKUP_DIR no .env");
-            return true;
-          }),
-      async (argv) => {
+    }
+  }
+  return out;
+}
+
+function printHelp() {
+  console.log(`
+Uso: node cloud-backup.js <comando> [opções]
+
+Comandos:
+  auth      Autoriza o acesso a um provedor de nuvem (OAuth 2.0)
+  config    Pergunta quais pastas serão salvas e grava no arquivo .env
+  run       Executa o backup da pasta local para a(s) nuvem(ns)
+  status    Mostra quais provedores já estão autorizados
+  logout    Remove as credenciais salvas de um provedor
+
+Opções:
+  --provider   google | onedrive | both (padrão: both)
+  --dir        Pasta local a ser copiada (ou BACKUP_DIR no .env; várias separadas por ";")
+  --remote     Pasta raiz de destino na nuvem (padrão: Backups)
+  --conflict   overwrite | skip | rename (padrão: overwrite)
+  --exclude    Trechos de caminho a ignorar, separados por vírgula
+  --url        URL do backend (telemetria)
+  --key        Chave de telemetria do agente
+  --intervalo  Segundos entre backups automáticos (loop contínuo)
+
+Exemplos:
+  node cloud-backup.js auth --provider google
+  node cloud-backup.js run --dir "C:\\dados" --provider google
+  node cloud-backup.js run --url <URL> --key <CHAVE> --intervalo 300
+`);
+}
+
+async function main() {
+  const opts = parseArgs(process.argv.slice(2));
+  const command = opts._[0];
+
+  // Telemetria via linha de comando (opcional): --url e --key alimentam o painel
+  if (opts.url) process.env.BACKUP_API_URL = String(opts.url);
+  if (opts.key) process.env.BACKUP_API_KEY = String(opts.key);
+
+  switch (command) {
+    case "auth": {
+      const provider = String(opts.provider || "");
+      if (!PROVIDERS[provider]) {
+        throw new Error("Informe --provider google ou --provider onedrive");
+      }
+      await PROVIDERS[provider].authorize();
+      break;
+    }
+
+    case "config": {
+      const envPath = path.resolve(process.cwd(), ".env");
+      let envText = "";
+      try {
+        envText = await fsp.readFile(envPath, "utf8");
+      } catch {
+        // .env ainda não existe: será criado ao salvar
+      }
+      const current = (envText.match(/^BACKUP_DIR=(.*)$/m) || [])[1] || "";
+      console.log("\n=== Configuração das pastas do backup ===");
+      if (current.trim()) console.log(`Pastas atuais: ${current.trim()}`);
+      console.log("Informe as pastas que devem ser salvas, uma por vez.");
+      console.log("Exemplos: C:\\dados   D:\\arquivos   \\\\SERVIDOR\\compartilhamento");
+      console.log("Deixe em branco para terminar.\n");
+      const dirs = [];
+      for (let i = 1; ; i++) {
+        const answer = (await prompt(`Pasta ${i}: `)).trim();
+        if (!answer) break;
+        if (!fs.existsSync(answer)) {
+          console.log(`  ⚠️  Pasta não encontrada: ${answer} (digite novamente ou em branco para terminar)`);
+          i--;
+          continue;
+        }
+        dirs.push(answer);
+      }
+      if (dirs.length === 0) {
+        if (!current.trim()) throw new Error("Nenhuma pasta informada. Configuração não alterada.");
+        log("info", `Mantendo as pastas atuais: ${current.trim()}`);
+        break;
+      }
+      const line = `BACKUP_DIR=${dirs.join(";")}`;
+      if (/^BACKUP_DIR=.*$/m.test(envText)) {
+        envText = envText.replace(/^BACKUP_DIR=.*$/m, line);
+      } else {
+        envText += (envText.endsWith("\n") || envText === "" ? "" : "\n") + line + "\n";
+      }
+      await fsp.writeFile(envPath, envText, "utf8");
+      log("info", `Pastas salvas no .env (${dirs.length}):`);
+      for (const d of dirs) console.log(`  - ${d}`);
+      log("info", "Pronto! Execute 'node cloud-backup.js run' para fazer o backup agora.");
+      break;
+    }
+
+    case "run": {
+      const dir = String(opts.dir || process.env.BACKUP_DIR || "");
+      if (!dir.trim()) {
+        throw new Error("Informe --dir ou defina BACKUP_DIR no .env (rode 'node cloud-backup.js config')");
+      }
+      const provider = String(opts.provider || process.env.BACKUP_PROVIDER || "both");
+      if (!["google", "onedrive", "both"].includes(provider)) {
+        throw new Error("--provider deve ser google, onedrive ou both");
+      }
+      const remote = String(opts.remote || process.env.BACKUP_REMOTE_DIR || "Backups");
+      const conflict = String(opts.conflict || process.env.BACKUP_CONFLICT || "overwrite");
+      if (!["overwrite", "skip", "rename"].includes(conflict)) {
+        throw new Error("--conflict deve ser overwrite, skip ou rename");
+      }
+      const exclude = String(opts.exclude || process.env.BACKUP_EXCLUDE || "node_modules,.git")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const dryRun = opts["dry-run"] === true || String(opts["dry-run"]) === "true";
+      const intervalo = Number(opts.intervalo || 0);
+
+      const runAll = async () => {
         // Aceita várias pastas separadas por ";" (ex.: C:\dados;D:\arquivos;\\SRV\pasta)
-        const dirs = String(argv.dir)
+        const dirs = dir
           .split(";")
           .map((d) => d.trim())
           .filter(Boolean);
-        for (const dir of dirs) {
+        for (const d of dirs) {
           // Com mais de uma pasta, cada uma ganha uma subpasta própria no destino
-          const base = path.basename(dir.replace(/[\\/]+$/, "")) || "backup";
-          const remote = dirs.length > 1 ? `${argv.remote}/${base}` : argv.remote;
-          log("info", `=== Backup da pasta: ${dir} -> ${remote} ===`);
-          await runBackup({
-            dir,
-            provider: argv.provider,
-            remote,
-            conflict: argv.conflict,
-            exclude: argv.exclude,
-            incremental: argv.incremental,
-            dryRun: argv["dry-run"],
-          });
+          const base = path.basename(d.replace(/[\\/]+$/, "")) || "backup";
+          const remoteDir = dirs.length > 1 ? `${remote}/${base}` : remote;
+          log("info", `=== Backup da pasta: ${d} -> ${remoteDir} ===`);
+          await runBackup({ dir: d, provider, remote: remoteDir, conflict, exclude, incremental: true, dryRun });
         }
-      }
-    )
-    .command(
-      "config",
-      "Pergunta quais pastas serão salvas e grava no arquivo .env",
-      () => {},
-      async () => {
-        const envPath = path.resolve(process.cwd(), ".env");
-        let envText = "";
-        try {
-          envText = await fsp.readFile(envPath, "utf8");
-        } catch {
-          // .env ainda não existe: será criado ao salvar
-        }
-        const current = (envText.match(/^BACKUP_DIR=(.*)$/m) || [])[1] || "";
-        console.log("\n=== Configuração das pastas do backup ===");
-        if (current.trim()) console.log(`Pastas atuais: ${current.trim()}`);
-        console.log("Informe as pastas que devem ser salvas, uma por vez.");
-        console.log("Exemplos: C:\\dados   D:\\arquivos   \\\\SERVIDOR\\compartilhamento");
-        console.log("Deixe em branco para terminar.\n");
-        const dirs = [];
-        for (let i = 1; ; i++) {
-          const answer = (await prompt(`Pasta ${i}: `)).trim();
-          if (!answer) break;
-          if (!fs.existsSync(answer)) {
-            console.log(`  ⚠️  Pasta não encontrada: ${answer} (digite novamente ou em branco para terminar)`);
-            i--;
-            continue;
+      };
+
+      if (intervalo > 0) {
+        log("info", `Modo contínuo: backup a cada ${intervalo} segundos. Ctrl+C para parar.`);
+        // Loop infinito com pausa entre execuções; erros são logados e o ciclo continua
+        for (;;) {
+          try {
+            await runAll();
+          } catch (err) {
+            log("error", `Falha no ciclo de backup: ${err.message}`);
           }
-          dirs.push(answer);
+          await new Promise((r) => setTimeout(r, intervalo * 1000));
         }
-        if (dirs.length === 0) {
-          if (!current.trim()) throw new Error("Nenhuma pasta informada. Configuração não alterada.");
-          return log("info", `Mantendo as pastas atuais: ${current.trim()}`);
-        }
-        const line = `BACKUP_DIR=${dirs.join(";")}`;
-        if (/^BACKUP_DIR=.*$/m.test(envText)) {
-          envText = envText.replace(/^BACKUP_DIR=.*$/m, line);
-        } else {
-          envText += (envText.endsWith("\n") || envText === "" ? "" : "\n") + line + "\n";
-        }
-        await fsp.writeFile(envPath, envText, "utf8");
-        log("info", `Pastas salvas no .env (${dirs.length}):`);
-        for (const d of dirs) console.log(`  - ${d}`);
-        log("info", "Pronto! Execute 'node cloud-backup.js run' para fazer o backup agora.");
+      } else {
+        await runAll();
       }
-    )
-    .command(
-      "status",
-      "Mostra quais provedores já estão autorizados",
-      () => {},
-      async () => {
-        const tokens = await readTokens();
-        console.log("\nEstado das autorizações:");
-        for (const [id, provider] of Object.entries(PROVIDERS)) {
-          console.log(`  ${provider.label.padEnd(14)} ${tokens[id] ? "✅ autorizado" : "❌ não autorizado"}`);
-        }
-        console.log(`\nArquivo de estado: ${TOKEN_FILE}\n`);
+      break;
+    }
+
+    case "status": {
+      const tokens = await readTokens();
+      console.log("\nEstado das autorizações:");
+      for (const [id, provider] of Object.entries(PROVIDERS)) {
+        console.log(`  ${provider.label.padEnd(14)} ${tokens[id] ? "✅ autorizado" : "❌ não autorizado"}`);
       }
-    )
-    .command(
-      "logout",
-      "Remove as credenciais salvas de um provedor",
-      (y) => y.option("provider", { alias: "p", choices: ["google", "onedrive"], demandOption: true }),
-      async (argv) => {
-        const answer = await prompt(`Remover credenciais de ${PROVIDERS[argv.provider].label}? (s/N) `);
-        if (answer.toLowerCase() !== "s") return log("info", "Cancelado.");
-        const tokens = await readTokens();
-        delete tokens[argv.provider];
-        await ensureStateDir();
-        await fsp.writeFile(TOKEN_FILE, JSON.stringify(tokens, null, 2), { mode: 0o600 });
-        log("info", "Credenciais removidas.");
+      console.log(`\nArquivo de estado: ${TOKEN_FILE}\n`);
+      break;
+    }
+
+    case "logout": {
+      const provider = String(opts.provider || "");
+      if (!PROVIDERS[provider]) {
+        throw new Error("Informe --provider google ou --provider onedrive");
       }
-    )
-    .demandCommand(1, "Informe um comando: auth | config | run | status | logout")
-    .strict()
-    .help()
-    .parseAsync();
+      const answer = await prompt(`Remover credenciais de ${PROVIDERS[provider].label}? (s/N) `);
+      if (answer.toLowerCase() !== "s") {
+        log("info", "Cancelado.");
+        break;
+      }
+      const tokens = await readTokens();
+      delete tokens[provider];
+      await ensureStateDir();
+      await fsp.writeFile(TOKEN_FILE, JSON.stringify(tokens, null, 2), { mode: 0o600 });
+      log("info", "Credenciais removidas.");
+      break;
+    }
+
+    case undefined:
+      printHelp();
+      throw new Error("Informe um comando: auth | config | run | status | logout");
+
+    default:
+      printHelp();
+      throw new Error(`Comando desconhecido: ${command}`);
+  }
 }
 
 main().catch((err) => {
