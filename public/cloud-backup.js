@@ -362,8 +362,11 @@ const GoogleDrive = {
   async getClient() {
     const saved = (await readTokens()).google;
     if (!saved?.refresh_token) {
-      throw new Error("Google Drive não autorizado. Rode: node cloud-backup.js auth --provider google");
+      const err = new Error("Google Drive não autorizado. Rode: node cloud-backup.js auth --provider google");
+      err.code = "NOT_AUTHORIZED";
+      throw err;
     }
+
     const tokens = await this.tokenRequest({
       client_id: requireEnv("GOOGLE_CLIENT_ID"),
       client_secret: requireEnv("GOOGLE_CLIENT_SECRET"),
@@ -604,8 +607,11 @@ const OneDrive = {
   async getAccessToken() {
     const saved = (await readTokens()).onedrive;
     if (!saved?.refresh_token) {
-      throw new Error("OneDrive não autorizado. Rode: node cloud-backup.js auth --provider onedrive");
+      const err = new Error("OneDrive não autorizado. Rode: node cloud-backup.js auth --provider onedrive");
+      err.code = "NOT_AUTHORIZED";
+      throw err;
     }
+
     const tokens = await this.tokenRequest({
       grant_type: "refresh_token",
       client_id: requireEnv("MS_CLIENT_ID"),
@@ -815,7 +821,23 @@ async function runBackup(options) {
   for (const id of selected) {
     const provider = PROVIDERS[id];
     try {
-      const client = await withRetry(`Autenticação ${provider.label}`, () => provider.getClient());
+      let client;
+      try {
+        client = await provider.getClient();
+      } catch (err) {
+        // Falta de autorização não é falha transitória: não adianta repetir.
+        if (err?.code === "NOT_AUTHORIZED") {
+          if (process.stdin.isTTY) {
+            log("warn", `${provider.label} ainda não autorizado. Iniciando autorização agora...`);
+            await provider.authorize();
+            client = await provider.getClient();
+          } else {
+            throw err;
+          }
+        } else {
+          client = await withRetry(`Autenticação ${provider.label}`, () => provider.getClient());
+        }
+      }
       targets.push({
         provider,
         ctx: { client, remoteRoot: options.remote, folderCache: new Map() },
@@ -826,9 +848,14 @@ async function runBackup(options) {
     }
   }
 
+
   if (targets.length === 0) {
-    throw new Error("Nenhum provedor de nuvem disponível. Backup abortado.");
+    throw new Error(
+      "Nenhum provedor de nuvem disponível. Autorize primeiro executando: node cloud-backup.js auth --provider " +
+        selected.join(" / "),
+    );
   }
+
 
   // --- Envio arquivo a arquivo ---
   const summary = {};
