@@ -5,8 +5,8 @@
  *  Copia uma pasta local para OneDrive (Microsoft Graph) e/ou Google Drive.
  *
  *  Instalação:
- *    npm init -y
- *    npm install   (instala googleapis e @azure/msal-node, necessários apenas ao acessar a nuvem)
+ *    Nenhuma! Não requer npm install — usa apenas recursos nativos do Node 18+.
+
  *
  *  Autenticação (uma vez por provedor):
  *    node cloud-backup.js auth --provider google
