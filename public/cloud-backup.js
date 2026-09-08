@@ -5,8 +5,8 @@
  *  Copia uma pasta local para OneDrive (Microsoft Graph) e/ou Google Drive.
  *
  *  Instalação:
- *    npm init -y
- *    npm install   (instala googleapis e @azure/msal-node, necessários apenas ao acessar a nuvem)
+ *    Nenhuma! Não requer npm install — usa apenas recursos nativos do Node 18+.
+
  *
  *  Autenticação (uma vez por provedor):
  *    node cloud-backup.js auth --provider google
@@ -55,18 +55,8 @@ const crypto = require("crypto");
 const readline = require("readline");
 const { URL } = require("url");
 
-// Bibliotecas de nuvem são carregadas sob demanda (lazy) para que os comandos
-// que não acessam a nuvem (config, status, --help) funcionem sem npm install.
-function loadCloudDeps(provider) {
-  try {
-    if (provider === "google") return { google: require("googleapis").google };
-    return { PublicClientApplication: require("@azure/msal-node").PublicClientApplication };
-  } catch {
-    throw new Error(
-      "Dependências não instaladas. Execute 'instalar.cmd' (ou 'npm install') nesta pasta e tente novamente."
-    );
-  }
-}
+// Sem dependências externas: Google Drive e OneDrive são acessados por HTTP puro.
+
 
 /** Detecção simples de Content-Type por extensão (substitui mime-types). */
 const MIME_MAP = {
@@ -320,31 +310,47 @@ const GoogleDrive = {
   id: "google",
   label: "Google Drive",
 
-  createOAuthClient() {
-    const { google } = loadCloudDeps("google");
-    return new google.auth.OAuth2(
-      requireEnv("GOOGLE_CLIENT_ID"),
-      requireEnv("GOOGLE_CLIENT_SECRET"),
-      OAUTH_REDIRECT
-    );
+  /** Troca/renova tokens direto no endpoint OAuth do Google (sem SDK). */
+  async tokenRequest(params) {
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(params).toString(),
+    });
+    const body = await res.text();
+    if (!res.ok) throw new Error(`Google OAuth ${res.status}: ${body.slice(0, 400)}`);
+    return JSON.parse(body);
   },
 
-  /** Fluxo interativo de consentimento. */
+  /** Fluxo interativo de consentimento (loopback redirect). */
   async authorize() {
-    const client = this.createOAuthClient();
+    const clientId = requireEnv("GOOGLE_CLIENT_ID");
+    const clientSecret = requireEnv("GOOGLE_CLIENT_SECRET");
     const state = crypto.randomBytes(16).toString("hex");
-    const authUrl = client.generateAuthUrl({
-      access_type: "offline",
-      prompt: "consent",
-      scope: GOOGLE_SCOPES,
-      state,
-    });
+    const authUrl =
+      "https://accounts.google.com/o/oauth2/v2/auth?" +
+      new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: OAUTH_REDIRECT,
+        response_type: "code",
+        access_type: "offline",
+        prompt: "consent",
+        include_granted_scopes: "true",
+        scope: GOOGLE_SCOPES.join(" "),
+        state,
+      }).toString();
 
     console.log("\nAbra esta URL no navegador para autorizar o Google Drive:\n");
     console.log(authUrl + "\n");
 
     const code = await waitForOAuthCode(state);
-    const { tokens } = await client.getToken(code);
+    const tokens = await this.tokenRequest({
+      code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: OAUTH_REDIRECT,
+      grant_type: "authorization_code",
+    });
     if (!tokens.refresh_token) {
       throw new Error("Google não retornou refresh_token. Revogue o acesso e tente novamente.");
     }
@@ -352,20 +358,39 @@ const GoogleDrive = {
     log("info", "Google Drive autorizado com sucesso.");
   },
 
-  /** @returns {Promise<import("googleapis").drive_v3.Drive>} */
+  /** Cliente leve: guarda o access_token e faz chamadas REST à API do Drive. */
   async getClient() {
-    const { google } = loadCloudDeps("google");
     const saved = (await readTokens()).google;
     if (!saved?.refresh_token) {
       throw new Error("Google Drive não autorizado. Rode: node cloud-backup.js auth --provider google");
     }
-    const client = this.createOAuthClient();
-    client.setCredentials({ refresh_token: saved.refresh_token });
-    return google.drive({ version: "v3", auth: client });
+    const tokens = await this.tokenRequest({
+      client_id: requireEnv("GOOGLE_CLIENT_ID"),
+      client_secret: requireEnv("GOOGLE_CLIENT_SECRET"),
+      refresh_token: saved.refresh_token,
+      grant_type: "refresh_token",
+    });
+    if (!tokens.access_token) throw new Error("Google não retornou access_token.");
+    return { token: tokens.access_token };
+  },
+
+  /** Chamada genérica à API do Drive com erro explícito. */
+  async api(token, url, options = {}) {
+    const res = await fetch(url.startsWith("http") ? url : `https://www.googleapis.com/drive/v3${url}`, {
+      ...options,
+      headers: { Authorization: `Bearer ${token}`, ...(options.headers || {}) },
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      const error = new Error(`Drive ${res.status}: ${body.slice(0, 400)}`);
+      error.statusCode = res.status;
+      throw error;
+    }
+    return res.status === 204 ? null : res.json();
   },
 
   /** Garante a existência da árvore de pastas e devolve o id da folha. */
-  async ensureFolder(drive, segments, cache) {
+  async ensureFolder(token, segments, cache) {
     let parentId = "root";
     let accumulated = "";
 
@@ -377,23 +402,24 @@ const GoogleDrive = {
       }
 
       const safeName = segment.replace(/'/g, "\\'");
-      const { data } = await drive.files.list({
-        q: `name='${safeName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-        fields: "files(id)",
-        pageSize: 1,
-      });
+      const q = `name='${safeName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+      const data = await this.api(
+        token,
+        `/files?${new URLSearchParams({ q, fields: "files(id)", pageSize: "1" })}`
+      );
 
       let folderId = data.files?.[0]?.id;
       if (!folderId) {
-        const created = await drive.files.create({
-          requestBody: {
+        const created = await this.api(token, "/files?fields=id", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             name: segment,
             mimeType: "application/vnd.google-apps.folder",
             parents: [parentId],
-          },
-          fields: "id",
+          }),
         });
-        folderId = created.data.id;
+        folderId = created.id;
         log("debug", "Pasta criada no Google Drive", { path: accumulated });
       }
 
@@ -404,34 +430,95 @@ const GoogleDrive = {
     return parentId;
   },
 
+  /** Upload resumível em blocos — funciona para arquivos de qualquer tamanho. */
+  async resumableUpload(token, metadata, absPath, fileId) {
+    const size = fs.statSync(absPath).size;
+    const contentType = mime.lookup(absPath) || "application/octet-stream";
+    const base = "https://www.googleapis.com/upload/drive/v3/files";
+    const url = fileId
+      ? `${base}/${fileId}?uploadType=resumable`
+      : `${base}?uploadType=resumable`;
+
+    const start = await fetch(url, {
+      method: fileId ? "PATCH" : "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": contentType,
+        "X-Upload-Content-Length": String(size),
+      },
+      body: JSON.stringify(metadata),
+    });
+    if (!start.ok) {
+      const body = await start.text().catch(() => "");
+      throw new Error(`Drive upload ${start.status}: ${body.slice(0, 400)}`);
+    }
+    const location = start.headers.get("location");
+    if (!location) throw new Error("Google Drive não devolveu a URL de upload.");
+
+    if (size === 0) {
+      const empty = await fetch(location, {
+        method: "PUT",
+        headers: { "Content-Length": "0" },
+        body: "",
+      });
+      if (!empty.ok) throw new Error(`Drive upload ${empty.status}`);
+      return;
+    }
+
+    const handle = fs.openSync(absPath, "r");
+    try {
+      let offset = 0;
+      while (offset < size) {
+        const length = Math.min(CHUNK_SIZE, size - offset);
+        const buffer = Buffer.alloc(length);
+        fs.readSync(handle, buffer, 0, length, offset);
+        const res = await fetch(location, {
+          method: "PUT",
+          headers: {
+            "Content-Length": String(length),
+            "Content-Range": `bytes ${offset}-${offset + length - 1}/${size}`,
+          },
+          body: buffer,
+        });
+        if (res.status === 308) {
+          offset += length;
+          continue;
+        }
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          throw new Error(`Drive upload ${res.status}: ${body.slice(0, 400)}`);
+        }
+        offset += length;
+      }
+    } finally {
+      fs.closeSync(handle);
+    }
+  },
+
   /**
    * Envia um arquivo. `conflict`: overwrite | skip | rename
    */
   async uploadFile(ctx, relPath, absPath, conflict) {
-    const drive = ctx.client;
+    const token = ctx.client.token;
     const segments = [ctx.remoteRoot, ...path.dirname(relPath).split(path.sep)].filter(
       (s) => s && s !== "."
     );
-    const parentId = await this.ensureFolder(drive, segments, ctx.folderCache);
+    const parentId = await this.ensureFolder(token, segments, ctx.folderCache);
     const name = path.basename(relPath);
     const safeName = name.replace(/'/g, "\\'");
 
-    const { data } = await drive.files.list({
-      q: `name='${safeName}' and '${parentId}' in parents and trashed=false`,
-      fields: "files(id)",
-      pageSize: 1,
-    });
+    const q = `name='${safeName}' and '${parentId}' in parents and trashed=false`;
+    const data = await this.api(
+      token,
+      `/files?${new URLSearchParams({ q, fields: "files(id)", pageSize: "1" })}`
+    );
     const existingId = data.files?.[0]?.id;
 
     if (existingId && conflict === "skip") return "skipped";
 
-    const media = {
-      mimeType: mime.lookup(absPath) || "application/octet-stream",
-      body: fs.createReadStream(absPath),
-    };
-
     if (existingId && conflict === "overwrite") {
-      await drive.files.update({ fileId: existingId, media });
+      await this.resumableUpload(token, {}, absPath, existingId);
       return "updated";
     }
 
@@ -440,14 +527,11 @@ const GoogleDrive = {
         ? `${path.parse(name).name}-${Date.now()}${path.parse(name).ext}`
         : name;
 
-    await drive.files.create({
-      requestBody: { name: finalName, parents: [parentId] },
-      media,
-      fields: "id",
-    });
+    await this.resumableUpload(token, { name: finalName, parents: [parentId] }, absPath);
     return "uploaded";
   },
 };
+
 
 // ============================================================================
 // PROVEDOR: ONEDRIVE (Microsoft Graph)
@@ -458,65 +542,87 @@ const OneDrive = {
   label: "OneDrive",
   graph: "https://graph.microsoft.com/v1.0",
 
-  createApp() {
-    const { PublicClientApplication } = loadCloudDeps("onedrive");
-    return new PublicClientApplication({
-      auth: {
-        clientId: requireEnv("MS_CLIENT_ID"),
-        authority: `https://login.microsoftonline.com/${process.env.MS_TENANT_ID || "common"}`,
-      },
-    });
+  authority() {
+    return `https://login.microsoftonline.com/${process.env.MS_TENANT_ID || "common"}`;
   },
 
-  /** Device code flow: ideal para servidores sem navegador. */
+  async tokenRequest(params) {
+    const res = await fetch(`${this.authority()}/oauth2/v2.0/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(params).toString(),
+    });
+    const body = await res.text();
+    let json = {};
+    try { json = JSON.parse(body); } catch { /* resposta não-JSON */ }
+    if (!res.ok) {
+      const err = new Error(`Microsoft OAuth ${res.status}: ${json.error || body.slice(0, 300)}`);
+      err.oauthError = json.error;
+      throw err;
+    }
+    return json;
+  },
+
+  /** Device code flow (REST puro): ideal para servidores sem navegador. */
   async authorize() {
-    const app = this.createApp();
-    const result = await app.acquireTokenByDeviceCode({
-      scopes: MS_SCOPES,
-      deviceCodeCallback: (response) => {
-        console.log(`\n${response.message}\n`);
-      },
-    });
+    const clientId = requireEnv("MS_CLIENT_ID");
+    const scope = MS_SCOPES.join(" ");
 
-    const cache = app.getTokenCache().serialize();
-    await writeTokens("onedrive", {
-      msalCache: cache,
-      homeAccountId: result.account?.homeAccountId ?? null,
+    const res = await fetch(`${this.authority()}/oauth2/v2.0/devicecode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: clientId, scope }).toString(),
     });
-    log("info", "OneDrive autorizado com sucesso.", { user: result.account?.username });
+    const device = await res.json();
+    if (!res.ok) throw new Error(`Microsoft device code: ${device.error_description || res.status}`);
+
+    console.log(`\n${device.message}\n`);
+
+    const deadline = Date.now() + (device.expires_in || 900) * 1000;
+    const interval = (device.interval || 5) * 1000;
+    for (;;) {
+      if (Date.now() > deadline) throw new Error("Tempo esgotado aguardando autorização da Microsoft.");
+      await new Promise((r) => setTimeout(r, interval));
+      try {
+        const tokens = await this.tokenRequest({
+          grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+          client_id: clientId,
+          device_code: device.device_code,
+        });
+        if (!tokens.refresh_token) throw new Error("Microsoft não retornou refresh_token.");
+        await writeTokens("onedrive", { refresh_token: tokens.refresh_token });
+        log("info", "OneDrive autorizado com sucesso.");
+        return;
+      } catch (err) {
+        if (err.oauthError === "authorization_pending" || err.oauthError === "slow_down") continue;
+        throw err;
+      }
+    }
   },
 
-  /** Obtém access token silenciosamente a partir do cache persistido. */
+  /** Obtém access token a partir do refresh token persistido. */
   async getAccessToken() {
     const saved = (await readTokens()).onedrive;
-    if (!saved?.msalCache) {
+    if (!saved?.refresh_token) {
       throw new Error("OneDrive não autorizado. Rode: node cloud-backup.js auth --provider onedrive");
     }
-
-    const app = this.createApp();
-    const cache = app.getTokenCache();
-    await cache.deserialize(saved.msalCache);
-
-    const accounts = await cache.getAllAccounts();
-    const account =
-      accounts.find((a) => a.homeAccountId === saved.homeAccountId) || accounts[0];
-    if (!account) throw new Error("Nenhuma conta Microsoft no cache. Reautorize.");
-
-    const result = await app.acquireTokenSilent({ account, scopes: MS_SCOPES });
-
-    // Persiste o cache atualizado (refresh token rotacionado).
-    await writeTokens("onedrive", {
-      msalCache: cache.serialize(),
-      homeAccountId: account.homeAccountId,
+    const tokens = await this.tokenRequest({
+      grant_type: "refresh_token",
+      client_id: requireEnv("MS_CLIENT_ID"),
+      refresh_token: saved.refresh_token,
+      scope: MS_SCOPES.join(" "),
     });
-
-    return result.accessToken;
+    if (tokens.refresh_token) {
+      await writeTokens("onedrive", { refresh_token: tokens.refresh_token });
+    }
+    return tokens.access_token;
   },
 
   async getClient() {
     const token = await this.getAccessToken();
     return { token };
   },
+
 
   /** Chamada genérica ao Graph com tratamento de erro explícito. */
   async graphFetch(token, url, options = {}) {

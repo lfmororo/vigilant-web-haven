@@ -104,9 +104,10 @@ export const AGENT_BUNDLES: Record<string, AgentBundleDefinition> = {
     mainScript: "cloud-backup.js",
     runtime: "node",
     notes: [
-      "O pacote inclui package.json. Execute instalar.cmd como Administrador para instalar as dependencias npm automaticamente.",
-      "Requer conexao com a Internet durante a instalacao para baixar googleapis e @azure/msal-node.",
+      "Nao requer npm install: o agente usa apenas recursos nativos do Node 18 ou superior.",
+      "Execute instalar.cmd como Administrador para configurar as pastas, autorizar a nuvem e criar o servico.",
     ],
+
   },
   localBackup: {
     id: "localBackup",
