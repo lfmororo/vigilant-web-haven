@@ -632,17 +632,22 @@ const PROVIDERS = { google: GoogleDrive, onedrive: OneDrive };
 
 // Versao deste agente. Mantenha igual a src/lib/agentVersions.ts.
 const AGENT_VERSION = "1.1.0";
-const REPORT_URL = process.env.BACKUP_API_URL || "";
-const REPORT_KEY = process.env.BACKUP_API_KEY || "";
-const REPORT_ENABLED = Boolean(REPORT_URL && REPORT_KEY);
+// Lidos dinamicamente para permitir definição via --url/--key na linha de comando
+// (os parâmetros são aplicados em process.env dentro de main(), antes do backup).
+function reportConfig() {
+  const url = process.env.BACKUP_API_URL || "";
+  const key = process.env.BACKUP_API_KEY || "";
+  return { url, key, enabled: Boolean(url && key) };
+}
 
 /** Envia um evento ao painel. Nunca interrompe o backup em caso de falha. */
 async function report(action, payload = {}) {
-  if (!REPORT_ENABLED) return null;
+  const { url, key, enabled } = reportConfig();
+  if (!enabled) return null;
   try {
-    const res = await fetch(REPORT_URL, {
+    const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": REPORT_KEY },
+      headers: { "Content-Type": "application/json", "x-api-key": key },
       body: JSON.stringify({ action, hostname: os.hostname(), agent_version: AGENT_VERSION, ...payload }),
     });
     if (!res.ok) {
@@ -875,8 +880,8 @@ async function main() {
   const command = opts._[0];
 
   // Telemetria via linha de comando (opcional): --url e --key alimentam o painel
-  if (opts.url) process.env.BACKEND_URL = String(opts.url);
-  if (opts.key) process.env.AGENT_KEY = String(opts.key);
+  if (opts.url) process.env.BACKUP_API_URL = String(opts.url);
+  if (opts.key) process.env.BACKUP_API_KEY = String(opts.key);
 
   switch (command) {
     case "auth": {
