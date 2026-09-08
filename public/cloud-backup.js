@@ -815,7 +815,23 @@ async function runBackup(options) {
   for (const id of selected) {
     const provider = PROVIDERS[id];
     try {
-      const client = await withRetry(`Autenticação ${provider.label}`, () => provider.getClient());
+      let client;
+      try {
+        client = await provider.getClient();
+      } catch (err) {
+        // Falta de autorização não é falha transitória: não adianta repetir.
+        if (err?.code === "NOT_AUTHORIZED") {
+          if (process.stdin.isTTY) {
+            log("warn", `${provider.label} ainda não autorizado. Iniciando autorização agora...`);
+            await provider.authorize();
+            client = await provider.getClient();
+          } else {
+            throw err;
+          }
+        } else {
+          client = await withRetry(`Autenticação ${provider.label}`, () => provider.getClient());
+        }
+      }
       targets.push({
         provider,
         ctx: { client, remoteRoot: options.remote, folderCache: new Map() },
@@ -825,6 +841,7 @@ async function runBackup(options) {
       log("error", `Não foi possível conectar a ${provider.label}: ${err.message}`);
     }
   }
+
 
   if (targets.length === 0) {
     throw new Error("Nenhum provedor de nuvem disponível. Backup abortado.");
