@@ -362,8 +362,11 @@ const GoogleDrive = {
   async getClient() {
     const saved = (await readTokens()).google;
     if (!saved?.refresh_token) {
-      throw new Error("Google Drive não autorizado. Rode: node cloud-backup.js auth --provider google");
+      const err = new Error("Google Drive não autorizado. Rode: node cloud-backup.js auth --provider google");
+      err.code = "NOT_AUTHORIZED";
+      throw err;
     }
+
     const tokens = await this.tokenRequest({
       client_id: requireEnv("GOOGLE_CLIENT_ID"),
       client_secret: requireEnv("GOOGLE_CLIENT_SECRET"),
