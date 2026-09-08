@@ -850,8 +850,12 @@ async function runBackup(options) {
 
 
   if (targets.length === 0) {
-    throw new Error("Nenhum provedor de nuvem disponível. Backup abortado.");
+    throw new Error(
+      "Nenhum provedor de nuvem disponível. Autorize primeiro executando: node cloud-backup.js auth --provider " +
+        selected.join(" / "),
+    );
   }
+
 
   // --- Envio arquivo a arquivo ---
   const summary = {};
