@@ -932,7 +932,7 @@ async function main() {
         log("info", "Credenciais removidas.");
       }
     )
-    .demandCommand(1, "Informe um comando: auth | run | status | logout")
+    .demandCommand(1, "Informe um comando: auth | config | run | status | logout")
     .strict()
     .help()
     .parseAsync();
