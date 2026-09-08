@@ -55,6 +55,7 @@ function buildEnv(cfg: CloudBackupSettings, endpoint: string, agentKey: string, 
     `MS_TENANT_ID=${cfg.msTenantId || "common"}`,
     "",
     "# --- Backup ---",
+    "# Pastas a salvar, separadas por ponto e vírgula. Se vazio, o configurar-pastas.cmd pergunta na instalação.",
     `BACKUP_DIR=${cfg.backupDir}`,
     `BACKUP_PROVIDER=${cfg.provider || "google"}`,
     `BACKUP_REMOTE_DIR=${cfg.remoteDir || "Backups"}`,
@@ -129,9 +130,10 @@ export function CloudBackupConfig({ agents, endpoint }: CloudBackupConfigProps) 
     };
   }, []);
 
+  // As pastas não são obrigatórias aqui: o configurar-pastas.cmd pergunta na instalação.
   const ready = useMemo(
-    () => Boolean(cfg.googleClientId && cfg.googleClientSecret && cfg.backupDir),
-    [cfg.googleClientId, cfg.googleClientSecret, cfg.backupDir],
+    () => Boolean(cfg.googleClientId && cfg.googleClientSecret),
+    [cfg.googleClientId, cfg.googleClientSecret],
   );
 
   const save = async () => {
@@ -196,7 +198,7 @@ export function CloudBackupConfig({ agents, endpoint }: CloudBackupConfigProps) 
                 {field("googleClientSecret", "Google Client Secret", "GOCSPX-...", "password")}
                 {field("msClientId", "OneDrive Client ID (opcional)", "00000000-0000-0000-0000-000000000000")}
                 {field("msTenantId", "OneDrive Tenant", "common")}
-                {field("backupDir", "Pasta de origem no servidor", "C:\\dados\\importante")}
+                {field("backupDir", "Pastas de origem (opcional — o instalador pergunta)", "C:\\dados;D:\\arquivos")}
                 {field("remoteDir", "Pasta de destino na nuvem", "Backups/Servidor01")}
                 {field("provider", "Destino (google, onedrive ou both)", "google")}
                 {field("exclude", "Ignorar caminhos", "node_modules,.git")}
@@ -214,14 +216,15 @@ export function CloudBackupConfig({ agents, endpoint }: CloudBackupConfigProps) 
         <CardHeader>
           <CardTitle>Pacotes prontos por agente</CardTitle>
           <CardDescription>
-            Cada pacote já vem com credenciais, pastas e chave do agente. Basta extrair, executar{" "}
-            <code>autorizar-google.cmd</code> uma vez e depois <code>instalar.cmd</code>.
+            Cada pacote já vem com credenciais e chave do agente. No servidor, basta extrair e executar{" "}
+            <code>configurar-pastas.cmd</code> (ele pergunta quais pastas salvar), depois{" "}
+            <code>autorizar-google.cmd</code> uma vez e por fim <code>instalar.cmd</code>.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {!ready && (
             <p className="text-sm text-destructive">
-              Informe ao menos o Client ID, o Client Secret do Google e a pasta de origem antes de baixar.
+              Informe ao menos o Client ID e o Client Secret do Google antes de baixar.
             </p>
           )}
           {agents.length === 0 ? (
@@ -240,6 +243,7 @@ export function CloudBackupConfig({ agents, endpoint }: CloudBackupConfigProps) 
                     zipName: `agente-backup-nuvem-${agent.name.replace(/[^a-zA-Z0-9-_]+/g, "-").toLowerCase()}`,
                     extraFiles: {
                       ".env": buildEnv(cfg, endpoint, agent.api_key, agent.name),
+                      "configurar-pastas.cmd": buildConfigCmd(),
                       "autorizar-google.cmd": buildAuthCmd(),
                       "executar-backup.cmd": buildRunCmd(),
                     },
