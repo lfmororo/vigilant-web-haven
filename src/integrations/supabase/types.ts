@@ -1649,6 +1649,147 @@ export type Database = {
           },
         ]
       }
+      provisioning_requests: {
+        Row: {
+          agent_key: string | null
+          claimed_at: string | null
+          client_id: string
+          created_at: string
+          created_by: string | null
+          email: string | null
+          email_status: string
+          finished_at: string | null
+          full_name: string
+          id: string
+          initial_password: string | null
+          job_title: string | null
+          log: string | null
+          phone: string | null
+          sector_id: string | null
+          status: string
+          steps: Json
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          agent_key?: string | null
+          claimed_at?: string | null
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          email_status?: string
+          finished_at?: string | null
+          full_name: string
+          id?: string
+          initial_password?: string | null
+          job_title?: string | null
+          log?: string | null
+          phone?: string | null
+          sector_id?: string | null
+          status?: string
+          steps?: Json
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          agent_key?: string | null
+          claimed_at?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          email_status?: string
+          finished_at?: string | null
+          full_name?: string
+          id?: string
+          initial_password?: string | null
+          job_title?: string | null
+          log?: string | null
+          phone?: string | null
+          sector_id?: string | null
+          status?: string
+          steps?: Json
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provisioning_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provisioning_requests_sector_id_fkey"
+            columns: ["sector_id"]
+            isOneToOne: false
+            referencedRelation: "client_sectors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provisioning_templates: {
+        Row: {
+          ad_groups: string[]
+          ad_ou: string | null
+          base_path: string | null
+          client_id: string
+          created_at: string
+          email_domain: string | null
+          email_groups: string[]
+          home_drive: string | null
+          id: string
+          sector_id: string | null
+          subfolders: string[]
+          updated_at: string
+        }
+        Insert: {
+          ad_groups?: string[]
+          ad_ou?: string | null
+          base_path?: string | null
+          client_id: string
+          created_at?: string
+          email_domain?: string | null
+          email_groups?: string[]
+          home_drive?: string | null
+          id?: string
+          sector_id?: string | null
+          subfolders?: string[]
+          updated_at?: string
+        }
+        Update: {
+          ad_groups?: string[]
+          ad_ou?: string | null
+          base_path?: string | null
+          client_id?: string
+          created_at?: string
+          email_domain?: string | null
+          email_groups?: string[]
+          home_drive?: string | null
+          id?: string
+          sector_id?: string | null
+          subfolders?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provisioning_templates_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provisioning_templates_sector_id_fkey"
+            columns: ["sector_id"]
+            isOneToOne: false
+            referencedRelation: "client_sectors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proxmox_guests: {
         Row: {
           cpu_count: number | null
