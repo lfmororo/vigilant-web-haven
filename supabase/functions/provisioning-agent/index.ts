@@ -9,9 +9,10 @@
  * Autenticação: header `x-agent-key` comparado com system_settings.provisioning_agent_key.
  */
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+const responseHeaders = {
+  ...corsHeaders,
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-agent-key",
 };
@@ -19,7 +20,7 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...responseHeaders, "Content-Type": "application/json" },
   });
 
 interface ReportPayload {
@@ -30,7 +31,7 @@ interface ReportPayload {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: responseHeaders });
 
   try {
     const supabase = createClient(
