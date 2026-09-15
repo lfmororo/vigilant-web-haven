@@ -32,6 +32,7 @@ import GdmsTutorial from "./pages/admin/GdmsTutorial";
 import DvrMonitor from "./pages/admin/DvrMonitor";
 import ServerMonitor from "./pages/admin/ServerMonitor";
 import AdminBackup from "./pages/admin/AdminBackup";
+import UserProvisioning from "./pages/admin/UserProvisioning";
 import HelpdeskDashboard from "./pages/helpdesk/HelpdeskDashboard";
 import ClientTicketsList from "./pages/helpdesk/ClientTicketsList";
 import NewTicket from "./pages/helpdesk/NewTicket";
@@ -60,6 +61,7 @@ const App = () => (
               <Route path="/helpdesk/orders" element={<AuthGuard><ClientServiceOrders /></AuthGuard>} />
               <Route path="/admin" element={<AuthGuard requireAdminOrTechnician><AdminDashboard /></AuthGuard>} />
               <Route path="/admin/users" element={<AuthGuard requireAdmin><UsersManagement /></AuthGuard>} />
+              <Route path="/admin/provisioning" element={<AuthGuard requireAdmin><UserProvisioning /></AuthGuard>} />
               <Route path="/admin/clients" element={<AuthGuard requireAdmin><ClientsManagement /></AuthGuard>} />
               <Route path="/admin/inventory" element={<AuthGuard requireAdmin><EquipmentInventory /></AuthGuard>} />
               <Route path="/admin/inventory/:id" element={<AuthGuard requireAdmin><EquipmentDetail /></AuthGuard>} />

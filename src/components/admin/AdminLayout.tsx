@@ -23,7 +23,8 @@ import {
   Router,
   Video,
   Server,
-  HardDriveDownload } from
+  HardDriveDownload,
+  UserPlus } from
 "lucide-react";
 import fmLogo from "@/assets/fm-techflow-logo.png";
 
@@ -34,6 +35,7 @@ interface AdminLayoutProps {
 const allNavItems = [
 { label: "Dashboard", href: "/admin", icon: LayoutDashboard, roles: ["admin"] },
 { label: "Usuários", href: "/admin/users", icon: Users, roles: ["admin"] },
+{ label: "Criar Usuário Empresa", href: "/admin/provisioning", icon: UserPlus, roles: ["admin"] },
 { label: "Clientes", href: "/admin/clients", icon: UserCheck, roles: ["admin"] },
 
 { label: "Inventário", href: "/admin/inventory", icon: Package, roles: ["admin"] },
