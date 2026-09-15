@@ -76,6 +76,15 @@ Deno.serve(async (req) => {
       const tasks: Record<string, unknown>[] = [];
 
       for (const request of pending ?? []) {
+        if (!/^[a-zA-Z0-9._-]{2,64}$/.test(request.username)) {
+          await supabase.from("provisioning_requests").update({
+            status: "error",
+            log: "Login inválido: use somente letras, números, ponto, hífen e sublinhado.",
+            initial_password: null,
+            finished_at: new Date().toISOString(),
+          }).eq("id", request.id).eq("status", "pending");
+          continue;
+        }
         // Busca o modelo do setor; se não houver, tenta o modelo geral do cliente.
         const { data: templates } = await supabase
           .from("provisioning_templates")
@@ -87,7 +96,7 @@ Deno.serve(async (req) => {
           (templates ?? []).find((t) => !t.sector_id) ??
           null;
 
-        const { error: claimError } = await supabase
+        const { data: claimed, error: claimError } = await supabase
           .from("provisioning_requests")
           .update({
             status: "running",
@@ -96,9 +105,11 @@ Deno.serve(async (req) => {
             initial_password: null,
           })
           .eq("id", request.id)
-          .eq("status", "pending");
+          .eq("status", "pending")
+          .select("id")
+          .maybeSingle();
 
-        if (claimError) {
+        if (claimError || !claimed) {
           console.error("claim update error:", claimError);
           continue;
         }

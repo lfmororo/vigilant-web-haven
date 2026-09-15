@@ -43,10 +43,13 @@ function New-UsuarioAD {
     param($Tarefa, [System.Collections.ArrayList]$Etapas)
 
     $login = $Tarefa.username
+    if ($login -notmatch '^[a-zA-Z0-9._-]{2,64}$') {
+        throw "Login invalido. Use somente letras, numeros, ponto, hifen e sublinhado."
+    }
     $nome = $Tarefa.full_name
     $modelo = $Tarefa.template
 
-    $existente = Get-ADUser -Filter "SamAccountName -eq '$login'" -ErrorAction SilentlyContinue
+    $existente = Get-ADUser -Identity $login -ErrorAction SilentlyContinue
     if ($existente) {
         [void]$Etapas.Add(@{ etapa = "Usuario no AD"; status = "ok"; detalhe = "Ja existia" })
     }
@@ -90,6 +93,9 @@ function New-PastasUsuario {
     param($Tarefa, [System.Collections.ArrayList]$Etapas)
 
     $modelo = $Tarefa.template
+    if ($Tarefa.username -notmatch '^[a-zA-Z0-9._-]{2,64}$') {
+        throw "Login invalido para criacao de pastas."
+    }
     if (-not $modelo -or [string]::IsNullOrWhiteSpace($modelo.base_path)) {
         [void]$Etapas.Add(@{ etapa = "Pastas"; status = "ignorado"; detalhe = "Sem caminho base no modelo" })
         return

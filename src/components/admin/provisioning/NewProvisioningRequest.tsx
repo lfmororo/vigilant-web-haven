@@ -62,6 +62,10 @@ const NewProvisioningRequest = ({ onCreated }: NewProvisioningRequestProps) => {
       toast.error("Informe a empresa, o nome completo e o login.");
       return;
     }
+    if (!/^[a-zA-Z0-9._-]{2,64}$/.test(username.trim())) {
+      toast.error("O login aceita somente letras, números, ponto, hífen e sublinhado.");
+      return;
+    }
     setSaving(true);
     const { error } = await (supabase.from("provisioning_requests" as any) as any).insert({
       client_id: clientId,
