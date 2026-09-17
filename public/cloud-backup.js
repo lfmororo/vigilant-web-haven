@@ -111,6 +111,8 @@ if (
 /** Uploads acima deste tamanho usam sessão resumível (chunked). */
 const LARGE_FILE_THRESHOLD = 4 * 1024 * 1024; // 4 MB
 const CHUNK_SIZE = 5 * 1024 * 1024; // múltiplo de 320 KiB exigido pelo Graph
+const MAX_RETRY_DELAY_MS = 60000;
+const DEFAULT_RETRY_ATTEMPTS = 6;
 
 // ============================================================================
 // LOGGER
@@ -248,8 +250,22 @@ function formatBytes(bytes) {
   return `${value.toFixed(2)} ${units[i]}`;
 }
 
-/** Retenta uma operação com backoff exponencial. */
-async function withRetry(label, fn, attempts = 3) {
+function httpError(message, response, body = "") {
+  const error = new Error(`${message} ${response.status}: ${body.slice(0, 400)}`.trim());
+  error.statusCode = response.status;
+  const retryAfter = response.headers.get("retry-after");
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    const dateDelay = Date.parse(retryAfter) - Date.now();
+    error.retryAfterMs = Number.isFinite(seconds)
+      ? Math.max(0, seconds * 1000)
+      : Math.max(0, dateDelay);
+  }
+  return error;
+}
+
+/** Retenta falhas temporárias com backoff exponencial, jitter e Retry-After. */
+async function withRetry(label, fn, attempts = DEFAULT_RETRY_ATTEMPTS) {
   let lastError;
   for (let i = 1; i <= attempts; i += 1) {
     try {
@@ -261,11 +277,17 @@ async function withRetry(label, fn, attempts = 3) {
       if (status && status >= 400 && status < 500 && status !== 408 && status !== 429) {
         throw err;
       }
-      const delay = Math.min(30000, 1000 * 2 ** (i - 1));
-      log("warn", `${label} falhou (tentativa ${i}/${attempts}), aguardando ${delay}ms`, {
+      if (i >= attempts) break;
+      const exponentialDelay = Math.min(MAX_RETRY_DELAY_MS, 2000 * 2 ** (i - 1));
+      const jitter = Math.floor(Math.random() * 1000);
+      const delay = Math.min(
+        MAX_RETRY_DELAY_MS,
+        Math.max(exponentialDelay + jitter, err?.retryAfterMs || 0),
+      );
+      log("warn", `${label} falhou (tentativa ${i}/${attempts}), nova tentativa em ${Math.ceil(delay / 1000)}s`, {
         error: err.message,
       });
-      if (i < attempts) await new Promise((r) => setTimeout(r, delay));
+      await new Promise((r) => setTimeout(r, delay));
     }
   }
   throw lastError;
@@ -481,7 +503,7 @@ const GoogleDrive = {
     });
     if (!start.ok) {
       const body = await start.text().catch(() => "");
-      throw new Error(`Drive upload ${start.status}: ${body.slice(0, 400)}`);
+      throw httpError("Drive upload", start, body);
     }
     const location = start.headers.get("location");
     if (!location) throw new Error("Google Drive não devolveu a URL de upload.");
@@ -492,7 +514,10 @@ const GoogleDrive = {
         headers: { "Content-Length": "0" },
         body: "",
       });
-      if (!empty.ok) throw new Error(`Drive upload ${empty.status}`);
+      if (!empty.ok) {
+        const body = await empty.text().catch(() => "");
+        throw httpError("Drive upload", empty, body);
+      }
       return;
     }
 
@@ -503,21 +528,25 @@ const GoogleDrive = {
         const length = Math.min(CHUNK_SIZE, size - offset);
         const buffer = Buffer.alloc(length);
         fs.readSync(handle, buffer, 0, length, offset);
-        const res = await fetch(location, {
-          method: "PUT",
-          headers: {
-            "Content-Length": String(length),
-            "Content-Range": `bytes ${offset}-${offset + length - 1}/${size}`,
-          },
-          body: buffer,
+        const res = await withRetry(`Bloco ${Math.floor(offset / CHUNK_SIZE) + 1} de ${path.basename(absPath)}`, async () => {
+          const response = await fetch(location, {
+            method: "PUT",
+            headers: {
+              "Content-Length": String(length),
+              "Content-Range": `bytes ${offset}-${offset + length - 1}/${size}`,
+            },
+            body: buffer,
+          });
+          if (!response.ok && response.status !== 308) {
+            const body = await response.text().catch(() => "");
+            throw httpError("Drive upload", response, body);
+          }
+          return response;
         });
         if (res.status === 308) {
-          offset += length;
+          const acknowledged = /bytes=0-(\d+)/.exec(res.headers.get("range") || "");
+          offset = acknowledged ? Number(acknowledged[1]) + 1 : offset + length;
           continue;
-        }
-        if (!res.ok) {
-          const body = await res.text().catch(() => "");
-          throw new Error(`Drive upload ${res.status}: ${body.slice(0, 400)}`);
         }
         offset += length;
       }
