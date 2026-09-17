@@ -16,6 +16,7 @@ const GOOGLE_REDIRECT_URI = "http://127.0.0.1:53682/callback";
 export interface CloudBackupSettings {
   googleClientId: string;
   googleClientSecret: string;
+  googleRedirectUri: string;
   msClientId: string;
   msTenantId: string;
   backupDir: string;
@@ -27,6 +28,7 @@ export interface CloudBackupSettings {
 const EMPTY: CloudBackupSettings = {
   googleClientId: "",
   googleClientSecret: "",
+  googleRedirectUri: GOOGLE_REDIRECT_URI,
   msClientId: "",
   msTenantId: "common",
   backupDir: "",
@@ -51,6 +53,7 @@ function buildEnv(cfg: CloudBackupSettings, endpoint: string, agentKey: string, 
     "# --- Google Drive ---",
     `GOOGLE_CLIENT_ID=${cfg.googleClientId}`,
     `GOOGLE_CLIENT_SECRET=${cfg.googleClientSecret}`,
+    `GOOGLE_REDIRECT_URI=${cfg.googleRedirectUri || GOOGLE_REDIRECT_URI}`,
     "",
     "# --- OneDrive / Microsoft Graph ---",
     `MS_CLIENT_ID=${cfg.msClientId}`,
@@ -222,7 +225,7 @@ export function CloudBackupConfig({ agents, endpoint }: CloudBackupConfigProps) 
 
   return (
     <div className="space-y-4">
-      <GoogleDriveSetupGuide redirectUri={GOOGLE_REDIRECT_URI} />
+      <GoogleDriveSetupGuide redirectUri={cfg.googleRedirectUri || GOOGLE_REDIRECT_URI} />
 
       <Card>
         <CardHeader>
@@ -243,6 +246,7 @@ export function CloudBackupConfig({ agents, endpoint }: CloudBackupConfigProps) 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {field("googleClientId", "Google Client ID", "xxxx.apps.googleusercontent.com")}
                 {field("googleClientSecret", "Google Client Secret", "GOCSPX-...", "password")}
+                {field("googleRedirectUri", "Endereço de retorno do Google", GOOGLE_REDIRECT_URI)}
                 {field("msClientId", "OneDrive Client ID (opcional)", "00000000-0000-0000-0000-000000000000")}
                 {field("msTenantId", "OneDrive Tenant", "common")}
                 {field("backupDir", "Pastas de origem (opcional — o instalador pergunta)", "C:\\dados;D:\\arquivos")}
@@ -256,7 +260,9 @@ export function CloudBackupConfig({ agents, endpoint }: CloudBackupConfigProps) 
                   Prefira uma credencial OAuth do tipo <strong>Aplicativo para computador</strong>. Se usar
                   Aplicativo da Web, cadastre exatamente este endereço de retorno:
                 </p>
-                <code className="mt-2 block overflow-x-auto text-xs text-foreground">{GOOGLE_REDIRECT_URI}</code>
+                <code className="mt-2 block overflow-x-auto text-xs text-foreground">
+                  {cfg.googleRedirectUri || GOOGLE_REDIRECT_URI}
+                </code>
                 <p className="mt-2">Depois de alterar a credencial, salve e baixe novamente o pacote do agente.</p>
               </div>
               <Button onClick={save} disabled={saving}>
