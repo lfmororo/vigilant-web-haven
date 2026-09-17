@@ -174,7 +174,8 @@ Iniciar em: C:\cloud-backup
 
 - **Estrutura de pastas** é replicada na nuvem sob a pasta remota raiz.
 - **Arquivos grandes (≥ 4 MB)** no OneDrive usam *upload session* em blocos de 5 MB.
-- **Retry** com backoff exponencial (3 tentativas) para erros de rede, `429` e `5xx`.
+- **Retry** com backoff exponencial, intervalo aleatório e até 6 tentativas para erros de rede, `429` e `5xx`.
+  O agente respeita `Retry-After` e repete somente o bloco atual em uploads grandes do Google Drive.
   Erros `4xx` permanentes (credencial inválida, permissão negada) falham imediatamente.
 - **Falha isolada:** se um provedor estiver indisponível, o outro continua.
   Um arquivo com erro não interrompe o lote.
@@ -187,6 +188,7 @@ Iniciar em: C:\cloud-backup
 | Sintoma | Causa provável / Solução |
 |---|---|
 | `redirect_uri_mismatch` / solicitação inválida | Crie um Client ID do tipo **Aplicativo para computador**. Se usar **Aplicativo da Web**, cadastre exatamente `http://127.0.0.1:53682/callback`; `localhost` é diferente de `127.0.0.1`. Depois baixe novamente o pacote. |
+| `Drive upload 503: Service Unavailable` | Indisponibilidade temporária do Google Drive. O agente tenta novamente até 6 vezes, respeitando o intervalo informado pelo Google, sem recomeçar o arquivo inteiro. |
 | `Google não retornou refresh_token` | Revogue o app em <https://myaccount.google.com/permissions> e refaça o `auth`. |
 | `AADSTS7000218` / erro no device code | Habilite *Allow public client flows* no registro do app. |
 | `Graph 403` | Falta a permissão `Files.ReadWrite` ou o consentimento não foi concedido. |

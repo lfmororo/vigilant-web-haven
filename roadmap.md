@@ -10,3 +10,6 @@
 - [x] Corrigir autorização Google Drive do backup em nuvem (redirect_uri_mismatch)
 - [x] Documentar cadastro e autorização do Google Drive no menu Backup
 - [x] Permitir configurar o endereço OAuth exato para corrigir redirect_uri_mismatch
+- [x] Reforçar uploads do Google Drive contra falhas temporárias HTTP 429/5xx
+
+- [x] Confirmar a pasta de destino do backup no Google Drive
