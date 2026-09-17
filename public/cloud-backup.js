@@ -483,81 +483,79 @@ const GoogleDrive = {
   },
 
   /** Upload resumível em blocos — funciona para arquivos de qualquer tamanho. */
-  async resumableUpload(token, metadata, absPath, fileId) {
+  async resumableUpload(ctx, metadata, absPath, fileId) {
+    const token = ctx.client.token;
     const size = fs.statSync(absPath).size;
     const contentType = mime.lookup(absPath) || "application/octet-stream";
-    const base = "https://www.googleapis.com/upload/drive/v3/files";
-    const url = fileId
-      ? `${base}/${fileId}?uploadType=resumable`
-      : `${base}?uploadType=resumable`;
+    const sessionKey = `google:${fileId || absPath}`;
+    let location = ctx.sessionCache?.get(sessionKey);
+    let offset = 0;
 
-    const start = await fetch(url, {
-      method: fileId ? "PATCH" : "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json; charset=UTF-8",
-        "X-Upload-Content-Type": contentType,
-        "X-Upload-Content-Length": String(size),
-      },
-      body: JSON.stringify(metadata),
-    });
-    if (!start.ok) {
-      const body = await start.text().catch(() => "");
-      throw httpError("Drive upload", start, body);
+    if (location) {
+      try {
+        const res = await fetch(location, {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}`, "Content-Range": `bytes */${size}` }
+        });
+        if (res.status === 308) {
+          const range = res.headers.get("range");
+          if (range) offset = Number(range.split("-")[1]) + 1;
+        } else if (res.ok) return;
+        else location = null;
+      } catch { location = null; }
     }
-    const location = start.headers.get("location");
-    if (!location) throw new Error("Google Drive não devolveu a URL de upload.");
 
-    if (size === 0) {
-      const empty = await fetch(location, {
-        method: "PUT",
-        headers: { "Content-Length": "0" },
-        body: "",
+    if (!location) {
+      const base = "https://www.googleapis.com/upload/drive/v3/files";
+      const url = fileId ? `${base}/${fileId}?uploadType=resumable` : `${base}?uploadType=resumable`;
+      const start = await fetch(url, {
+        method: fileId ? "PATCH" : "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json; charset=UTF-8",
+          "X-Upload-Content-Type": contentType,
+          "X-Upload-Content-Length": String(size),
+        },
+        body: JSON.stringify(metadata),
       });
-      if (!empty.ok) {
-        const body = await empty.text().catch(() => "");
-        throw httpError("Drive upload", empty, body);
-      }
+      if (!start.ok) throw httpError("Drive upload init", start, await start.text().catch(() => ""));
+      location = start.headers.get("location");
+      if (!location) throw new Error("Google Drive não devolveu a URL de upload.");
+      ctx.sessionCache?.set(sessionKey, location);
+    }
+
+    if (size === 0 && offset === 0) {
+      const empty = await fetch(location, { method: "PUT", headers: { "Content-Length": "0" }, body: "" });
+      if (!empty.ok) throw httpError("Drive empty upload", empty, await empty.text().catch(() => ""));
       return;
     }
 
     const handle = fs.openSync(absPath, "r");
     try {
-      let offset = 0;
       while (offset < size) {
         const length = Math.min(CHUNK_SIZE, size - offset);
         const buffer = Buffer.alloc(length);
         fs.readSync(handle, buffer, 0, length, offset);
-        const res = await withRetry(`Bloco ${Math.floor(offset / CHUNK_SIZE) + 1} de ${path.basename(absPath)}`, async () => {
+        const res = await withRetry(`Bloco Google ${Math.floor(offset / CHUNK_SIZE) + 1}`, async () => {
           const response = await fetch(location, {
             method: "PUT",
-            headers: {
-              "Content-Length": String(length),
-              "Content-Range": `bytes ${offset}-${offset + length - 1}/${size}`,
-            },
+            headers: { "Content-Length": String(length), "Content-Range": `bytes ${offset}-${offset + length - 1}/${size}` },
             body: buffer,
           });
-          if (!response.ok && response.status !== 308) {
-            const body = await response.text().catch(() => "");
-            throw httpError("Drive upload", response, body);
-          }
+          if (!response.ok && response.status !== 308) throw httpError("Drive chunk", response, await response.text().catch(() => ""));
           return response;
         });
         if (res.status === 308) {
           const acknowledged = /bytes=0-(\d+)/.exec(res.headers.get("range") || "");
-          offset = acknowledged ? Number(acknowledged[1]) + 1 : offset + length;
-          continue;
+          offset = acknowledged ? Number(acknowledged[1]) + 1 : offset;
+        } else {
+          offset += length;
         }
-        offset += length;
       }
     } finally {
       fs.closeSync(handle);
     }
   },
-
-  /**
-   * Envia um arquivo. `conflict`: overwrite | skip | rename
-   */
   async uploadFile(ctx, relPath, absPath, conflict) {
     const token = ctx.client.token;
     const segments = [ctx.remoteRoot, ...path.dirname(relPath).split(path.sep)].filter(
@@ -577,7 +575,7 @@ const GoogleDrive = {
     if (existingId && conflict === "skip") return "skipped";
 
     if (existingId && conflict === "overwrite") {
-      await this.resumableUpload(token, {}, absPath, existingId);
+      await this.resumableUpload(ctx, {}, absPath, existingId);
       return "updated";
     }
 
@@ -586,7 +584,7 @@ const GoogleDrive = {
         ? `${path.parse(name).name}-${Date.now()}${path.parse(name).ext}`
         : name;
 
-    await this.resumableUpload(token, { name: finalName, parents: [parentId] }, absPath);
+    await this.resumableUpload(ctx, { name: finalName, parents: [parentId] }, absPath);
     return "uploaded";
   },
 };
@@ -741,44 +739,54 @@ const OneDrive = {
     }
 
     // --- Upload resumível em blocos ---
-    const session = await this.graphFetch(token, `/me/drive/root:/${encoded}:/createUploadSession`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ item: { "@microsoft.graph.conflictBehavior": graphConflict } }),
-    });
+    const sessionKey = `onedrive:${absPath}`;
+    let session = ctx.sessionCache?.get(sessionKey);
+    let offset = 0;
+
+    if (session) {
+      try {
+        const res = await fetch(session.uploadUrl);
+        if (res.ok) {
+          const data = await res.json();
+          const next = data.nextExpectedRanges?.[0];
+          if (next) offset = Number(next.split("-")[0]);
+          else if (data.id) return exists ? "updated" : "uploaded";
+        } else session = null;
+      } catch { session = null; }
+    }
+
+    if (!session) {
+      session = await this.graphFetch(token, `/me/drive/root:/${encoded}:/createUploadSession`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item: { "@microsoft.graph.conflictBehavior": graphConflict } }),
+      });
+      ctx.sessionCache?.set(sessionKey, session);
+    }
 
     const handle = await fsp.open(absPath, "r");
     try {
-      let offset = 0;
       while (offset < stats.size) {
         const size = Math.min(CHUNK_SIZE, stats.size - offset);
         const buffer = Buffer.alloc(size);
         await handle.read(buffer, 0, size, offset);
 
-        const res = await fetch(session.uploadUrl, {
-          method: "PUT",
-          headers: {
-            "Content-Length": String(size),
-            "Content-Range": `bytes ${offset}-${offset + size - 1}/${stats.size}`,
-          },
-          body: buffer,
+        await withRetry(`Bloco OneDrive ${Math.floor(offset / CHUNK_SIZE) + 1}`, async () => {
+          const res = await fetch(session.uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Length": String(size), "Content-Range": `bytes ${offset}-${offset + size - 1}/${stats.size}` },
+            body: buffer,
+          });
+          if (!res.ok && res.status !== 202) throw httpError("OneDrive chunk", res, await res.text().catch(() => ""));
+          return res;
         });
-
-        if (!res.ok && res.status !== 202) {
-          const body = await res.text().catch(() => "");
-          throw new Error(`Chunk falhou ${res.status}: ${body.slice(0, 300)}`);
-        }
 
         offset += size;
-        log("debug", "Chunk enviado", {
-          file: relPath,
-          progress: `${Math.round((offset / stats.size) * 100)}%`,
-        });
+        log("debug", "Chunk enviado", { file: relPath, progress: `${Math.round((offset / stats.size) * 100)}%` });
       }
     } finally {
       await handle.close();
     }
-
     return exists ? "updated" : "uploaded";
   },
 };
@@ -896,7 +904,7 @@ async function runBackup(options) {
       }
       targets.push({
         provider,
-        ctx: { client, remoteRoot: options.remote, folderCache: new Map() },
+        ctx: { client, remoteRoot: options.remote, folderCache: new Map(), sessionCache: new Map() },
       });
       log("info", `Conectado a ${provider.label}.`);
     } catch (err) {
