@@ -78,7 +78,10 @@ export function GoogleDriveSetupGuide({ redirectUri }: GoogleDriveSetupGuideProp
                 Se utilizar uma credencial do tipo <strong>Aplicativo da Web</strong>, adicione exatamente este endereço em
                 <strong> URIs de redirecionamento autorizados</strong>:
                 <code className="mt-2 block overflow-x-auto text-xs text-foreground">{redirectUri}</code>
-                <p className="mt-2"><strong>localhost</strong> e <strong>127.0.0.1</strong> são endereços diferentes para o Google.</p>
+                <p className="mt-2">
+                  Copie sem alterar nenhum caractere. <strong>localhost</strong> e <strong>127.0.0.1</strong> são endereços
+                  diferentes para o Google. Após salvar no Google, aguarde alguns minutos e baixe um novo pacote.
+                </p>
               </div>
             </AccordionContent>
           </AccordionItem>

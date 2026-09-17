@@ -84,15 +84,29 @@ const MANIFEST_FILE = path.join(STATE_DIR, "manifest.json");
 const GOOGLE_SCOPES = ["https://www.googleapis.com/auth/drive.file"];
 const MS_SCOPES = ["Files.ReadWrite", "offline_access"];
 
-/** Porta local usada no fluxo OAuth (loopback redirect). */
-const OAUTH_PORT = Number(process.env.OAUTH_PORT || 53682);
-if (!Number.isInteger(OAUTH_PORT) || OAUTH_PORT < 1024 || OAUTH_PORT > 65535) {
-  throw new Error("OAUTH_PORT inválida. Use uma porta entre 1024 e 65535.");
+/** Endereço local usado no fluxo OAuth. Para cliente Web, deve ser idêntico ao cadastrado no Google. */
+const DEFAULT_OAUTH_REDIRECT = `http://127.0.0.1:${process.env.OAUTH_PORT || "53682"}/callback`;
+const OAUTH_REDIRECT = String(process.env.GOOGLE_REDIRECT_URI || DEFAULT_OAUTH_REDIRECT).trim();
+let oauthRedirectUrl;
+try {
+  oauthRedirectUrl = new URL(OAUTH_REDIRECT);
+} catch {
+  throw new Error("GOOGLE_REDIRECT_URI inválida. Exemplo: http://127.0.0.1:53682/callback");
 }
-// O Google compara o endereço literalmente. 127.0.0.1 é o loopback recomendado
-// para clientes OAuth de aplicativo para computador; não troque por localhost.
-const OAUTH_HOST = "127.0.0.1";
-const OAUTH_REDIRECT = `http://${OAUTH_HOST}:${OAUTH_PORT}/callback`;
+const OAUTH_PORT = Number(oauthRedirectUrl.port);
+const OAUTH_HOST = oauthRedirectUrl.hostname;
+if (
+  oauthRedirectUrl.protocol !== "http:" ||
+  !["127.0.0.1", "localhost"].includes(OAUTH_HOST) ||
+  oauthRedirectUrl.pathname !== "/callback" ||
+  !Number.isInteger(OAUTH_PORT) ||
+  OAUTH_PORT < 1024 ||
+  OAUTH_PORT > 65535
+) {
+  throw new Error(
+    "GOOGLE_REDIRECT_URI deve usar http, host 127.0.0.1 ou localhost, porta entre 1024 e 65535 e caminho /callback.",
+  );
+}
 
 /** Uploads acima deste tamanho usam sessão resumível (chunked). */
 const LARGE_FILE_THRESHOLD = 4 * 1024 * 1024; // 4 MB
@@ -351,7 +365,8 @@ const GoogleDrive = {
 
     console.log(`\nEndereço de retorno OAuth: ${OAUTH_REDIRECT}`);
     console.log("Use uma credencial Google do tipo 'Aplicativo para computador'.");
-    console.log("Se a credencial for do tipo 'Aplicativo da Web', cadastre exatamente esse endereço como URI autorizada.\n");
+    console.log("Se a credencial for do tipo 'Aplicativo da Web', o endereço acima deve estar cadastrado sem nenhuma diferença.");
+    console.log("Após mudar a configuração no Google, aguarde alguns minutos antes de tentar novamente.\n");
     console.log("Abra esta URL no navegador para autorizar o Google Drive:\n");
     console.log(authUrl + "\n");
 
