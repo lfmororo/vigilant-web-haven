@@ -7,4 +7,4 @@
 - [ ] Aplicar proteção adicional da senha inicial no banco — aguardando o Lovable Cloud concluir a inicialização
 - [ ] Integrar criação e grupos de e-mail Locaweb — aguardando confirmação de API/credenciais disponíveis na conta
 
-- [ ] Corrigir autorização Google Drive do backup em nuvem (redirect_uri_mismatch)
+- [x] Corrigir autorização Google Drive do backup em nuvem (redirect_uri_mismatch)
