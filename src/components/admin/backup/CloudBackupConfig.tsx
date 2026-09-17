@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AgentDownloadButton } from "@/components/admin/AgentDownloadButton";
+import { GoogleDriveSetupGuide } from "@/components/admin/backup/GoogleDriveSetupGuide";
 
 const SETTING_KEY = "cloud_backup_config";
 const GOOGLE_REDIRECT_URI = "http://127.0.0.1:53682/callback";
@@ -221,6 +222,8 @@ export function CloudBackupConfig({ agents, endpoint }: CloudBackupConfigProps) 
 
   return (
     <div className="space-y-4">
+      <GoogleDriveSetupGuide redirectUri={GOOGLE_REDIRECT_URI} />
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
