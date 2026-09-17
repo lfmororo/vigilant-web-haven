@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { AgentDownloadButton } from "@/components/admin/AgentDownloadButton";
 
 const SETTING_KEY = "cloud_backup_config";
+const GOOGLE_REDIRECT_URI = "http://127.0.0.1:53682/callback";
 
 /** Configuração usada para pré-preencher o .env do agente de backup em nuvem. */
 export interface CloudBackupSettings {
@@ -245,6 +246,15 @@ export function CloudBackupConfig({ agents, endpoint }: CloudBackupConfigProps) 
                 {field("remoteDir", "Pasta de destino na nuvem", "Backups/Servidor01")}
                 {field("provider", "Destino (google, onedrive ou both)", "google")}
                 {field("exclude", "Ignorar caminhos", "node_modules,.git")}
+              </div>
+              <div className="rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Configuração obrigatória no Google</p>
+                <p>
+                  Prefira uma credencial OAuth do tipo <strong>Aplicativo para computador</strong>. Se usar
+                  Aplicativo da Web, cadastre exatamente este endereço de retorno:
+                </p>
+                <code className="mt-2 block overflow-x-auto text-xs text-foreground">{GOOGLE_REDIRECT_URI}</code>
+                <p className="mt-2">Depois de alterar a credencial, salve e baixe novamente o pacote do agente.</p>
               </div>
               <Button onClick={save} disabled={saving}>
                 {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}

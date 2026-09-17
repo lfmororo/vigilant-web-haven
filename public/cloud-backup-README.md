@@ -30,9 +30,14 @@ npm install googleapis @azure/msal-node yargs dotenv mime-types
 3. **Tela de consentimento OAuth** → tipo *Externo* → adicione seu e-mail como
    usuário de teste.
 4. **Credenciais → Criar credenciais → ID do cliente OAuth → Aplicativo para computador**.
-5. Em *URIs de redirecionamento autorizados*, adicione:
-   `http://localhost:53682/callback`
-6. Guarde o **Client ID** e o **Client Secret**.
+5. Guarde o **Client ID** e o **Client Secret**. Nesse tipo de credencial o Google
+   aceita automaticamente o retorno local usado pelo agente.
+
+> **Importante:** o agente usa exatamente `http://127.0.0.1:53682/callback`.
+> Não use `localhost`. Caso reutilize uma credencial do tipo **Aplicativo da Web**,
+> inclua esse endereço completo em **URIs de redirecionamento autorizados**. A
+> opção recomendada para o agente é criar uma credencial nova do tipo
+> **Aplicativo para computador**.
 
 ### OneDrive (Microsoft)
 1. Acesse <https://entra.microsoft.com/> → **Registros de aplicativo → Novo registro**.
@@ -181,11 +186,12 @@ Iniciar em: C:\cloud-backup
 
 | Sintoma | Causa provável / Solução |
 |---|---|
+| `redirect_uri_mismatch` / solicitação inválida | Crie um Client ID do tipo **Aplicativo para computador**. Se usar **Aplicativo da Web**, cadastre exatamente `http://127.0.0.1:53682/callback`; `localhost` é diferente de `127.0.0.1`. Depois baixe novamente o pacote. |
 | `Google não retornou refresh_token` | Revogue o app em <https://myaccount.google.com/permissions> e refaça o `auth`. |
 | `AADSTS7000218` / erro no device code | Habilite *Allow public client flows* no registro do app. |
 | `Graph 403` | Falta a permissão `Files.ReadWrite` ou o consentimento não foi concedido. |
 | `Graph 401` após dias parado | Refresh token expirou (90 dias sem uso) — rode `auth` novamente. |
-| `EADDRINUSE` na porta 53682 | Altere `OAUTH_PORT` no `.env` e o URI de redirecionamento no Google. |
+| `EADDRINUSE` na porta 53682 | Altere `OAUTH_PORT` no `.env`. Se usar credencial Web, atualize também a URI autorizada no Google com a mesma porta. |
 | Timeout aguardando autorização | Use túnel SSH para expor o `localhost` do servidor. |
 | Nada é enviado | Modo incremental achou tudo igual — use `--no-incremental`. |
 

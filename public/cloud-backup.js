@@ -86,7 +86,13 @@ const MS_SCOPES = ["Files.ReadWrite", "offline_access"];
 
 /** Porta local usada no fluxo OAuth (loopback redirect). */
 const OAUTH_PORT = Number(process.env.OAUTH_PORT || 53682);
-const OAUTH_REDIRECT = `http://localhost:${OAUTH_PORT}/callback`;
+if (!Number.isInteger(OAUTH_PORT) || OAUTH_PORT < 1024 || OAUTH_PORT > 65535) {
+  throw new Error("OAUTH_PORT inválida. Use uma porta entre 1024 e 65535.");
+}
+// O Google compara o endereço literalmente. 127.0.0.1 é o loopback recomendado
+// para clientes OAuth de aplicativo para computador; não troque por localhost.
+const OAUTH_HOST = "127.0.0.1";
+const OAUTH_REDIRECT = `http://${OAUTH_HOST}:${OAUTH_PORT}/callback`;
 
 /** Uploads acima deste tamanho usam sessão resumível (chunked). */
 const LARGE_FILE_THRESHOLD = 4 * 1024 * 1024; // 4 MB
@@ -286,7 +292,7 @@ function waitForOAuthCode(expectedState) {
     });
 
     server.on("error", reject);
-    server.listen(OAUTH_PORT, "127.0.0.1", () => {
+    server.listen(OAUTH_PORT, OAUTH_HOST, () => {
       log("info", `Aguardando callback OAuth em ${OAUTH_REDIRECT}`);
     });
 
@@ -326,6 +332,9 @@ const GoogleDrive = {
   async authorize() {
     const clientId = requireEnv("GOOGLE_CLIENT_ID");
     const clientSecret = requireEnv("GOOGLE_CLIENT_SECRET");
+    if (!clientId.endsWith(".apps.googleusercontent.com")) {
+      throw new Error("GOOGLE_CLIENT_ID inválido. Informe o Client ID OAuth, terminado em .apps.googleusercontent.com.");
+    }
     const state = crypto.randomBytes(16).toString("hex");
     const authUrl =
       "https://accounts.google.com/o/oauth2/v2/auth?" +
@@ -340,7 +349,10 @@ const GoogleDrive = {
         state,
       }).toString();
 
-    console.log("\nAbra esta URL no navegador para autorizar o Google Drive:\n");
+    console.log(`\nEndereço de retorno OAuth: ${OAUTH_REDIRECT}`);
+    console.log("Use uma credencial Google do tipo 'Aplicativo para computador'.");
+    console.log("Se a credencial for do tipo 'Aplicativo da Web', cadastre exatamente esse endereço como URI autorizada.\n");
+    console.log("Abra esta URL no navegador para autorizar o Google Drive:\n");
     console.log(authUrl + "\n");
 
     const code = await waitForOAuthCode(state);
