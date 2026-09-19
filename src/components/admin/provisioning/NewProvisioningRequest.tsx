@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { UserPlus } from "lucide-react";
 
 interface Option {id: string;name: string;}
+interface ClientRow {id: string;full_name: string;}
 
 export interface NewProvisioningRequestProps {
   onCreated: () => void;
@@ -42,10 +43,19 @@ const NewProvisioningRequest = ({ onCreated }: NewProvisioningRequestProps) => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    (supabase.from("clients") as any).
-    select("id, name").
-    order("name").
-    then(({ data }: { data: Option[] | null }) => setClients(data || []));
+    supabase.from("clients").
+    select("id, full_name").
+    order("full_name").
+    then(({ data, error }) => {
+      if (error) {
+        toast.error(`Erro ao carregar empresas: ${error.message}`);
+        return;
+      }
+      setClients(((data as ClientRow[] | null) || []).map((client) => ({
+        id: client.id,
+        name: client.full_name
+      })));
+    });
   }, []);
 
   useEffect(() => {
