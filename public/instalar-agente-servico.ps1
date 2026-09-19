@@ -125,7 +125,7 @@ $COLETORES_BACKEND = @(
     "proxmox-collector.js",
     "ilo-collector.js",
     "vmware-collector.js",
-    "mikrotik-vps-collector.js"
+    "mikrotik-vps-collector.js",
     "ad-provisioning-agent.ps1"
 )
 $requerBackend = $COLETORES_BACKEND -contains $Script.ToLower()

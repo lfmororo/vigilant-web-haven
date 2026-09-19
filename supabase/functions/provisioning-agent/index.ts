@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
           log: typeof payload.log === "string" ? payload.log.slice(0, 20000) : null,
           finished_at: status === "running" ? null : new Date().toISOString(),
         })
-        .eq("id", requestId);
+        .eq("id", requestId)
         .eq("client_id", clientId);
 
       if (error) {
