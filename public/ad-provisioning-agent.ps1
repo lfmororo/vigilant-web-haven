@@ -28,9 +28,11 @@ function Write-Log {
 
 function Invoke-Backend {
     param([hashtable]$Corpo)
-    $headers = @{ "x-agent-key" = $Key; "Content-Type" = "application/json" }
+    $headers = @{ "x-agent-key" = $Key }
     $json = $Corpo | ConvertTo-Json -Depth 8
-    return Invoke-RestMethod -Uri $Url -Method Post -Headers $headers -Body $json -TimeoutSec 60
+    $corpoUtf8 = [Text.Encoding]::UTF8.GetBytes($json)
+    return Invoke-RestMethod -Uri $Url -Method Post -Headers $headers -Body $corpoUtf8 `
+        -ContentType "application/json; charset=utf-8" -TimeoutSec 60
 }
 
 function Ensure-Modulo {
