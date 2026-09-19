@@ -13,7 +13,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.1.0"
+$AgentVersion = "1.1.1"
 
 function Write-Log {
     param([string]$Mensagem)
@@ -28,9 +28,11 @@ function Write-Log {
 
 function Invoke-Backend {
     param([hashtable]$Corpo)
-    $headers = @{ "x-agent-key" = $Key; "Content-Type" = "application/json" }
+    $headers = @{ "x-agent-key" = $Key }
     $json = $Corpo | ConvertTo-Json -Depth 8
-    return Invoke-RestMethod -Uri $Url -Method Post -Headers $headers -Body $json -TimeoutSec 60
+    $corpoUtf8 = [Text.Encoding]::UTF8.GetBytes($json)
+    return Invoke-RestMethod -Uri $Url -Method Post -Headers $headers -Body $corpoUtf8 `
+        -ContentType "application/json; charset=utf-8" -TimeoutSec 60
 }
 
 function Ensure-Modulo {
@@ -40,8 +42,36 @@ function Ensure-Modulo {
     Import-Module ActiveDirectory -ErrorAction Stop
 }
 
+function Get-ControladorDominio {
+    $dominio = Get-ADDomain -ErrorAction Stop
+    if ([string]::IsNullOrWhiteSpace($dominio.PDCEmulator)) {
+        throw "Nao foi possivel localizar o controlador principal do dominio."
+    }
+    return $dominio.PDCEmulator
+}
+
+function Wait-UsuarioAD {
+    param(
+        [Parameter(Mandatory = $true)][string]$Login,
+        [Parameter(Mandatory = $true)][string]$Servidor,
+        [int]$Tentativas = 10
+    )
+
+    for ($tentativa = 1; $tentativa -le $Tentativas; $tentativa++) {
+        $usuario = Get-ADUser -Identity $Login -Server $Servidor -ErrorAction SilentlyContinue
+        if ($usuario) { return $usuario }
+        if ($tentativa -lt $Tentativas) { Start-Sleep -Seconds 2 }
+    }
+
+    throw "O usuario '$Login' foi criado, mas ainda nao esta disponivel no controlador $Servidor."
+}
+
 function New-UsuarioAD {
-    param($Tarefa, [System.Collections.ArrayList]$Etapas)
+    param(
+        $Tarefa,
+        [System.Collections.ArrayList]$Etapas,
+        [Parameter(Mandatory = $true)][string]$Servidor
+    )
 
     $login = $Tarefa.username
     if ($login -notmatch '^[a-zA-Z0-9._-]{2,64}$') {
@@ -50,8 +80,9 @@ function New-UsuarioAD {
     $nome = $Tarefa.full_name
     $modelo = $Tarefa.template
 
-    $existente = Get-ADUser -Identity $login -ErrorAction SilentlyContinue
+    $existente = Get-ADUser -Identity $login -Server $Servidor -ErrorAction SilentlyContinue
     if ($existente) {
+        $usuario = $existente
         [void]$Etapas.Add(@{ etapa = "Usuario no AD"; status = "ok"; detalhe = "Ja existia" })
     }
     else {
@@ -72,7 +103,8 @@ function New-UsuarioAD {
         if ($Tarefa.phone) { $parametros["OfficePhone"] = $Tarefa.phone }
         if ($modelo -and $modelo.ad_ou) { $parametros["Path"] = $modelo.ad_ou }
 
-        New-ADUser @parametros
+        $usuarioCriado = New-ADUser @parametros -Server $Servidor -PassThru
+        $usuario = Wait-UsuarioAD -Login $usuarioCriado.SamAccountName -Servidor $Servidor
         [void]$Etapas.Add(@{ etapa = "Usuario no AD"; status = "ok"; detalhe = "Criado" })
     }
 
@@ -80,7 +112,7 @@ function New-UsuarioAD {
         foreach ($grupo in $modelo.ad_groups) {
             if ([string]::IsNullOrWhiteSpace($grupo)) { continue }
             try {
-                Add-ADGroupMember -Identity $grupo -Members $login -ErrorAction Stop
+                Add-ADGroupMember -Identity $grupo -Members $usuario.DistinguishedName -Server $Servidor -ErrorAction Stop
                 [void]$Etapas.Add(@{ etapa = "Grupo $grupo"; status = "ok"; detalhe = "Adicionado" })
             }
             catch {
@@ -88,10 +120,17 @@ function New-UsuarioAD {
             }
         }
     }
+
+    return $usuario
 }
 
 function New-PastasUsuario {
-    param($Tarefa, [System.Collections.ArrayList]$Etapas)
+    param(
+        $Tarefa,
+        [System.Collections.ArrayList]$Etapas,
+        $UsuarioAD,
+        [Parameter(Mandatory = $true)][string]$Servidor
+    )
 
     $modelo = $Tarefa.template
     if ($Tarefa.username -notmatch '^[a-zA-Z0-9._-]{2,64}$') {
@@ -112,7 +151,7 @@ function New-PastasUsuario {
     }
 
     try {
-        $dominio = (Get-ADDomain).NetBIOSName
+        $dominio = (Get-ADDomain -Server $Servidor).NetBIOSName
         $conta = "$dominio\$($Tarefa.username)"
         $acl = Get-Acl $raiz
         $regra = New-Object System.Security.AccessControl.FileSystemAccessRule(
@@ -127,7 +166,7 @@ function New-PastasUsuario {
 
     if ($modelo.home_drive) {
         try {
-            Set-ADUser -Identity $Tarefa.username -HomeDrive $modelo.home_drive -HomeDirectory $raiz
+            Set-ADUser -Identity $UsuarioAD.DistinguishedName -Server $Servidor -HomeDrive $modelo.home_drive -HomeDirectory $raiz
             [void]$Etapas.Add(@{ etapa = "Unidade de rede"; status = "ok"; detalhe = "$($modelo.home_drive) -> $raiz" })
         }
         catch {
@@ -150,8 +189,9 @@ while ($true) {
             $erro = ""
 
             try {
-                New-UsuarioAD -Tarefa $tarefa -Etapas $etapas
-                New-PastasUsuario -Tarefa $tarefa -Etapas $etapas
+                $servidorAD = Get-ControladorDominio
+                $usuarioAD = New-UsuarioAD -Tarefa $tarefa -Etapas $etapas -Servidor $servidorAD
+                New-PastasUsuario -Tarefa $tarefa -Etapas $etapas -UsuarioAD $usuarioAD -Servidor $servidorAD
             }
             catch {
                 $erro = $_.Exception.Message
