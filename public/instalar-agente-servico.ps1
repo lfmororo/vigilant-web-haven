@@ -240,12 +240,24 @@ function Instalar-ComNssm {
         Start-Sleep -Seconds 2
     }
 
-    # Registra primeiro apenas o executavel e grava os parametros separadamente.
-    # Isso evita que o NSSM duplique aspas em caminhos e argumentos extensos.
+    # Registra primeiro apenas o executavel. Os parametros sao gravados
+    # diretamente no Registro porque o PowerShell 5.1 pode remover as aspas
+    # internas ao repassar uma string ao NSSM. Sem elas, um caminho como
+    # "C:\Agente Usuarios\agente.ps1" chega ao powershell.exe como "C:\Agente".
     & $Nssm install $Nome $Executavel | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "O NSSM nao conseguiu registrar o servico (codigo $LASTEXITCODE)." }
-    & $Nssm set $Nome AppParameters $linha | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "O NSSM nao conseguiu configurar os argumentos (codigo $LASTEXITCODE)." }
+
+    $caminhoParametros = "HKLM:\SYSTEM\CurrentControlSet\Services\$Nome\Parameters"
+    if (-not (Test-Path $caminhoParametros)) {
+        New-Item -Path $caminhoParametros -Force | Out-Null
+    }
+    New-ItemProperty -Path $caminhoParametros -Name "AppParameters" -Value $linha `
+        -PropertyType ExpandString -Force | Out-Null
+
+    $parametrosGravados = (Get-ItemProperty -Path $caminhoParametros -Name "AppParameters").AppParameters
+    if ($parametrosGravados -ne $linha) {
+        throw "Os argumentos do servico nao foram gravados corretamente."
+    }
     & $Nssm set $Nome AppDirectory      $Pasta                                   | Out-Null
     & $Nssm set $Nome DisplayName       "Coletor - $Script"                      | Out-Null
     & $Nssm set $Nome Description       "Agente coletor executando em $Pasta"    | Out-Null
