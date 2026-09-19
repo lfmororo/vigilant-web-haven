@@ -120,6 +120,20 @@ export const AGENT_BUNDLES: Record<string, AgentBundleDefinition> = {
       "Use --vigiar para manter o agente monitorando a origem e copiando alterações imediatamente.",
     ],
   },
+  provisioning: {
+    id: "provisioning",
+    label: "Agente de Criação de Usuários no AD",
+    zipName: "agente-provisionamento-ad",
+    files: ["/ad-provisioning-agent.ps1"],
+    mainScript: "ad-provisioning-agent.ps1",
+    runtime: "powershell",
+    notes: [
+      "Instale este pacote somente no controlador de dominio da empresa selecionada.",
+      "O modulo ActiveDirectory (RSAT/AD DS) deve estar instalado.",
+      "A conta SYSTEM do servidor precisa ter permissao para criar usuarios, adicionar grupos e acessar as pastas de rede.",
+      "O agente processa somente os pedidos da empresa escolhida antes do download.",
+    ],
+  },
 };
 
 export interface BundleOptions {
@@ -133,6 +147,10 @@ export interface BundleOptions {
   extraFiles?: Record<string, string>;
   /** Sobrescreve o nome do ZIP. */
   zipName?: string;
+  /** Argumentos adicionais já gravados no instalador e no guia. */
+  arguments?: string;
+  /** Nome estável do serviço do Windows. */
+  serviceName?: string;
 }
 
 /** Baixa um arquivo público do próprio site e devolve o conteúdo bruto. */
@@ -148,6 +166,7 @@ function buildReadme(def: AgentBundleDefinition, opts: BundleOptions): string {
   const url = opts.url ?? "<URL_DO_BACKEND>";
   const key = opts.key ?? "<CHAVE_PUBLICA>";
   const interval = opts.interval ?? 300;
+  const extraArguments = opts.arguments ? ` ${opts.arguments}` : "";
   const main = def.mainScript ?? def.files[0].replace(/^\//, "");
   const isNode = def.runtime !== "powershell" && def.runtime !== "python";
 
@@ -173,7 +192,7 @@ function buildReadme(def: AgentBundleDefinition, opts: BundleOptions): string {
       ? `  node ${main} --url "${url}" --key "${key}" --intervalo ${interval}`
       : def.runtime === "python"
         ? `  python ${main} --url "${url}" --key "${key}" --intervalo ${interval}`
-        : `  powershell -ExecutionPolicy Bypass -File .\\${main} -Url "${url}" -Key "${key}"`,
+       : `  powershell -ExecutionPolicy Bypass -File .\\${main} -Url "${url}" -Key "${key}"${extraArguments}`,
     "",
   ];
 
@@ -184,7 +203,7 @@ function buildReadme(def: AgentBundleDefinition, opts: BundleOptions): string {
       "  2. Abra o PowerShell como Administrador nessa pasta",
       "  3. Execute: Unblock-File .\\instalar-agente-servico.ps1",
       "  4. Execute: .\\instalar.cmd  (ou o comando abaixo)",
-      `     .\\instalar-agente-servico.ps1 -Script ${main} -Url "${url}" -Key "${key}" -Intervalo ${interval}`,
+      `     .\\instalar-agente-servico.ps1 -Script ${main} -Nome "${opts.serviceName ?? `Agente_${def.id}`}" -Url "${url}" -Key "${key}" -Intervalo ${interval}${opts.arguments ? ` -Argumentos '${opts.arguments}'` : ""}`,
       "",
       "  Desinstalar: .\\instalar-agente-servico.ps1 -Desinstalar",
       "  Logs do servico: .\\logs\\",
@@ -205,11 +224,13 @@ function buildInstallerShortcut(def: AgentBundleDefinition, opts: BundleOptions)
   const url = opts.url ?? "";
   const key = opts.key ?? "";
   const interval = opts.interval ?? 300;
+  const serviceName = opts.serviceName ?? `Agente_${def.id}`;
+  const extraArguments = opts.arguments?.replace(/'/g, "''") ?? "";
   return [
     "@echo off",
     "REM Instala o agente como servico do Windows a partir desta pasta.",
     "cd /d \"%~dp0\"",
-    `powershell -NoProfile -ExecutionPolicy Bypass -Command "Unblock-File '.\\instalar-agente-servico.ps1'; & '.\\instalar-agente-servico.ps1' -Script '${main}' -Url '${url}' -Key '${key}' -Intervalo ${interval}"`,
+    `powershell -NoProfile -ExecutionPolicy Bypass -Command "Unblock-File '.\\instalar-agente-servico.ps1'; & '.\\instalar-agente-servico.ps1' -Script '${main}' -Nome '${serviceName}' -Url '${url}' -Key '${key}' -Intervalo ${interval} -Argumentos '${extraArguments}'"`,
     "pause",
     "",
   ].join("\r\n");

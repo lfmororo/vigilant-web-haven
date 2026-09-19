@@ -2,17 +2,18 @@
 # Executar em um controlador de dominio, com o modulo ActiveDirectory disponivel.
 #
 # Uso:
-#   .\ad-provisioning-agent.ps1 -Url "https://SEU-BACKEND/functions/v1/provisioning-agent" -Key "CHAVE" [-Intervalo 30]
+#   .\ad-provisioning-agent.ps1 -Url "https://SEU-BACKEND/functions/v1/provisioning-agent" -Key "CHAVE" -ClientId "UUID" [-Intervalo 30]
 
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Url,
     [Parameter(Mandatory = $true)][string]$Key,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-fA-F-]{36}$')][string]$ClientId,
     [int]$Intervalo = 30
 )
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.0.0"
+$AgentVersion = "1.1.0"
 
 function Write-Log {
     param([string]$Mensagem)
@@ -140,7 +141,7 @@ Write-Log "Agente de provisionamento v$AgentVersion iniciado. Consultando a cada
 
 while ($true) {
     try {
-        $resposta = Invoke-Backend @{ action = "claim"; host = $env:COMPUTERNAME; version = $AgentVersion }
+        $resposta = Invoke-Backend @{ action = "claim"; host = $env:COMPUTERNAME; version = $AgentVersion; client_id = $ClientId }
         foreach ($tarefa in @($resposta.tasks)) {
             if (-not $tarefa) { continue }
             Write-Log "Processando $($tarefa.username)"
@@ -165,6 +166,7 @@ while ($true) {
             Invoke-Backend @{
                 action     = "report"
                 request_id = $tarefa.id
+                client_id  = $ClientId
                 status     = $status
                 steps      = @($etapas)
                 log        = ($etapas | ForEach-Object { "$($_.etapa): $($_.status) - $($_.detalhe)" }) -join "`n"

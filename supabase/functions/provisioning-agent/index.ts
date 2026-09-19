@@ -25,6 +25,7 @@ const json = (body: unknown, status = 200) =>
 
 interface ReportPayload {
   request_id?: string;
+  client_id?: string;
   status?: string;
   steps?: unknown;
   log?: string;
@@ -59,11 +60,16 @@ Deno.serve(async (req) => {
     }
 
     const agentHost = String((body as Record<string, unknown>).host || "").trim() || null;
+    const clientId = String((body as Record<string, unknown>).client_id || "").trim();
+    if (!/^[0-9a-fA-F-]{36}$/.test(clientId)) {
+      return json({ error: "Empresa do agente ausente ou inválida" }, 400);
+    }
 
     if (action === "claim") {
       const { data: pending, error } = await supabase
         .from("provisioning_requests")
         .select("*")
+        .eq("client_id", clientId)
         .eq("status", "pending")
         .order("created_at", { ascending: true })
         .limit(5);
@@ -156,6 +162,7 @@ Deno.serve(async (req) => {
           finished_at: status === "running" ? null : new Date().toISOString(),
         })
         .eq("id", requestId);
+        .eq("client_id", clientId);
 
       if (error) {
         console.error("report update error:", error);

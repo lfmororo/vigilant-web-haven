@@ -7,7 +7,7 @@
     O script detecta automaticamente o coletor presente na pasta atual
     (proxmox-collector.js, ilo-collector.js, vmware-collector.js,
     dvr-vps-collector.js, mikrotik-vps-collector.js, local-backup.js,
-    cloud-backup.js ou windows-server-collector.ps1) ou aceita o nome via -Script.
+    cloud-backup.js, ad-provisioning-agent.ps1 ou windows-server-collector.ps1) ou aceita o nome via -Script.
 
     Estratégia de instalação (nesta ordem):
       1. NSSM (Non-Sucking Service Manager) - baixado automaticamente se ausente.
@@ -89,6 +89,7 @@ $CANDIDATOS = @(
     "mikrotik-vps-collector.js",
     "local-backup.js",
     "cloud-backup.js",
+    "ad-provisioning-agent.ps1",
     "windows-server-collector.ps1",
     "windows-server-agent.ps1"
 )
@@ -125,6 +126,7 @@ $COLETORES_BACKEND = @(
     "ilo-collector.js",
     "vmware-collector.js",
     "mikrotik-vps-collector.js"
+    "ad-provisioning-agent.ps1"
 )
 $requerBackend = $COLETORES_BACKEND -contains $Script.ToLower()
 
@@ -186,8 +188,14 @@ if ($ehNode) {
 } else {
     $Executavel = (Get-Command powershell.exe).Source
     $linha = "-NoProfile -ExecutionPolicy Bypass -File `"$CaminhoScript`""
-    if ($Url)        { $linha += " -SupabaseUrl `"$Url`"" }
-    if ($Key)        { $linha += " -SupabaseKey `"$Key`"" }
+    if ($Script.ToLower() -eq "ad-provisioning-agent.ps1") {
+        if ($Url) { $linha += " -Url `"$Url`"" }
+        if ($Key) { $linha += " -Key `"$Key`"" }
+        if ($Intervalo) { $linha += " -Intervalo $Intervalo" }
+    } else {
+        if ($Url) { $linha += " -SupabaseUrl `"$Url`"" }
+        if ($Key) { $linha += " -SupabaseKey `"$Key`"" }
+    }
     if ($Argumentos) { $linha += " $Argumentos" }
     Write-Ok "Runtime: PowerShell"
 }
