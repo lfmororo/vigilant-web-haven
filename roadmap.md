@@ -7,6 +7,7 @@
 - [x] Corrigir carregamento das empresas no provisionamento
 - [x] Gerar agente AD pré-configurado e vinculado à empresa
 - [x] Incluir LEIA-ME e instalador como serviço no pacote do agente AD
+- [x] Bloquear agentes AD antigos e eliminar falhas de localização após criar o usuário
 - [ ] Aplicar proteção adicional da senha inicial no banco — aguardando o Lovable Cloud concluir a inicialização
 - [ ] Integrar criação e grupos de e-mail Locaweb — aguardando confirmação de API/credenciais disponíveis na conta
 
