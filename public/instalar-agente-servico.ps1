@@ -232,6 +232,40 @@ function Obter-Nssm {
 
 function Instalar-ComNssm {
     Write-Passo "Instalando o serviço via NSSM"
+
+    # Versoes antigas do pacote podiam deixar uma tarefa agendada ativa ao
+    # migrar para NSSM. Dois agentes concorrentes fazem o antigo consumir o
+    # pedido antes do agente atualizado. Remova o fallback antes de instalar.
+    if (Get-ScheduledTask -TaskName $Nome -ErrorAction SilentlyContinue) {
+        Stop-ScheduledTask -TaskName $Nome -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -TaskName $Nome -Confirm:$false
+        Write-Aviso "Tarefa agendada anterior removida."
+    }
+
+    if ($Script.ToLower() -eq "ad-provisioning-agent.ps1") {
+        $nomesLegados = @("Agente_provisioning", "Agente_adprovisioningagent")
+        foreach ($nomeLegado in $nomesLegados) {
+            if ($nomeLegado -eq $Nome) { continue }
+            $servicoLegado = Get-Service -Name $nomeLegado -ErrorAction SilentlyContinue
+            if ($servicoLegado) {
+                if ($servicoLegado.Status -ne "Stopped") {
+                    Stop-Service -Name $nomeLegado -Force -ErrorAction SilentlyContinue
+                }
+                if (Test-Path $Nssm) {
+                    & $Nssm remove $nomeLegado confirm | Out-Null
+                } else {
+                    sc.exe delete $nomeLegado | Out-Null
+                }
+                Write-Aviso "Servico antigo '$nomeLegado' removido."
+            }
+            if (Get-ScheduledTask -TaskName $nomeLegado -ErrorAction SilentlyContinue) {
+                Stop-ScheduledTask -TaskName $nomeLegado -ErrorAction SilentlyContinue
+                Unregister-ScheduledTask -TaskName $nomeLegado -Confirm:$false
+                Write-Aviso "Tarefa antiga '$nomeLegado' removida."
+            }
+        }
+    }
+
     $svc = Get-Service -Name $Nome -ErrorAction SilentlyContinue
     if ($svc) {
         Write-Aviso "Serviço já existe - recriando."

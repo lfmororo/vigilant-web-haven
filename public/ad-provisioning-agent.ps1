@@ -13,7 +13,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.1.1"
+$AgentVersion = "1.2.0"
 
 function Write-Log {
     param([string]$Mensagem)
@@ -50,6 +50,24 @@ function Get-ControladorDominio {
     return $dominio.PDCEmulator
 }
 
+function Find-UsuarioAD {
+    param(
+        [Parameter(Mandatory = $true)][string]$Login,
+        [Parameter(Mandatory = $true)][string]$Servidor
+    )
+
+    # Get-ADUser -Identity pode resolver o nome em outro controlador e gerar
+    # "objeto com identidade nao localizado" logo apos a criacao. A consulta
+    # por filtro e feita explicitamente no mesmo DC usado pelo New-ADUser.
+    $loginEscapado = $Login.Replace("'", "''")
+    $usuarios = @(Get-ADUser -Filter "SamAccountName -eq '$loginEscapado'" -Server $Servidor `
+        -Properties DistinguishedName, SID -ErrorAction Stop)
+    if ($usuarios.Count -gt 1) {
+        throw "Mais de um usuario foi localizado para o login '$Login' no controlador $Servidor."
+    }
+    return $usuarios | Select-Object -First 1
+}
+
 function Wait-UsuarioAD {
     param(
         [Parameter(Mandatory = $true)][string]$Login,
@@ -58,7 +76,7 @@ function Wait-UsuarioAD {
     )
 
     for ($tentativa = 1; $tentativa -le $Tentativas; $tentativa++) {
-        $usuario = Get-ADUser -Identity $Login -Server $Servidor -ErrorAction SilentlyContinue
+        $usuario = Find-UsuarioAD -Login $Login -Servidor $Servidor
         if ($usuario) { return $usuario }
         if ($tentativa -lt $Tentativas) { Start-Sleep -Seconds 2 }
     }
@@ -80,7 +98,7 @@ function New-UsuarioAD {
     $nome = $Tarefa.full_name
     $modelo = $Tarefa.template
 
-    $existente = Get-ADUser -Identity $login -Server $Servidor -ErrorAction SilentlyContinue
+    $existente = Find-UsuarioAD -Login $login -Servidor $Servidor
     if ($existente) {
         $usuario = $existente
         [void]$Etapas.Add(@{ etapa = "Usuario no AD"; status = "ok"; detalhe = "Ja existia" })
@@ -103,8 +121,8 @@ function New-UsuarioAD {
         if ($Tarefa.phone) { $parametros["OfficePhone"] = $Tarefa.phone }
         if ($modelo -and $modelo.ad_ou) { $parametros["Path"] = $modelo.ad_ou }
 
-        $usuarioCriado = New-ADUser @parametros -Server $Servidor -PassThru
-        $usuario = Wait-UsuarioAD -Login $usuarioCriado.SamAccountName -Servidor $Servidor
+        New-ADUser @parametros -Server $Servidor
+        $usuario = Wait-UsuarioAD -Login $login -Servidor $Servidor
         [void]$Etapas.Add(@{ etapa = "Usuario no AD"; status = "ok"; detalhe = "Criado" })
     }
 
@@ -151,11 +169,12 @@ function New-PastasUsuario {
     }
 
     try {
-        $dominio = (Get-ADDomain -Server $Servidor).NetBIOSName
-        $conta = "$dominio\$($Tarefa.username)"
+        if (-not $UsuarioAD.SID) {
+            throw "O Active Directory nao retornou o SID do usuario $($Tarefa.username)."
+        }
         $acl = Get-Acl $raiz
         $regra = New-Object System.Security.AccessControl.FileSystemAccessRule(
-            $conta, "Modify", "ContainerInherit,ObjectInherit", "None", "Allow")
+            $UsuarioAD.SID, "Modify", "ContainerInherit,ObjectInherit", "None", "Allow")
         $acl.AddAccessRule($regra)
         Set-Acl -Path $raiz -AclObject $acl
         [void]$Etapas.Add(@{ etapa = "Pastas"; status = "ok"; detalhe = $raiz })
