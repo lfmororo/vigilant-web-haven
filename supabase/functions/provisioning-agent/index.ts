@@ -23,6 +23,19 @@ const json = (body: unknown, status = 200) =>
     headers: { ...responseHeaders, "Content-Type": "application/json" },
   });
 
+const MINIMUM_AGENT_VERSION = "1.2.0";
+
+const compareVersions = (current: string, minimum: string): number => {
+  const currentParts = current.split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const minimumParts = minimum.split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const length = Math.max(currentParts.length, minimumParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const difference = (currentParts[index] ?? 0) - (minimumParts[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
+};
+
 interface ReportPayload {
   request_id?: string;
   client_id?: string;
@@ -66,6 +79,20 @@ Deno.serve(async (req) => {
     }
 
     if (action === "claim") {
+      const agentVersion = String((body as Record<string, unknown>).version || "0.0.0").trim();
+      if (compareVersions(agentVersion, MINIMUM_AGENT_VERSION) < 0) {
+        console.warn(
+          `provisioning-agent: versão ${agentVersion || "desconhecida"} bloqueada em ${agentHost ?? "host desconhecido"}`,
+        );
+        return json({
+          success: false,
+          tasks: [],
+          error: `Agente desatualizado. Instale a versão ${MINIMUM_AGENT_VERSION} ou superior.`,
+          upgrade_required: true,
+          minimum_version: MINIMUM_AGENT_VERSION,
+        }, 409);
+      }
+
       const { data: pending, error } = await supabase
         .from("provisioning_requests")
         .select("*")

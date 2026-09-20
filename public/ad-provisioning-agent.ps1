@@ -59,8 +59,9 @@ function Find-UsuarioAD {
     # Get-ADUser -Identity pode resolver o nome em outro controlador e gerar
     # "objeto com identidade nao localizado" logo apos a criacao. A consulta
     # por filtro e feita explicitamente no mesmo DC usado pelo New-ADUser.
-    $usuarios = @(Get-ADUser -Filter "SamAccountName -eq '$Login'" -Server $Servidor `
-        -Properties DistinguishedName -ErrorAction Stop)
+    $loginEscapado = $Login.Replace("'", "''")
+    $usuarios = @(Get-ADUser -Filter "SamAccountName -eq '$loginEscapado'" -Server $Servidor `
+        -Properties DistinguishedName, SID -ErrorAction Stop)
     if ($usuarios.Count -gt 1) {
         throw "Mais de um usuario foi localizado para o login '$Login' no controlador $Servidor."
     }
@@ -168,11 +169,12 @@ function New-PastasUsuario {
     }
 
     try {
-        $dominio = (Get-ADDomain -Server $Servidor).NetBIOSName
-        $conta = "$dominio\$($Tarefa.username)"
+        if (-not $UsuarioAD.SID) {
+            throw "O Active Directory nao retornou o SID do usuario $($Tarefa.username)."
+        }
         $acl = Get-Acl $raiz
         $regra = New-Object System.Security.AccessControl.FileSystemAccessRule(
-            $conta, "Modify", "ContainerInherit,ObjectInherit", "None", "Allow")
+            $UsuarioAD.SID, "Modify", "ContainerInherit,ObjectInherit", "None", "Allow")
         $acl.AddAccessRule($regra)
         Set-Acl -Path $raiz -AclObject $acl
         [void]$Etapas.Add(@{ etapa = "Pastas"; status = "ok"; detalhe = $raiz })
