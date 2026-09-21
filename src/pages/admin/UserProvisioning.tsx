@@ -6,6 +6,7 @@ import NewProvisioningRequest from "@/components/admin/provisioning/NewProvision
 import ProvisioningRequestsList from "@/components/admin/provisioning/ProvisioningRequestsList";
 import ProvisioningTemplates from "@/components/admin/provisioning/ProvisioningTemplates";
 import ProvisioningAgentCard from "@/components/admin/provisioning/ProvisioningAgentCard";
+import CompletedADUsers from "@/components/admin/provisioning/CompletedADUsers";
 
 const UserProvisioning = () => {
   const [refreshToken, setRefreshToken] = useState(0);
@@ -27,12 +28,16 @@ const UserProvisioning = () => {
         <Tabs defaultValue="requests" className="space-y-6">
           <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="requests">Novo e acompanhamento</TabsTrigger>
+            <TabsTrigger value="users">Usuários no AD</TabsTrigger>
             <TabsTrigger value="templates">Modelos por setor</TabsTrigger>
             <TabsTrigger value="agent">Agente do servidor</TabsTrigger>
           </TabsList>
           <TabsContent value="requests" className="space-y-6">
             <NewProvisioningRequest onCreated={() => setRefreshToken((v) => v + 1)} />
             <ProvisioningRequestsList refreshToken={refreshToken} />
+          </TabsContent>
+          <TabsContent value="users">
+            <CompletedADUsers refreshToken={refreshToken} />
           </TabsContent>
           <TabsContent value="templates">
             <ProvisioningTemplates />

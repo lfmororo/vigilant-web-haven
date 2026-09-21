@@ -13,7 +13,7 @@ export const AGENT_VERSIONS: Record<string, { label: string; version: string }> 
   mikrotik: { label: "Coletor MikroTik/SNMP", version: "1.1.0" },
   "backup-nuvem": { label: "Agente de Backup em Nuvem", version: "1.1.0" },
   "backup-local": { label: "Agente de Backup Local/Rede", version: "1.1.0" },
-  provisioning: { label: "Agente de Criação de Usuários no AD", version: "1.2.0" },
+  provisioning: { label: "Agente de Criação de Usuários no AD", version: "1.3.0" },
 };
 
 /** true quando `atual` é anterior a `esperada` (ou desconhecida). */
