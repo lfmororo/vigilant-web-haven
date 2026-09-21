@@ -1670,6 +1670,9 @@ export type Database = {
           steps: Json
           updated_at: string
           username: string
+          whatsapp_notification_error: string | null
+          whatsapp_notification_status: string
+          whatsapp_notified_at: string | null
         }
         Insert: {
           agent_key?: string | null
@@ -1691,6 +1694,9 @@ export type Database = {
           steps?: Json
           updated_at?: string
           username: string
+          whatsapp_notification_error?: string | null
+          whatsapp_notification_status?: string
+          whatsapp_notified_at?: string | null
         }
         Update: {
           agent_key?: string | null
@@ -1712,6 +1718,9 @@ export type Database = {
           steps?: Json
           updated_at?: string
           username?: string
+          whatsapp_notification_error?: string | null
+          whatsapp_notification_status?: string
+          whatsapp_notified_at?: string | null
         }
         Relationships: [
           {

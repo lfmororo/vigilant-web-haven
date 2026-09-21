@@ -10,6 +10,7 @@
  */
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { getEvolutionConfig, sendText } from "../_shared/whatsapp.ts";
 
 const responseHeaders = {
   ...corsHeaders,
@@ -23,7 +24,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...responseHeaders, "Content-Type": "application/json" },
   });
 
-const MINIMUM_AGENT_VERSION = "1.2.0";
+const MINIMUM_AGENT_VERSION = "1.3.0";
 
 const compareVersions = (current: string, minimum: string): number => {
   const currentParts = current.split(".").map((part) => Number.parseInt(part, 10) || 0);
@@ -42,7 +43,90 @@ interface ReportPayload {
   status?: string;
   steps?: unknown;
   log?: string;
+  temporary_password?: string;
 }
+
+const notifyProvisioningCompleted = async (
+  supabase: ReturnType<typeof createClient>,
+  requestId: string,
+  temporaryPassword: string,
+): Promise<void> => {
+  const { data: claimed } = await supabase
+    .from("provisioning_requests")
+    .update({ whatsapp_notification_status: "sending", whatsapp_notification_error: null })
+    .eq("id", requestId)
+    .in("whatsapp_notification_status", ["pending", "failed"])
+    .select("id, full_name, username, email, clients(full_name, whatsapp_group_id)")
+    .maybeSingle();
+
+  if (!claimed) return;
+
+  try {
+    const { data: settingsRows } = await supabase.from("system_settings").select("key, value");
+    const settings: Record<string, string> = {};
+    settingsRows?.forEach((row: { key: string; value: string | null }) => {
+      settings[row.key] = row.value || "";
+    });
+    const config = await getEvolutionConfig(settings);
+    if (!config.enabled || !config.baseUrl || !config.apiKey) {
+      await supabase.from("provisioning_requests").update({
+        whatsapp_notification_status: "skipped",
+        whatsapp_notification_error: "WhatsApp desativado ou não configurado.",
+      }).eq("id", requestId);
+      return;
+    }
+
+    const { data: adminRoles } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
+    const adminIds = (adminRoles ?? []).map((role: { user_id: string }) => role.user_id);
+    const { data: adminProfiles } = adminIds.length
+      ? await supabase.from("profiles").select("phone").in("id", adminIds).eq("is_active", true)
+      : { data: [] };
+
+    const client = Array.isArray(claimed.clients) ? claimed.clients[0] : claimed.clients;
+    const recipients = new Set<string>();
+    adminProfiles?.forEach((profile: { phone: string | null }) => {
+      if (profile.phone) recipients.add(profile.phone);
+    });
+    if (client?.whatsapp_group_id) recipients.add(client.whatsapp_group_id);
+
+    const message = [
+      "✅ *Usuário criado no Active Directory*", "",
+      `🏢 *Empresa:* ${client?.full_name || "Não informada"}`,
+      `👤 *Nome:* ${claimed.full_name}`,
+      `🔐 *Usuário:* ${claimed.username}`,
+      claimed.email ? `✉️ *E-mail:* ${claimed.email}` : "",
+      `🔑 *Senha provisória:* ${temporaryPassword}`, "",
+      "⚠️ A troca da senha será exigida no primeiro acesso.",
+    ].filter(Boolean).join("\n");
+
+    let sent = 0;
+    const failures: string[] = [];
+    for (const recipient of recipients) {
+      try {
+        if (await sendText(config, recipient, message)) sent += 1;
+        else failures.push(recipient);
+      } catch (error: unknown) {
+        failures.push(recipient);
+        console.error("provisioning-agent: falha ao notificar destinatário", error);
+      }
+    }
+
+    await supabase.from("provisioning_requests").update({
+      whatsapp_notification_status: sent > 0 ? "sent" : "failed",
+      whatsapp_notified_at: sent > 0 ? new Date().toISOString() : null,
+      whatsapp_notification_error: failures.length > 0
+        ? `Falha em ${failures.length} de ${recipients.size} destinatário(s).`
+        : null,
+    }).eq("id", requestId);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Falha desconhecida";
+    console.error("provisioning-agent: erro na notificação de conclusão", error);
+    await supabase.from("provisioning_requests").update({
+      whatsapp_notification_status: "failed",
+      whatsapp_notification_error: message.slice(0, 500),
+    }).eq("id", requestId);
+  }
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: responseHeaders });
@@ -179,6 +263,12 @@ Deno.serve(async (req) => {
       const status = allowed.includes(String(payload.status))
         ? String(payload.status)
         : "error";
+      const temporaryPassword = typeof payload.temporary_password === "string"
+        ? payload.temporary_password
+        : "";
+      if (temporaryPassword && (temporaryPassword.length < 6 || temporaryPassword.length > 128)) {
+        return json({ error: "Senha provisória inválida" }, 400);
+      }
 
       const { error } = await supabase
         .from("provisioning_requests")
@@ -194,6 +284,10 @@ Deno.serve(async (req) => {
       if (error) {
         console.error("report update error:", error);
         return json({ error: error.message }, 500);
+      }
+
+      if (status === "done" && temporaryPassword) {
+        await notifyProvisioningCompleted(supabase, requestId, temporaryPassword);
       }
 
       return json({ success: true });

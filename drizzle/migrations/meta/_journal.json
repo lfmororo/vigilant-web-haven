@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789953990372,
+      "tag": "0000_track_provisioning_whatsapp_notifications",
+      "breakpoints": true
+    }
+  ]
+}

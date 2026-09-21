@@ -13,7 +13,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.2.0"
+$AgentVersion = "1.3.0"
 
 function Write-Log {
     param([string]$Mensagem)
@@ -229,7 +229,10 @@ while ($true) {
                 status     = $status
                 steps      = @($etapas)
                 log        = ($etapas | ForEach-Object { "$($_.etapa): $($_.status) - $($_.detalhe)" }) -join "`n"
+                temporary_password = $(if ($status -eq "done") { $tarefa.password } else { $null })
             } | Out-Null
+
+            $tarefa.password = $null
 
             Write-Log "Concluido $($tarefa.username) => $status"
         }
