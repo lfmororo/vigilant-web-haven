@@ -13,7 +13,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.3.0"
+$AgentVersion = "1.4.0"
 
 function Write-Log {
     param([string]$Mensagem)
@@ -194,6 +194,23 @@ function New-PastasUsuario {
     }
 }
 
+function Set-SenhaUsuarioAD {
+    param(
+        $Tarefa,
+        [System.Collections.ArrayList]$Etapas,
+        [Parameter(Mandatory = $true)][string]$Servidor
+    )
+
+    if (-not $Tarefa.password) { throw "Nova senha nao recebida para $($Tarefa.username)." }
+    $usuario = Find-UsuarioAD -Login $Tarefa.username -Servidor $Servidor
+    if (-not $usuario) { throw "Usuario '$($Tarefa.username)' nao localizado no Active Directory." }
+
+    $senha = ConvertTo-SecureString $Tarefa.password -AsPlainText -Force
+    Set-ADAccountPassword -Identity $usuario.DistinguishedName -Server $Servidor -Reset -NewPassword $senha
+    Set-ADUser -Identity $usuario.DistinguishedName -Server $Servidor -ChangePasswordAtLogon $true
+    [void]$Etapas.Add(@{ etapa = "Senha do usuario"; status = "ok"; detalhe = "Senha provisoria alterada" })
+}
+
 Ensure-Modulo
 Write-Log "Agente de provisionamento v$AgentVersion iniciado. Consultando a cada $Intervalo s."
 
@@ -209,8 +226,13 @@ while ($true) {
 
             try {
                 $servidorAD = Get-ControladorDominio
-                $usuarioAD = New-UsuarioAD -Tarefa $tarefa -Etapas $etapas -Servidor $servidorAD
-                New-PastasUsuario -Tarefa $tarefa -Etapas $etapas -UsuarioAD $usuarioAD -Servidor $servidorAD
+                if ($tarefa.operation -eq "reset_password") {
+                    Set-SenhaUsuarioAD -Tarefa $tarefa -Etapas $etapas -Servidor $servidorAD
+                }
+                else {
+                    $usuarioAD = New-UsuarioAD -Tarefa $tarefa -Etapas $etapas -Servidor $servidorAD
+                    New-PastasUsuario -Tarefa $tarefa -Etapas $etapas -UsuarioAD $usuarioAD -Servidor $servidorAD
+                }
             }
             catch {
                 $erro = $_.Exception.Message

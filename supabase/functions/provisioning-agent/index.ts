@@ -24,7 +24,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...responseHeaders, "Content-Type": "application/json" },
   });
 
-const MINIMUM_AGENT_VERSION = "1.3.0";
+const MINIMUM_AGENT_VERSION = "1.4.0";
 
 const compareVersions = (current: string, minimum: string): number => {
   const currentParts = current.split(".").map((part) => Number.parseInt(part, 10) || 0);
@@ -56,7 +56,7 @@ const notifyProvisioningCompleted = async (
     .update({ whatsapp_notification_status: "sending", whatsapp_notification_error: null })
     .eq("id", requestId)
     .in("whatsapp_notification_status", ["pending", "failed"])
-    .select("id, full_name, username, email, clients(full_name, whatsapp_group_id)")
+    .select("id, client_id, full_name, username, email, operation, notify_on_completion")
     .maybeSingle();
 
   if (!claimed) return;
@@ -76,21 +76,38 @@ const notifyProvisioningCompleted = async (
       return;
     }
 
+    if (!claimed.notify_on_completion) {
+      await supabase.from("provisioning_requests").update({
+        whatsapp_notification_status: "skipped",
+        whatsapp_notification_error: null,
+      }).eq("id", requestId);
+      return;
+    }
+
+    const { data: client, error: clientError } = await supabase
+      .from("clients")
+      .select("full_name, whatsapp_group_id")
+      .eq("id", claimed.client_id)
+      .maybeSingle();
+    if (clientError) throw clientError;
+
     const { data: adminRoles } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
     const adminIds = (adminRoles ?? []).map((role: { user_id: string }) => role.user_id);
     const { data: adminProfiles } = adminIds.length
       ? await supabase.from("profiles").select("phone").in("id", adminIds).eq("is_active", true)
       : { data: [] };
 
-    const client = Array.isArray(claimed.clients) ? claimed.clients[0] : claimed.clients;
-    const recipients = new Set<string>();
+    const recipients = new Map<string, "admin" | "group">();
     adminProfiles?.forEach((profile: { phone: string | null }) => {
-      if (profile.phone) recipients.add(profile.phone);
+      if (profile.phone) recipients.set(profile.phone, "admin");
     });
-    if (client?.whatsapp_group_id) recipients.add(client.whatsapp_group_id);
+    const groupId = client?.whatsapp_group_id?.trim();
+    if (groupId) recipients.set(groupId, "group");
 
     const message = [
-      "✅ *Usuário criado no Active Directory*", "",
+      claimed.operation === "reset_password"
+        ? "✅ *Senha do usuário alterada no Active Directory*"
+        : "✅ *Usuário criado no Active Directory*", "",
       `🏢 *Empresa:* ${client?.full_name || "Não informada"}`,
       `👤 *Nome:* ${claimed.full_name}`,
       `🔐 *Usuário:* ${claimed.username}`,
@@ -101,21 +118,26 @@ const notifyProvisioningCompleted = async (
 
     let sent = 0;
     const failures: string[] = [];
-    for (const recipient of recipients) {
+    let groupSent = false;
+    for (const [recipient, kind] of recipients) {
       try {
-        if (await sendText(config, recipient, message)) sent += 1;
-        else failures.push(recipient);
+        if (await sendText(config, recipient, message)) {
+          sent += 1;
+          if (kind === "group") groupSent = true;
+        } else failures.push(kind === "group" ? "grupo da empresa" : "administrador");
       } catch (error: unknown) {
-        failures.push(recipient);
+        failures.push(kind === "group" ? "grupo da empresa" : "administrador");
         console.error("provisioning-agent: falha ao notificar destinatário", error);
       }
     }
 
     await supabase.from("provisioning_requests").update({
-      whatsapp_notification_status: sent > 0 ? "sent" : "failed",
-      whatsapp_notified_at: sent > 0 ? new Date().toISOString() : null,
-      whatsapp_notification_error: failures.length > 0
-        ? `Falha em ${failures.length} de ${recipients.size} destinatário(s).`
+      whatsapp_notification_status: sent > 0 && groupSent ? "sent" : "failed",
+      whatsapp_notified_at: sent > 0 && groupSent ? new Date().toISOString() : null,
+      whatsapp_notification_error: !groupId
+        ? "Grupo de WhatsApp não configurado para a empresa."
+        : failures.length > 0
+        ? `Falha ao enviar para: ${Array.from(new Set(failures)).join(", ")}.`
         : null,
     }).eq("id", requestId);
   } catch (error: unknown) {
@@ -239,6 +261,7 @@ Deno.serve(async (req) => {
           phone: request.phone,
           job_title: request.job_title,
           password: request.initial_password,
+          operation: request.operation || "create",
           template: template
             ? {
                 ad_ou: template.ad_ou,

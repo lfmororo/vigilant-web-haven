@@ -13,6 +13,7 @@ import {
 "@/components/ui/select";
 import { toast } from "sonner";
 import { UserPlus } from "lucide-react";
+import { generateTemporaryPassword } from "@/lib/generateTemporaryPassword";
 
 interface Option {id: string;name: string;}
 interface ClientRow {id: string;full_name: string;}
@@ -20,14 +21,6 @@ interface ClientRow {id: string;full_name: string;}
 export interface NewProvisioningRequestProps {
   onCreated: () => void;
 }
-
-const gerarSenha = () => {
-  const base = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  let saida = "";
-  const bytes = crypto.getRandomValues(new Uint32Array(10));
-  bytes.forEach((b) => (saida += base[b % base.length]));
-  return `${saida}@1`;
-};
 
 const NewProvisioningRequest = ({ onCreated }: NewProvisioningRequestProps) => {
   const [clients, setClients] = useState<Option[]>([]);
@@ -39,7 +32,7 @@ const NewProvisioningRequest = ({ onCreated }: NewProvisioningRequestProps) => {
   const [email, setEmail] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState(gerarSenha());
+  const [password, setPassword] = useState(generateTemporaryPassword());
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -94,7 +87,7 @@ const NewProvisioningRequest = ({ onCreated }: NewProvisioningRequestProps) => {
     }
     toast.success("Pedido criado. O agente do servidor vai executar em instantes.");
     setFullName("");setUsername("");setEmail("");setJobTitle("");setPhone("");
-    setPassword(gerarSenha());
+    setPassword(generateTemporaryPassword());
     onCreated();
   };
 
@@ -151,7 +144,7 @@ const NewProvisioningRequest = ({ onCreated }: NewProvisioningRequestProps) => {
           <Label>Senha inicial</Label>
           <div className="flex gap-2">
             <Input value={password} onChange={(e) => setPassword(e.target.value)} />
-            <Button type="button" variant="outline" onClick={() => setPassword(gerarSenha())}>
+            <Button type="button" variant="outline" onClick={() => setPassword(generateTemporaryPassword())}>
               Gerar
             </Button>
           </div>

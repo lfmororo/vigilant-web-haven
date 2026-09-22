@@ -98,6 +98,10 @@ export function toEvolutionNumber(raw: string): string {
   const value = String(raw || "").trim();
   if (value.includes("@")) return value; // grupo (@g.us) ou jid completo
 
+  // IDs de grupos copiados sem o sufixo do WhatsApp (ex.: 1203...-1234...).
+  // Remover o hífen transforma o grupo em telefone e faz a Evolution rejeitá-lo.
+  if (/^\d+-\d+$/.test(value)) return `${value}@g.us`;
+
   let digits = value.replace(/\D/g, "");
   // Remove zeros de discagem nacional (ex.: 085 9xxxx-xxxx)
   digits = digits.replace(/^0+/, "");
