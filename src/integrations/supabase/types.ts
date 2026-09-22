@@ -1664,8 +1664,11 @@ export type Database = {
           initial_password: string | null
           job_title: string | null
           log: string | null
+          notify_on_completion: boolean
+          operation: string
           phone: string | null
           sector_id: string | null
+          source_request_id: string | null
           status: string
           steps: Json
           updated_at: string
@@ -1688,8 +1691,11 @@ export type Database = {
           initial_password?: string | null
           job_title?: string | null
           log?: string | null
+          notify_on_completion?: boolean
+          operation?: string
           phone?: string | null
           sector_id?: string | null
+          source_request_id?: string | null
           status?: string
           steps?: Json
           updated_at?: string
@@ -1712,8 +1718,11 @@ export type Database = {
           initial_password?: string | null
           job_title?: string | null
           log?: string | null
+          notify_on_completion?: boolean
+          operation?: string
           phone?: string | null
           sector_id?: string | null
+          source_request_id?: string | null
           status?: string
           steps?: Json
           updated_at?: string
@@ -1735,6 +1744,13 @@ export type Database = {
             columns: ["sector_id"]
             isOneToOne: false
             referencedRelation: "client_sectors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provisioning_requests_source_request_id_fkey"
+            columns: ["source_request_id"]
+            isOneToOne: false
+            referencedRelation: "provisioning_requests"
             referencedColumns: ["id"]
           },
         ]
