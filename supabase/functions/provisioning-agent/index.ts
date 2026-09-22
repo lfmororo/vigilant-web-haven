@@ -118,7 +118,7 @@ const notifyProvisioningCompleted = async (
 
     let sent = 0;
     const failures: string[] = [];
-    let groupSent = !groupId;
+    let groupSent = false;
     for (const [recipient, kind] of recipients) {
       try {
         if (await sendText(config, recipient, message)) {

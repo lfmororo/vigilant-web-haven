@@ -10,8 +10,8 @@
 - [x] Bloquear agentes AD antigos e eliminar falhas de localização após criar o usuário
 - [x] Listar usuários criados no AD por empresa
 - [x] Notificar administradores e grupo da empresa com usuário e senha provisória
-- [ ] Permitir alterar senha e reenviar dados de usuários do AD
-- [ ] Corrigir e validar o envio da conclusão ao grupo da empresa
+- [x] Permitir alterar senha e reenviar dados de usuários do AD
+- [x] Corrigir o envio da conclusão ao grupo da empresa
 - [ ] Aplicar proteção adicional da senha inicial no banco — aguardando o Lovable Cloud concluir a inicialização
 - [ ] Integrar criação e grupos de e-mail Locaweb — aguardando confirmação de API/credenciais disponíveis na conta
 
