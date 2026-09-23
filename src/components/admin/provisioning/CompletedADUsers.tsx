@@ -47,7 +47,7 @@ const CompletedADUsers = ({ refreshToken }: CompletedADUsersProps) => {
     const load = async () => {
       const { data, error } = await supabase.from("provisioning_requests")
         .select("id, client_id, sector_id, full_name, username, email, phone, job_title, finished_at, whatsapp_notification_status, clients(full_name)")
-        .eq("status", "done").order("finished_at", { ascending: false });
+        .eq("status", "done").eq("operation", "create").order("finished_at", { ascending: false });
       if (error) toast.error(`Erro ao carregar usuários do AD: ${error.message}`);
       else setRows((data as unknown as CompletedUser[]) || []);
     };
