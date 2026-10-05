@@ -2360,6 +2360,141 @@ export type Database = {
           },
         ]
       }
+      sophos_alerts: {
+        Row: {
+          created_at: string
+          firewall_id: string
+          id: string
+          message: string
+          resolved: boolean
+          severity: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          firewall_id: string
+          id?: string
+          message: string
+          resolved?: boolean
+          severity: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          firewall_id?: string
+          id?: string
+          message?: string
+          resolved?: boolean
+          severity?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sophos_alerts_firewall_id_fkey"
+            columns: ["firewall_id"]
+            isOneToOne: false
+            referencedRelation: "sophos_firewalls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sophos_firewalls: {
+        Row: {
+          api_token: string
+          client_id: string
+          created_at: string
+          firmware_version: string | null
+          id: string
+          last_seen_at: string | null
+          model: string | null
+          name: string
+          serial_number: string | null
+          sophos_ip: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          api_token: string
+          client_id: string
+          created_at?: string
+          firmware_version?: string | null
+          id?: string
+          last_seen_at?: string | null
+          model?: string | null
+          name: string
+          serial_number?: string | null
+          sophos_ip?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          api_token?: string
+          client_id?: string
+          created_at?: string
+          firmware_version?: string | null
+          id?: string
+          last_seen_at?: string | null
+          model?: string | null
+          name?: string
+          serial_number?: string | null
+          sophos_ip?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sophos_firewalls_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sophos_telemetry_logs: {
+        Row: {
+          cpu_usage: number | null
+          created_at: string
+          disk_usage: number | null
+          firewall_id: string
+          id: string
+          interfaces: Json | null
+          memory_usage: number | null
+          raw_payload: Json | null
+          vpn_tunnels: Json | null
+        }
+        Insert: {
+          cpu_usage?: number | null
+          created_at?: string
+          disk_usage?: number | null
+          firewall_id: string
+          id?: string
+          interfaces?: Json | null
+          memory_usage?: number | null
+          raw_payload?: Json | null
+          vpn_tunnels?: Json | null
+        }
+        Update: {
+          cpu_usage?: number | null
+          created_at?: string
+          disk_usage?: number | null
+          firewall_id?: string
+          id?: string
+          interfaces?: Json | null
+          memory_usage?: number | null
+          raw_payload?: Json | null
+          vpn_tunnels?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sophos_telemetry_logs_firewall_id_fkey"
+            columns: ["firewall_id"]
+            isOneToOne: false
+            referencedRelation: "sophos_firewalls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       system_settings: {
         Row: {
           description: string | null
