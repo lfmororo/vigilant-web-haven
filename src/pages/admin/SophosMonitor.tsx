@@ -131,7 +131,7 @@ const SophosMonitor = () => {
         alertCounts[a.firewall_id] = (alertCounts[a.firewall_id] || 0) + 1;
       });
 
-      Object.entries(latestTelemetry).forEach(([fwId, tel: any]) => {
+      Object.entries(latestTelemetry).forEach(([fwId, tel]) => {
         const tunnels = tel.vpn_tunnels as Array<{ status: string }> | null;
         vpnOfflineCounts[fwId] = tunnels?.filter((t) => t.status === "disconnected").length || 0;
       });
