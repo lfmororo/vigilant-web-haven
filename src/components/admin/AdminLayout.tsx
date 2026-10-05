@@ -24,7 +24,8 @@ import {
   Video,
   Server,
   HardDriveDownload,
-  UserPlus } from
+  UserPlus,
+  Shield } from
 "lucide-react";
 import fmLogo from "@/assets/fm-techflow-logo.png";
 
@@ -42,6 +43,7 @@ const allNavItems = [
 { label: "Mikrotik", href: "/admin/mikrotik", icon: Router, roles: ["admin"] },
 { label: "DVR / CFTV", href: "/admin/dvr", icon: Video, roles: ["admin"] },
 { label: "Servidores", href: "/admin/servers", icon: Server, roles: ["admin"] },
+{ label: "Firewalls Sophos", href: "/admin/sophos", icon: Shield, roles: ["admin"] },
 { label: "Dashboard Suporte", href: "/admin/helpdesk", icon: Headphones, roles: ["admin", "technician"] },
 { label: "Chamados", href: "/admin/tickets", icon: TicketCheck, roles: ["admin", "technician"] },
 { label: "Ordens de Serviço", href: "/admin/service-orders", icon: FileText, roles: ["admin", "technician"] },
