@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Download, Printer, Stethoscope, Trash2 } from "lucide-react";
+import { Download, Globe, Loader2, Printer, Stethoscope, Trash2 } from "lucide-react";
 
 interface Finding { check: string; status: string; detail: string; solution: string }
+interface WebItem { check: string; cause: string | null; steps: string | null; sources: string[] }
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   error: { label: "Problema", cls: "bg-red-500/20 text-red-400 border-red-500/30" },
@@ -40,7 +41,23 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
   const qc = useQueryClient();
   const [clientId, setClientId] = useState("");
   const [filter, setFilter] = useState("all");
-  const [open, setOpen] = useState<any>(null);
+  const [open, setOpenRaw] = useState<any>(null);
+  const [webItems, setWebItems] = useState<WebItem[] | null>(null);
+  const [researching, setResearching] = useState(false);
+  const setOpen = (r: any) => { setOpenRaw(r); setWebItems(null); };
+
+  const research = async (id: string) => {
+    setResearching(true);
+    const { data, error } = await supabase.functions.invoke("ad-diagnostics-research", { body: { report_id: id } });
+    setResearching(false);
+    if (error || data?.error) {
+      let msg = data?.error || error?.message;
+      try { msg = JSON.parse(await (error as any).context.text()).error || msg; } catch { /* ignore */ }
+      toast({ title: "Erro na pesquisa", description: msg, variant: "destructive" });
+      return;
+    }
+    setWebItems(data.items || []);
+  };
 
   const { data: reports } = useQuery({
     queryKey: ["ad-diagnostics"],
@@ -136,8 +153,29 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
               </DialogHeader>
               <div className="flex gap-2 print:hidden">
                 <Button size="sm" variant="outline" onClick={() => window.print()}><Printer className="w-4 h-4 mr-1" /> Imprimir / PDF</Button>
+                <Button size="sm" onClick={() => research(open.id)} disabled={researching || (open.error_count + open.warning_count) === 0}>
+                  {researching ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Globe className="w-4 h-4 mr-1" />} Pesquisar soluções na internet
+                </Button>
                 <Button size="sm" variant="ghost" onClick={() => del.mutate(open.id)}><Trash2 className="w-4 h-4 mr-1" /> Excluir</Button>
               </div>
+              {webItems && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold flex items-center gap-2"><Globe className="w-4 h-4" /> Soluções encontradas na internet</h3>
+                  {webItems.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma solução encontrada.</p>}
+                  {webItems.map((w, i) => (
+                    <div key={i} className="rounded-lg border border-border p-3 text-sm space-y-1">
+                      <p className="font-medium">{w.check}</p>
+                      {w.cause && <p><b>Causa provável:</b> {w.cause}</p>}
+                      {w.steps && <p className="whitespace-pre-wrap"><b>Como resolver:</b> {w.steps}</p>}
+                      {w.sources?.length > 0 && (
+                        <ul className="list-disc pl-5 text-xs">
+                          {w.sources.map((s, j) => <li key={j}><a href={s} target="_blank" rel="noreferrer" className="text-primary underline break-all">{s}</a></li>)}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="text-left text-muted-foreground border-b border-border">
