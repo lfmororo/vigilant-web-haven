@@ -68,10 +68,12 @@ Deno.serve(async (req) => {
         "",
         "Abra Servidores > Diagnósticos para ver as soluções sugeridas.",
       ].filter(Boolean).join("\n");
-      // Envia para todos os administradores ao mesmo tempo; 1 nova tentativa por número.
-      await Promise.all([...phones].map(async (phone) => {
-        try { await sendText(cfg, phone, text); }
-        catch { try { await sendText(cfg, phone, text); } catch (e) { console.error("notify fail", phone.slice(-4), e); } }
+      // Envia para administradores e para o grupo da empresa ao mesmo tempo; 1 nova tentativa por destino.
+      const targets = [...phones];
+      if (groupId) targets.push(groupId.includes("@") ? groupId : `${groupId}@g.us`);
+      await Promise.all(targets.map(async (target) => {
+        try { await sendText(cfg, target, text); }
+        catch { try { await sendText(cfg, target, text); } catch (e) { console.error("notify fail", target.slice(-6), e); } }
       }));
     } catch (err) {
       console.error("diagnostics notify error:", err);
