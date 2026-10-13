@@ -32,7 +32,7 @@ const DiagnosticsHistoryTab = ({ clients }: { clients: { id: string; full_name: 
         .from("ad_diagnostic_reports").select("*, clients(full_name)")
         .order("created_at", { ascending: false }).limit(500);
       if (error) throw error;
-      return (data || []) as Row[];
+      return (data || []) as unknown as Row[];
     },
     refetchInterval: 60000,
   });
