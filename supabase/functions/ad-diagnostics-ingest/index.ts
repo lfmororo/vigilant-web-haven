@@ -34,7 +34,48 @@ Deno.serve(async (req) => {
   const clientId = UUID.test(String(body?.client_id || "")) ? String(body.client_id) : null;
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { error } = await supabase.from("ad_diagnostic_reports").insert({
+
+  // Problemas graves: o aviso sai IMEDIATAMENTE, em paralelo ao salvamento,
+  // e é enviado mesmo que o salvamento do relatório falhe.
+  const errors = findings.filter((f: any) => f.status === "error");
+  const notify = async () => {
+    if (errors.length === 0) return;
+    try {
+      const [cfg, clientRes, rolesRes] = await Promise.all([
+        getEvolutionConfig(),
+        clientId
+          ? supabase.from("clients").select("full_name").eq("id", clientId).maybeSingle()
+          : Promise.resolve({ data: null }),
+        supabase.from("user_roles").select("user_id").eq("role", "admin"),
+      ]);
+      const companyName = (clientRes as any)?.data?.full_name || "Sem empresa";
+      const adminIds = (rolesRes.data || []).map((r: any) => r.user_id);
+      if (!adminIds.length) return;
+      const { data: profiles } = await supabase.from("profiles").select("phone").in("id", adminIds);
+      const phones = new Set<string>(
+        (profiles || []).map((p: any) => String(p.phone || "").replace(/[\s\-()+]/g, "")).filter((p: string) => p.length >= 10),
+      );
+      const text = [
+        `🚨 *Diagnóstico com ${errors.length} problema(s) grave(s)*`,
+        `🖥️ ${hostname} (${scope === "server" ? "Servidor" : "Estação"}) — ${companyName}`,
+        `📅 ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`,
+        "",
+        ...errors.slice(0, 8).map((f: any) => `• *${f.check}*: ${f.detail}`),
+        errors.length > 8 ? `… e mais ${errors.length - 8} problema(s).` : "",
+        "",
+        "Abra Servidores > Diagnósticos para ver as soluções sugeridas.",
+      ].filter(Boolean).join("\n");
+      // Envia para todos os administradores ao mesmo tempo; 1 nova tentativa por número.
+      await Promise.all([...phones].map(async (phone) => {
+        try { await sendText(cfg, phone, text); }
+        catch { try { await sendText(cfg, phone, text); } catch (e) { console.error("notify fail", phone.slice(-4), e); } }
+      }));
+    } catch (err) {
+      console.error("diagnostics notify error:", err);
+    }
+  };
+
+  const save = supabase.from("ad_diagnostic_reports").insert({
     client_id: clientId,
     scope,
     hostname,
@@ -45,41 +86,8 @@ Deno.serve(async (req) => {
     fixed_count: count("fixed"),
     findings,
   });
-  if (error) return json(500, { error: error.message });
 
-  // Problemas graves (error): avisa os administradores por WhatsApp, como os alertas de CPU/memória.
-  const errors = findings.filter((f: any) => f.status === "error");
-  if (errors.length > 0) {
-    try {
-      let companyName = "Sem empresa";
-      if (clientId) {
-        const { data: client } = await supabase.from("clients").select("full_name").eq("id", clientId).maybeSingle();
-        if (client?.full_name) companyName = client.full_name;
-      }
-      const lines = [
-        `🚨 *Diagnóstico com ${errors.length} problema(s) grave(s)*`,
-        `🖥️ ${hostname} (${scope === "server" ? "Servidor" : "Estação"}) — ${companyName}`,
-        `📅 ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`,
-        "",
-        ...errors.slice(0, 8).map((f: any) => `• *${f.check}*: ${f.detail}`),
-        errors.length > 8 ? `… e mais ${errors.length - 8} problema(s).` : "",
-        "",
-        "Abra Servidores > Diagnósticos para ver as soluções sugeridas.",
-      ].filter(Boolean);
-
-      const cfg = await getEvolutionConfig();
-      const { data: adminRoles } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
-      if (adminRoles?.length) {
-        const { data: profiles } = await supabase
-          .from("profiles").select("phone").in("id", adminRoles.map((r: any) => r.user_id));
-        const phones = new Set<string>(
-          (profiles || []).map((p: any) => String(p.phone || "").replace(/[\s\-()+]/g, "")).filter((p: string) => p.length >= 10),
-        );
-        for (const phone of phones) await sendText(cfg, phone, lines.join("\n"));
-      }
-    } catch (err) {
-      console.error("diagnostics notify error:", err);
-    }
-  }
+  const [{ error }] = await Promise.all([save, notify()]);
+  if (error) return json(500, { error: error.message, alert_sent: errors.length > 0 });
   return json(200, { success: true });
 });
