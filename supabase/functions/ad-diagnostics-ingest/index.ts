@@ -49,12 +49,15 @@ Deno.serve(async (req) => {
         supabase.from("user_roles").select("user_id").eq("role", "admin"),
       ]);
       const companyName = (clientRes as any)?.data?.full_name || "Sem empresa";
+      const groupId = String((clientRes as any)?.data?.whatsapp_group_id || "").trim();
       const adminIds = (rolesRes.data || []).map((r: any) => r.user_id);
-      if (!adminIds.length) return;
-      const { data: profiles } = await supabase.from("profiles").select("phone").in("id", adminIds);
+      const { data: profiles } = adminIds.length
+        ? await supabase.from("profiles").select("phone").in("id", adminIds)
+        : { data: [] };
       const phones = new Set<string>(
         (profiles || []).map((p: any) => String(p.phone || "").replace(/[\s\-()+]/g, "")).filter((p: string) => p.length >= 10),
       );
+      if (!phones.size && !groupId) return;
       const text = [
         `🚨 *Diagnóstico com ${errors.length} problema(s) grave(s)*`,
         `🖥️ ${hostname} (${scope === "server" ? "Servidor" : "Estação"}) — ${companyName}`,
