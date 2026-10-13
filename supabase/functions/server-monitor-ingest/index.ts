@@ -497,7 +497,7 @@ Deno.serve(async (req) => {
 
       const { data: previousNode } = await supabase
         .from("proxmox_nodes")
-        .select("id, name, status")
+        .select("id, name, status, ram_usage_pct, swap_total_gb, swap_used_gb")
         .eq("id", node_id)
         .maybeSingle();
 
@@ -584,6 +584,42 @@ Deno.serve(async (req) => {
         if (pveBecameOffline) lines.push(`🔴 Nó inacessível: ${pveError || "sem resposta da API"}`);
         if (diskCritical) lines.push(`💾 Disco do nó em ${nodeUpdate.disk_usage_pct}% de uso.`);
         await notifyAdmins(supabase, lines.join("\n"));
+      }
+
+      // Memória e swap altos: avisa só ao entrar e ao sair do alerta.
+      const MEM_LIMIT = 90; // % de RAM
+      const SWAP_LIMIT = 50; // % de swap
+      const swapPct = (total: any, used: any) =>
+        typeof total === "number" && total > 0 && typeof used === "number" ? (used / total) * 100 : null;
+      const prevMem = typeof previousNode.ram_usage_pct === "number" ? previousNode.ram_usage_pct : null;
+      const curMem = typeof nodeUpdate.ram_usage_pct === "number" ? nodeUpdate.ram_usage_pct : null;
+      const prevSwap = swapPct(previousNode.swap_total_gb, previousNode.swap_used_gb);
+      const curSwap = swapPct(nodeUpdate.swap_total_gb, nodeUpdate.swap_used_gb);
+      const prevHigh = (prevMem ?? 0) >= MEM_LIMIT || (prevSwap ?? 0) >= SWAP_LIMIT;
+      const curHigh = (curMem ?? 0) >= MEM_LIMIT || (curSwap ?? 0) >= SWAP_LIMIT;
+      if (curMem !== null || curSwap !== null) {
+        const memTxt = curMem !== null ? `${curMem.toFixed(1)}%` : "—";
+        const swapTxt = curSwap !== null
+          ? `${curSwap.toFixed(1)}% (${Number(nodeUpdate.swap_used_gb).toFixed(1)} de ${Number(nodeUpdate.swap_total_gb).toFixed(1)} GB)`
+          : "—";
+        if (curHigh && !prevHigh) {
+          await notifyAdmins(supabase, [
+            `🧠 *Proxmox com uso alto de memória — ${previousNode.name}*`,
+            "",
+            `Memória RAM: *${memTxt}* (limite ${MEM_LIMIT}%)`,
+            `Swap: *${swapTxt}* (limite ${SWAP_LIMIT}%)`,
+            "",
+            "Verifique as VMs/containers que mais consomem memória.",
+            `_Detectado em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}_`,
+          ].join("\n"));
+        } else if (!curHigh && prevHigh) {
+          await notifyAdmins(supabase, [
+            `✅ *Memória normalizada — ${previousNode.name}*`,
+            "",
+            `Memória RAM: ${memTxt}`,
+            `Swap: ${swapTxt}`,
+          ].join("\n"));
+        }
       }
 
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
