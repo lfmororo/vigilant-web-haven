@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
       const [cfg, clientRes, rolesRes] = await Promise.all([
         getEvolutionConfig(),
         clientId
-          ? supabase.from("clients").select("full_name").eq("id", clientId).maybeSingle()
+          ? supabase.from("clients").select("full_name, whatsapp_group_id").eq("id", clientId).maybeSingle()
           : Promise.resolve({ data: null }),
         supabase.from("user_roles").select("user_id").eq("role", "admin"),
       ]);
