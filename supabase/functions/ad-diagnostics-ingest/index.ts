@@ -44,17 +44,20 @@ Deno.serve(async (req) => {
       const [cfg, clientRes, rolesRes] = await Promise.all([
         getEvolutionConfig(),
         clientId
-          ? supabase.from("clients").select("full_name").eq("id", clientId).maybeSingle()
+          ? supabase.from("clients").select("full_name, whatsapp_group_id").eq("id", clientId).maybeSingle()
           : Promise.resolve({ data: null }),
         supabase.from("user_roles").select("user_id").eq("role", "admin"),
       ]);
       const companyName = (clientRes as any)?.data?.full_name || "Sem empresa";
+      const groupId = String((clientRes as any)?.data?.whatsapp_group_id || "").trim();
       const adminIds = (rolesRes.data || []).map((r: any) => r.user_id);
-      if (!adminIds.length) return;
-      const { data: profiles } = await supabase.from("profiles").select("phone").in("id", adminIds);
+      const { data: profiles } = adminIds.length
+        ? await supabase.from("profiles").select("phone").in("id", adminIds)
+        : { data: [] };
       const phones = new Set<string>(
         (profiles || []).map((p: any) => String(p.phone || "").replace(/[\s\-()+]/g, "")).filter((p: string) => p.length >= 10),
       );
+      if (!phones.size && !groupId) return;
       const text = [
         `🚨 *Diagnóstico com ${errors.length} problema(s) grave(s)*`,
         `🖥️ ${hostname} (${scope === "server" ? "Servidor" : "Estação"}) — ${companyName}`,
@@ -65,10 +68,12 @@ Deno.serve(async (req) => {
         "",
         "Abra Servidores > Diagnósticos para ver as soluções sugeridas.",
       ].filter(Boolean).join("\n");
-      // Envia para todos os administradores ao mesmo tempo; 1 nova tentativa por número.
-      await Promise.all([...phones].map(async (phone) => {
-        try { await sendText(cfg, phone, text); }
-        catch { try { await sendText(cfg, phone, text); } catch (e) { console.error("notify fail", phone.slice(-4), e); } }
+      // Envia para administradores e para o grupo da empresa ao mesmo tempo; 1 nova tentativa por destino.
+      const targets = [...phones];
+      if (groupId) targets.push(groupId.includes("@") ? groupId : `${groupId}@g.us`);
+      await Promise.all(targets.map(async (target) => {
+        try { await sendText(cfg, target, text); }
+        catch { try { await sendText(cfg, target, text); } catch (e) { console.error("notify fail", target.slice(-6), e); } }
       }));
     } catch (err) {
       console.error("diagnostics notify error:", err);
