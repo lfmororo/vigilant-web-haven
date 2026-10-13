@@ -59,9 +59,16 @@ if ($dc) {
         } else { Add-Finding "Horario x servidor" "ok" ("{0:N1}s de diferenca" -f $off) }
     } else { Add-Finding "Horario x servidor" "warning" "Nao foi possivel medir" "Verifique a porta UDP 123 entre a estacao e o servidor." }
 }
-$w32 = Get-Service W32Time
-if ($w32.StartType -eq "Disabled" -or $w32.Status -ne "Running") {
-    if ($Corrigir) { Set-Service W32Time -StartupType Automatic; Start-Service W32Time; Add-Finding "Servico de horario" "fixed" "W32Time ativado" }
+$w32 = Get-Service W32Time -ErrorAction SilentlyContinue
+if ($w32 -and ($w32.StartType -eq "Disabled" -or $w32.Status -ne "Running")) {
+    if ($Corrigir) {
+        try {
+            Set-Service W32Time -StartupType Automatic
+            w32tm /register 2>&1 | Out-Null
+            Start-Service W32Time -ErrorAction Stop
+            Add-Finding "Servico de horario" "fixed" "W32Time ativado"
+        } catch { Add-Finding "Servico de horario" "error" "Nao foi possivel iniciar o W32Time" "Rode como administrador: Set-Service W32Time -StartupType Automatic; w32tm /register; Start-Service W32Time" }
+    }
     else { Add-Finding "Servico de horario" "warning" "W32Time $($w32.Status)/$($w32.StartType)" "Set-Service W32Time -StartupType Automatic; Start-Service W32Time" }
 }
 
