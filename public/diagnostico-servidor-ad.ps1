@@ -26,14 +26,19 @@ Write-Host "=== Diagnostico do servidor $env:COMPUTERNAME ($dominio) ===" -Foreg
 
 # 1) Servicos essenciais do AD
 foreach ($svc in "NTDS", "DNS", "Netlogon", "kdc", "W32Time", "DFSR", "LanmanServer") {
-    $s = Get-Service -Name $svc
+    $s = Get-Service -Name $svc -ErrorAction SilentlyContinue
     if (-not $s) { continue }
     if ($s.Status -eq "Running") { Add-Finding "Servico $svc" "ok" "Em execucao" }
     elseif ($Corrigir) {
-        Start-Service $svc; Start-Sleep 3
+        try {
+            # Servico desabilitado nao inicia: reabilita antes. W32Time pode estar desregistrado.
+            if ($s.StartType -eq "Disabled") { Set-Service $svc -StartupType Automatic }
+            if ($svc -eq "W32Time") { w32tm /register 2>&1 | Out-Null }
+            Start-Service $svc -ErrorAction Stop; Start-Sleep 3
+        } catch { }
         if ((Get-Service $svc).Status -eq "Running") { Add-Finding "Servico $svc" "fixed" "Estava parado e foi iniciado" }
-        else { Add-Finding "Servico $svc" "error" "Nao foi possivel iniciar" "Verifique o Visualizador de Eventos (Sistema) e dependencias do servico." }
-    } else { Add-Finding "Servico $svc" "error" "Status: $($s.Status)" "Inicie o servico: Start-Service $svc (ou rode com -Corrigir)." }
+        else { Add-Finding "Servico $svc" "error" "Nao foi possivel iniciar" "Rode como administrador: Set-Service $svc -StartupType Automatic; Start-Service $svc. Se falhar, veja o Visualizador de Eventos (Sistema)." }
+    } else { Add-Finding "Servico $svc" "error" "Status: $($s.Status)/$($s.StartType)" "Rode como administrador: Set-Service $svc -StartupType Automatic; Start-Service $svc (ou rode o script com -Corrigir)." }
 }
 
 # 2) DCDIAG
