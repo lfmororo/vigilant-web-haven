@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      ad_diagnostic_reports: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          domain: string | null
+          error_count: number
+          findings: Json
+          fixed_count: number
+          hostname: string
+          id: string
+          ok_count: number
+          scope: string
+          warning_count: number
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          domain?: string | null
+          error_count?: number
+          findings?: Json
+          fixed_count?: number
+          hostname: string
+          id?: string
+          ok_count?: number
+          scope?: string
+          warning_count?: number
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          domain?: string | null
+          error_count?: number
+          findings?: Json
+          fixed_count?: number
+          hostname?: string
+          id?: string
+          ok_count?: number
+          scope?: string
+          warning_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_diagnostic_reports_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       backup_agents: {
         Row: {
           active: boolean
