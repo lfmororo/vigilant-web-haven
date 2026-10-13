@@ -25,6 +25,7 @@ import IloServersTab from "@/components/admin/servers/IloServersTab";
 import ProxmoxTab from "@/components/admin/servers/ProxmoxTab";
 import DiagnosticsTab from "@/components/admin/servers/DiagnosticsTab";
 import DiagnosticsHistoryTab from "@/components/admin/servers/DiagnosticsHistoryTab";
+import ADHealthTab from "@/components/admin/servers/ADHealthTab";
 
 
 const statusColor = (status: string) => {
@@ -540,6 +541,7 @@ const ServerMonitor = () => {
             <TabsTrigger value="vmware"><Monitor className="w-4 h-4 mr-1" /> VMware</TabsTrigger>
             <TabsTrigger value="ilo"><ServerCog className="w-4 h-4 mr-1" /> iLO4 / iDRAC9</TabsTrigger>
             <TabsTrigger value="proxmox"><Boxes className="w-4 h-4 mr-1" /> Proxmox</TabsTrigger>
+            <TabsTrigger value="ad-health"><Activity className="w-4 h-4 mr-1" /> Saúde do AD</TabsTrigger>
             <TabsTrigger value="diagnostics"><Activity className="w-4 h-4 mr-1" /> Diagnósticos</TabsTrigger>
             <TabsTrigger value="diagnostics-history"><Activity className="w-4 h-4 mr-1" /> Histórico Diagnósticos</TabsTrigger>
 
@@ -825,6 +827,9 @@ const ServerMonitor = () => {
             <DiagnosticsTab clients={clients || []} />
           </TabsContent>
 
+          <TabsContent value="ad-health">
+            <ADHealthTab clients={clients || []} />
+          </TabsContent>
           <TabsContent value="diagnostics-history">
             <DiagnosticsHistoryTab clients={clients || []} />
           </TabsContent>
