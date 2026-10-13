@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import IloServersTab from "@/components/admin/servers/IloServersTab";
 import ProxmoxTab from "@/components/admin/servers/ProxmoxTab";
+import DiagnosticsTab from "@/components/admin/servers/DiagnosticsTab";
 
 
 const statusColor = (status: string) => {
@@ -538,6 +539,7 @@ const ServerMonitor = () => {
             <TabsTrigger value="vmware"><Monitor className="w-4 h-4 mr-1" /> VMware</TabsTrigger>
             <TabsTrigger value="ilo"><ServerCog className="w-4 h-4 mr-1" /> iLO4 / iDRAC9</TabsTrigger>
             <TabsTrigger value="proxmox"><Boxes className="w-4 h-4 mr-1" /> Proxmox</TabsTrigger>
+            <TabsTrigger value="diagnostics"><Activity className="w-4 h-4 mr-1" /> Diagnósticos</TabsTrigger>
 
             <TabsTrigger value="guide"><Download className="w-4 h-4 mr-1" /> Guia Coletor</TabsTrigger>
 
@@ -815,6 +817,10 @@ const ServerMonitor = () => {
 
           <TabsContent value="proxmox">
             <ProxmoxTab clients={clients || []} />
+          </TabsContent>
+
+          <TabsContent value="diagnostics">
+            <DiagnosticsTab clients={clients || []} />
           </TabsContent>
 
 
