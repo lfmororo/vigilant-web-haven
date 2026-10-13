@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { getEvolutionConfig, sendText } from "../_shared/whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,5 +46,40 @@ Deno.serve(async (req) => {
     findings,
   });
   if (error) return json(500, { error: error.message });
+
+  // Problemas graves (error): avisa os administradores por WhatsApp, como os alertas de CPU/memória.
+  const errors = findings.filter((f: any) => f.status === "error");
+  if (errors.length > 0) {
+    try {
+      let companyName = "Sem empresa";
+      if (clientId) {
+        const { data: client } = await supabase.from("clients").select("full_name").eq("id", clientId).maybeSingle();
+        if (client?.full_name) companyName = client.full_name;
+      }
+      const lines = [
+        `🚨 *Diagnóstico com ${errors.length} problema(s) grave(s)*`,
+        `🖥️ ${hostname} (${scope === "server" ? "Servidor" : "Estação"}) — ${companyName}`,
+        `📅 ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`,
+        "",
+        ...errors.slice(0, 8).map((f: any) => `• *${f.check}*: ${f.detail}`),
+        errors.length > 8 ? `… e mais ${errors.length - 8} problema(s).` : "",
+        "",
+        "Abra Servidores > Diagnósticos para ver as soluções sugeridas.",
+      ].filter(Boolean);
+
+      const cfg = await getEvolutionConfig();
+      const { data: adminRoles } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
+      if (adminRoles?.length) {
+        const { data: profiles } = await supabase
+          .from("profiles").select("phone").in("id", adminRoles.map((r: any) => r.user_id));
+        const phones = new Set<string>(
+          (profiles || []).map((p: any) => String(p.phone || "").replace(/[\s\-()+]/g, "")).filter((p: string) => p.length >= 10),
+        );
+        for (const phone of phones) await sendText(cfg, phone, lines.join("\n"));
+      }
+    } catch (err) {
+      console.error("diagnostics notify error:", err);
+    }
+  }
   return json(200, { success: true });
 });
