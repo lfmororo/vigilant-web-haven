@@ -51,9 +51,11 @@ if ($dc) {
         $off = [math]::Abs([double](($sc.Matches[0].Value) -replace "s", "" -replace ",", "."))
         if ($off -gt 60) {
             if ($Corrigir) {
-                Set-Service W32Time -StartupType Automatic; Start-Service W32Time
+                Set-Service W32Time -StartupType Automatic
+                w32tm /register 2>&1 | Out-Null
+                Start-Service W32Time -ErrorAction SilentlyContinue
                 w32tm /config /syncfromflags:domhier /update | Out-Null
-                Restart-Service W32Time; w32tm /resync /force | Out-Null
+                Restart-Service W32Time -ErrorAction SilentlyContinue; w32tm /resync /force | Out-Null
                 Add-Finding "Horario x servidor" "fixed" ("Diferenca de {0:N0}s corrigida (sincronizado com o dominio)" -f $off)
             } else { Add-Finding "Horario x servidor" "error" ("Diferenca de {0:N0}s" -f $off) "Rode: w32tm /config /syncfromflags:domhier /update; net stop w32time; net start w32time; w32tm /resync /force. Se a data volta ao desligar, troque a bateria CMOS." }
         } else { Add-Finding "Horario x servidor" "ok" ("{0:N1}s de diferenca" -f $off) }
