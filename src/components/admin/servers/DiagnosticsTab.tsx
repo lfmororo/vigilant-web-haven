@@ -105,6 +105,7 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
           <ul className="text-muted-foreground list-disc pl-5 space-y-1">
             <li><b>Servidor:</b> execute no controlador de domínio como admin do domínio. Verifica serviços, DCDIAG, replicação, SYSVOL, horário/NTP, DNS, FSMO, contas de máquina antigas, discos, compartilhamentos e eventos.</li>
             <li><b>Estação:</b> execute como administrador local com <code>-Corrigir</code>. Trata "falha na relação de confiança", "diferença de horário" e "unidade de rede não acessível".</li>
+            <li><b>Conexão e velocidade:</b> a estação mede latência, perda e velocidade (envio/recebimento) até o controlador de domínio e os servidores informados. O script pergunta os IPs, ou use <code>-Servidores 192.168.0.10,192.168.0.20</code>.</li>
             <li>Comando: <code>powershell -ExecutionPolicy Bypass -File &lt;script&gt;.ps1 -Corrigir</code> (sem <code>-Corrigir</code> apenas diagnostica).</li>
           </ul>
         </CardContent>
