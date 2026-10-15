@@ -10,8 +10,9 @@
 #  ou desconecte o cabo de rede, logue com a conta em cache e execute o script.
 # =====================================================================
 #  Teste de velocidade com servidores: -Servidores 192.168.0.10,192.168.0.20
-#  (sem o parametro, o script pergunta; use -NaoPerguntar para pular)
-param([switch]$Corrigir, [string[]]$Servidores = @(), [switch]$NaoPerguntar)
+#  Teste de comunicacao com SQL Server: -SqlServidores 192.168.0.30
+#  (sem os parametros, o script pergunta; use -NaoPerguntar para pular)
+param([switch]$Corrigir, [string[]]$Servidores = @(), [string[]]$SqlServidores = @(), [switch]$NaoPerguntar)
 
 $SUPABASE_URL = "__SUPABASE_URL__"
 $SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__"
@@ -178,6 +179,44 @@ foreach ($alvo in $alvos) {
     } else { Add-Finding "Velocidade $alvo" "warning" "Nenhum compartilhamento acessivel para medir velocidade" "Rode o script como Administrador para usar a pasta \\SERVIDOR\C`$\testevel, ou verifique a porta 445 e as permissoes." }
     Remove-Item $origem -Force
 }
+# 6.2) Comunicacao com servidor SQL (porta 1433 e tempo de resposta)
+$sqlAlvos = New-Object System.Collections.ArrayList
+foreach ($s in $SqlServidores) { if ($s -and -not $sqlAlvos.Contains($s)) { [void]$sqlAlvos.Add($s) } }
+if (-not $NaoPerguntar) {
+    $extraSql = Read-Host "IP/nome do servidor SQL para testar comunicacao (separe por virgula, Enter para pular)"
+    foreach ($s in ($extraSql -split "[,; ]+")) { if ($s -and -not $sqlAlvos.Contains($s)) { [void]$sqlAlvos.Add($s) } }
+}
+foreach ($sql in $sqlAlvos) {
+    # Latencia de rede ate o servidor SQL
+    $pingsSql = @(1..5 | ForEach-Object { Test-Connection $sql -Count 1 -ErrorAction SilentlyContinue })
+    if ($pingsSql.Count -gt 0) {
+        $latSql = ($pingsSql | Measure-Object ResponseTime -Average).Average
+        Add-Finding "Rede ate SQL $sql" ($(if ($latSql -gt 50) { "warning" } else { "ok" })) ("Latencia media {0:N0} ms" -f $latSql) $(if ($latSql -gt 50) { "Latencia alta prejudica sistemas que usam o banco (telas lentas, travamentos). Verifique cabo, switch e Wi-Fi." } else { "" })
+    } else {
+        Add-Finding "Rede ate SQL $sql" "error" "Servidor nao responde ao ping" "Verifique se o servidor esta ligado, o IP esta correto e o firewall libera ICMP."
+    }
+    # Porta 1433 (SQL Server)
+    $tnc = Test-NetConnection $sql -Port 1433 -WarningAction SilentlyContinue
+    if ($tnc.TcpTestSucceeded) {
+        # Tempo de conexao e de uma consulta simples (SELECT 1) com autenticacao Windows
+        try {
+            $conn = New-Object System.Data.SqlClient.SqlConnection("Server=$sql,1433;Database=master;Integrated Security=True;Connect Timeout=5")
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            $conn.Open()
+            $cmd = $conn.CreateCommand(); $cmd.CommandText = "SELECT 1"; $cmd.CommandTimeout = 5
+            [void]$cmd.ExecuteScalar()
+            $sw.Stop(); $conn.Close()
+            $ms = $sw.ElapsedMilliseconds
+            if ($ms -gt 1000) { Add-Finding "SQL $sql" "warning" "Conectou, mas respondeu em ${ms} ms" "Consultas lentas: verifique uso de CPU/memoria/disco no servidor SQL e a latencia de rede acima." }
+            else { Add-Finding "SQL $sql" "ok" "Porta 1433 aberta; conexao + consulta em ${ms} ms" }
+        } catch {
+            Add-Finding "SQL $sql" "warning" "Porta 1433 aberta, mas a conexao de teste falhou: $($_.Exception.Message)" "Se o sistema usa usuario SQL (nao Windows), o teste com autenticacao Windows pode falhar mesmo estando tudo certo. Verifique tambem se o servico SQL Server e o SQL Browser estao ativos."
+        }
+    } else {
+        Add-Finding "SQL $sql" "error" "Porta 1433 fechada/sem resposta" "No servidor: verifique se o servico SQL Server esta rodando, se o TCP/IP esta habilitado no SQL Server Configuration Manager e se o firewall libera a porta 1433. Sistemas ficam fora do ar sem essa porta."
+    }
+}
+
 $nic = Get-NetAdapter -Physical | Where-Object Status -eq "Up"
 foreach ($n in $nic) {
     $st = if ($n.LinkSpeed -match "^(10|100) Mbps") { "warning" } else { "ok" }
