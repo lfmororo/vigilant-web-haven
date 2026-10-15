@@ -214,6 +214,49 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Versão de impressão: cabeçalho com logo, dados do relatório e rodapé */}
+      {open && (
+        <div className="print-diagnostics-root hidden">
+          <div className="print-diag-header">
+            <img src="/fm-techflow-logo-email.png" alt="FM TechFlow" />
+            <div style={{ textAlign: "right" }}>
+              <h1>Relatório de Diagnóstico</h1>
+              <p>
+                {open.scope === "server" ? "Servidor" : "Estação"}: {open.hostname} · Domínio: {open.domain}
+                <br />
+                Empresa: {open.clients?.full_name || "Sem empresa"} · Data: {new Date(open.created_at).toLocaleString("pt-BR")}
+              </p>
+            </div>
+          </div>
+          <p style={{ fontSize: 11, margin: "0 0 8px" }}>
+            Resumo: {open.error_count} problema(s), {open.warning_count} atenção(ões), {open.fixed_count} corrigido(s), {open.ok_count} OK.
+          </p>
+          <table className="print-diag-table">
+            <thead>
+              <tr><th>Verificação</th><th>Situação</th><th>Problema encontrado</th><th>Solução sugerida</th></tr>
+            </thead>
+            <tbody>
+              {sorted(open.findings as Finding[]).map((f, i) => (
+                <tr key={i}>
+                  <td>{f.check}</td>
+                  <td>
+                    <span className="print-diag-badge" style={{ cssText: undefined, ...( { } ), ...(PRINT_COLORS[f.status] ? { background: "", color: "" } : {}) }}>
+                      {(STATUS_LABEL[f.status] || STATUS_LABEL.warning).label}
+                    </span>
+                  </td>
+                  <td>{f.detail}</td>
+                  <td>{f.solution || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="print-diag-footer">
+            <span>FM TechFlow · contato@fmtechflow.com.br</span>
+            <span>Emitido em {new Date().toLocaleString("pt-BR")}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
