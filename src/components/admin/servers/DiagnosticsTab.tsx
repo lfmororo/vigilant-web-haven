@@ -87,11 +87,11 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
   const list = (reports || []).filter((r: any) => filter === "all" || r.client_id === filter);
   const sorted = (f: Finding[]) => [...f].sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status));
 
-  const PRINT_COLORS: Record<string, string> = {
-    error: "background:#fee2e2;color:#b91c1c;",
-    warning: "background:#fef3c7;color:#b45309;",
-    fixed: "background:#cffafe;color:#0e7490;",
-    ok: "background:#d1fae5;color:#047857;",
+  const PRINT_COLORS: Record<string, React.CSSProperties> = {
+    error: { background: "#fee2e2", color: "#b91c1c" },
+    warning: { background: "#fef3c7", color: "#b45309" },
+    fixed: { background: "#cffafe", color: "#0e7490" },
+    ok: { background: "#d1fae5", color: "#047857" },
   };
 
   /** Imprime apenas o relatório: ativa a classe no body, imprime e remove. */
@@ -241,7 +241,7 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
                 <tr key={i}>
                   <td>{f.check}</td>
                   <td>
-                    <span className="print-diag-badge" style={PRINT_COLORS[f.status] ? Object.fromEntries(PRINT_COLORS[f.status].split(";").filter(Boolean).map((p) => { const [k, v] = p.split(":"); return [k.trim(), v.trim()]; })) as React.CSSProperties : undefined}>
+                    <span className="print-diag-badge" style={PRINT_COLORS[f.status]}>
                       {(STATUS_LABEL[f.status] || STATUS_LABEL.warning).label}
                     </span>
                   </td>
