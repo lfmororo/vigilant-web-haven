@@ -175,7 +175,7 @@ foreach ($alvo in $alvos) {
             Remove-Item "$origem.ret" -Force
             Add-Finding "Velocidade $alvo" ($(if ($down -lt 50) { "warning" } else { "ok" })) ("Recebimento {0:N0} Mbps (leitura de {1:N1} MB do {2})" -f $down, ($arq.Length / 1MB), $share) "Para medir envio, rode como Administrador (acesso a C$) ou mapeie uma unidade de rede gravavel deste servidor."
         } else { Add-Finding "Velocidade $alvo" "warning" "Sem arquivo para medir velocidade" "Rode como Administrador (acesso a C$) ou mapeie uma unidade de rede deste servidor para medir a velocidade." }
-    } else { Add-Finding "Velocidade $alvo" "warning" "Nenhum compartilhamento acessivel para medir velocidade" "Rode o script como Administrador para usar a pasta \\SERVIDOR\C$\testevel, ou verifique a porta 445 e as permissoes." }
+    } else { Add-Finding "Velocidade $alvo" "warning" "Nenhum compartilhamento acessivel para medir velocidade" "Rode o script como Administrador para usar a pasta \\SERVIDOR\C`$\testevel, ou verifique a porta 445 e as permissoes." }
     Remove-Item $origem -Force
 }
 $nic = Get-NetAdapter -Physical | Where-Object Status -eq "Up"
