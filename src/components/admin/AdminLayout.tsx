@@ -93,7 +93,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
               <img
                 alt="Mororo.tech"
                 className="h-16 max-w-[200px] object-contain drop-shadow-sm"
-                src="/lovable-uploads/f066724a-93ef-4c74-a639-4f8766fa1f97.png" />
+                src={fmLogo.url} />
 
             </Link>
           </div>
@@ -146,7 +146,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
 
               <Menu className="w-6 h-6" />
             </button>
-            <img alt="Mororo.tech" className="h-8" src="/lovable-uploads/fe4b10ae-78e4-49c1-94e6-245df7a4f09a.png" />
+            <img alt="Mororo.tech" className="h-8" src={fmLogo.url} />
             <div className="w-10" />
           </div>
         </header>
