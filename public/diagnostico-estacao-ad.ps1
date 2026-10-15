@@ -143,20 +143,22 @@ foreach ($alvo in $alvos) {
 
     # Velocidade via SMB (escrita/leitura de arquivo de teste em compartilhamento)
     $share = $null
-    foreach ($c in @("\\$alvo\NETLOGON", "\\$alvo\SYSVOL")) { if (Test-Path $c) { $share = $c; break } }
-    $origem = Join-Path $env:TEMP "fmtf_speed.bin"
-    $bytes = New-Object byte[] (50MB); (New-Object Random).NextBytes($bytes)
-    [IO.File]::WriteAllBytes($origem, $bytes)
-    $gravavel = $null
-    foreach ($m in $maps) { if ($m.ProviderName -like "\\$alvo\*" -and (Test-Path "$($m.Name)\")) { $gravavel = "$($m.Name)\"; break } }
-    if ($gravavel) {
-        $dest = Join-Path $gravavel ("fmtf_speed_{0}.bin" -f $env:COMPUTERNAME)
+    # Pasta de teste no compartilhamento administrativo do servidor: \\SERVIDOR\C$\testevel
+    $testvel = "\\$alvo\C`$\testevel"
+    if (-not (Test-Path $testvel -PathType Container)) { New-Item -ItemType Directory -Path $testvel -Force | Out-Null }
+    $destino = $null
+    if (Test-Path $testvel -PathType Container) { $destino = $testvel }
+    if (-not $destino) {
+        foreach ($m in $maps) { if ($m.ProviderName -like "\\$alvo\*" -and (Test-Path "$($m.Name)\")) { $destino = "$($m.Name)\"; break } }
+    }
+    if ($destino) {
+        $dest = Join-Path $destino ("fmtf_speed_{0}.bin" -f $env:COMPUTERNAME)
         $t = Measure-Command { Copy-Item $origem $dest -Force }
         $up = if ($t.TotalSeconds -gt 0) { 400 / $t.TotalSeconds } else { 0 }
         $t2 = Measure-Command { Copy-Item $dest "$origem.ret" -Force }
         $down = if ($t2.TotalSeconds -gt 0) { 400 / $t2.TotalSeconds } else { 0 }
         Remove-Item $dest, "$origem.ret" -Force
-        $txt = "Envio {0:N0} Mbps / Recebimento {1:N0} Mbps (arquivo 50 MB em {2})" -f $up, $down, $gravavel
+        $txt = "Envio {0:N0} Mbps / Recebimento {1:N0} Mbps (arquivo 50 MB em {2})" -f $up, $down, $destino
         $min = [math]::Min($up, $down)
         if ($min -lt 50) { Add-Finding "Velocidade $alvo" "error" $txt "Muito lento para rede local. Verifique se a placa negociou 100 Mbps/half-duplex, cabo danificado, Wi-Fi ou switch sobrecarregado." }
         elseif ($min -lt 300) { Add-Finding "Velocidade $alvo" "warning" $txt "Abaixo de rede gigabit. Confira cabo Cat5e/Cat6 e a velocidade negociada da placa." }
@@ -167,9 +169,9 @@ foreach ($alvo in $alvos) {
             $t = Measure-Command { Copy-Item $arq.FullName "$origem.ret" -Force }
             $down = if ($t.TotalSeconds -gt 0) { ($arq.Length * 8 / 1MB) / $t.TotalSeconds } else { 0 }
             Remove-Item "$origem.ret" -Force
-            Add-Finding "Velocidade $alvo" ($(if ($down -lt 50) { "warning" } else { "ok" })) ("Recebimento {0:N0} Mbps (leitura de {1:N1} MB do {2})" -f $down, ($arq.Length / 1MB), $share) "Para medir envio, mapeie uma unidade de rede gravavel deste servidor."
-        } else { Add-Finding "Velocidade $alvo" "warning" "Sem arquivo para medir velocidade" "Mapeie uma unidade de rede deste servidor para medir a velocidade." }
-    } else { Add-Finding "Velocidade $alvo" "warning" "Nenhum compartilhamento acessivel para medir velocidade" "Mapeie uma unidade do servidor ou verifique a porta 445." }
+            Add-Finding "Velocidade $alvo" ($(if ($down -lt 50) { "warning" } else { "ok" })) ("Recebimento {0:N0} Mbps (leitura de {1:N1} MB do {2})" -f $down, ($arq.Length / 1MB), $share) "Para medir envio, rode como Administrador (acesso a C$) ou mapeie uma unidade de rede gravavel deste servidor."
+        } else { Add-Finding "Velocidade $alvo" "warning" "Sem arquivo para medir velocidade" "Rode como Administrador (acesso a C$) ou mapeie uma unidade de rede deste servidor para medir a velocidade." }
+    } else { Add-Finding "Velocidade $alvo" "warning" "Nenhum compartilhamento acessivel para medir velocidade" "Rode o script como Administrador para usar a pasta \\SERVIDOR\C$\testevel, ou verifique a porta 445 e as permissoes." }
     Remove-Item $origem -Force
 }
 $nic = Get-NetAdapter -Physical | Where-Object Status -eq "Up"
