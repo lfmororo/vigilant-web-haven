@@ -241,7 +241,7 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
                 <tr key={i}>
                   <td>{f.check}</td>
                   <td>
-                    <span className="print-diag-badge" style={{ cssText: undefined, ...( { } ), ...(PRINT_COLORS[f.status] ? { background: "", color: "" } : {}) }}>
+                    <span className="print-diag-badge" style={PRINT_COLORS[f.status] ? Object.fromEntries(PRINT_COLORS[f.status].split(";").filter(Boolean).map((p) => { const [k, v] = p.split(":"); return [k.trim(), v.trim()]; })) as React.CSSProperties : undefined}>
                       {(STATUS_LABEL[f.status] || STATUS_LABEL.warning).label}
                     </span>
                   </td>
