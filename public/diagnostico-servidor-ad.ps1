@@ -202,6 +202,96 @@ try {
     else { Add-Finding "Tempo ligado" "ok" "$dias dia(s)" }
 } catch { Add-Finding "Analise de lentidao (VM)" "warning" "Falha ao coletar: $($_.Exception.Message)" "Execute como administrador." }
 
+# 13) SQL Server - saude e lentidao
+$sqlServices = Get-Service | Where-Object { $_.Name -match "^MSSQL" -and $_.Name -notmatch "Agent|Browser|Writer|Launcher|PolyBase" }
+if (-not $sqlServices) {
+    Add-Finding "SQL Server" "ok" "Nenhuma instancia SQL Server neste servidor"
+} else {
+    foreach ($ss in $sqlServices) {
+        $inst = if ($ss.Name -eq "MSSQLSERVER") { "MSSQLSERVER" } else { $ss.Name -replace "^MSSQL\$", "" }
+        if ($ss.Status -ne "Running") {
+            Add-Finding "SQL Server ($inst)" "error" "Servico $($ss.Name) parado ($($ss.StartType))" "Inicie o servico: Start-Service $($ss.Name). Aplicativos ficarao fora do ar enquanto parado."
+            continue
+        }
+        Add-Finding "SQL Server ($inst)" "ok" "Servico em execucao"
+
+        $connStr = if ($inst -eq "MSSQLSERVER") { "Server=localhost;Database=master;Integrated Security=True;Connect Timeout=5" } else { "Server=localhost\$inst;Database=master;Integrated Security=True;Connect Timeout=5" }
+        try {
+            $conn = New-Object System.Data.SqlClient.SqlConnection $connStr
+            $conn.Open()
+
+            function Invoke-Sql($sql) {
+                $cmd = $conn.CreateCommand(); $cmd.CommandText = $sql; $cmd.CommandTimeout = 15
+                $da = New-Object System.Data.SqlClient.SqlDataAdapter $cmd
+                $dt = New-Object System.Data.DataTable; [void]$da.Fill($dt); $dt
+            }
+
+            # Tempo de resposta
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            [void](Invoke-Sql "SELECT 1")
+            $sw.Stop()
+            if ($sw.ElapsedMilliseconds -gt 2000) { Add-Finding "SQL ($inst) resposta" "error" "$($sw.ElapsedMilliseconds) ms para SELECT 1" "Servidor sobrecarregado: veja CPU, memoria e latencia de disco deste relatorio e as sessoes lentas abaixo." }
+            elseif ($sw.ElapsedMilliseconds -gt 500) { Add-Finding "SQL ($inst) resposta" "warning" "$($sw.ElapsedMilliseconds) ms para SELECT 1" "Resposta lenta para consulta trivial; investigue concorrencia e disco." }
+            else { Add-Finding "SQL ($inst) resposta" "ok" "$($sw.ElapsedMilliseconds) ms" }
+
+            # Sessoes demoradas (> 5 min rodando)
+            $lentas = Invoke-Sql "SELECT r.session_id, r.status, r.wait_type, r.wait_time, t.text AS query FROM sys.dm_exec_requests r CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) t WHERE r.session_id > 50 AND r.total_elapsed_time > 300000"
+            if ($lentas.Rows.Count -gt 0) {
+                $det = ($lentas.Rows | Select-Object -First 3 | ForEach-Object { "sessao $($_.session_id) espera $($_.wait_type)" }) -join "; "
+                Add-Finding "SQL ($inst) consultas demoradas" "warning" "$($lentas.Rows.Count) consulta(s) rodando ha +5 min: $det" "Identifique a consulta com sp_who2/Activity Monitor. Esperas PAGEIOLATCH = disco lento; CXPACKET = paralelismo; LCK_M = bloqueio."
+            } else { Add-Finding "SQL ($inst) consultas demoradas" "ok" "Nenhuma consulta rodando ha +5 min" }
+
+            # Bloqueios
+            $bloq = Invoke-Sql "SELECT COUNT(*) AS n FROM sys.dm_exec_requests WHERE blocking_session_id <> 0"
+            if ([int]$bloq.Rows[0].n -gt 0) { Add-Finding "SQL ($inst) bloqueios" "error" "$($bloq.Rows[0].n) sessao(oes) bloqueada(s) agora" "Sessoes travadas em fila. Veja quem bloqueia: SELECT blocking_session_id, session_id FROM sys.dm_exec_requests WHERE blocking_session_id<>0. Considere RCSI no banco." }
+            else { Add-Finding "SQL ($inst) bloqueios" "ok" "Sem bloqueios no momento" }
+
+            # Esperas predominantes (desde o boot da instancia)
+            $waits = Invoke-Sql "SELECT TOP 3 wait_type, wait_time_ms FROM sys.dm_os_wait_stats WHERE wait_type NOT IN ('SLEEP_TASK','BROKER_EVENTHANDLER','BROKER_TO_FLUSH','BROKER_TASK_STOP','CLR_MANUAL_EVENT','CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE','FT_IFTS_SCHEDULER_IDLE_WAIT','XE_DISPATCHER_WAIT','XE_TIMER_EVENT','BROKER_RECEIVE_WAITFOR','REQUEST_FOR_DEADLOCK_SEARCH','LOGMGR_QUEUE','CHECKPOINT_QUEUE','HADR_FILESTREAM_IOMGR_IOCOMPLETION','DIRTY_PAGE_POLL','WAITFOR','LAZYWRITER_SLEEP','SQLTRACE_BUFFER_FLUSH','XE_DISPATCHER_JOIN','QDS_PERSIST_TASK_MAIN_LOOP_SLEEP','QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP','SP_SERVER_DIAGNOSTICS_SLEEP') ORDER BY wait_time_ms DESC"
+            $wtop = ($waits.Rows | ForEach-Object { "$($_.wait_type) ({0:N0} min)" -f ($_.wait_time_ms/60000) }) -join ", "
+            if ($wtop -match "PAGEIOLATCH|WRITELOG|IO_COMPLETION") { Add-Finding "SQL ($inst) esperas" "warning" "Esperas de disco predominam: $wtop" "Disco e o gargalo: veja 'Latencia de disco' acima. No Proxmox prefira SSD, VirtIO SCSI + IO thread e cache write-back." }
+            elseif ($wtop -match "CXPACKET|CXCONSUMER") { Add-Finding "SQL ($inst) esperas" "warning" "Paralelismo alto: $wtop" "Ajuste 'max degree of parallelism' (ex.: 4) e 'cost threshold for parallelism' (ex.: 50)." }
+            else { Add-Finding "SQL ($inst) esperas" "ok" "Principais: $wtop" }
+
+            # Memoria usada pelo processo
+            $sqlProc = Get-Process sqlservr -ErrorAction SilentlyContinue | Sort-Object WorkingSet64 -Descending | Select-Object -First 1
+            if ($sqlProc) {
+                $sqlGB = [math]::Round($sqlProc.WorkingSet64 / 1GB, 1)
+                $osInfo = Get-CimInstance Win32_OperatingSystem
+                $totGB = [math]::Round($osInfo.TotalVisibleMemorySize / 1MB, 1)
+                if ($sqlGB -gt ($totGB * 0.85)) { Add-Finding "SQL ($inst) memoria" "warning" "sqlservr usando $sqlGB GB de $totGB GB" "Limite a memoria maxima do SQL (sp_configure 'max server memory') deixando ~15% para o Windows, ou o servidor inteiro fica lento." }
+                else { Add-Finding "SQL ($inst) memoria" "ok" "sqlservr usando $sqlGB GB de $totGB GB" }
+            }
+
+            # Bancos: tamanho do log e modo de recuperacao
+            $dbs = Invoke-Sql "SELECT d.name, d.recovery_model_desc, (SELECT SUM(size)*8/1024 FROM sys.master_files f WHERE f.database_id=d.database_id AND f.type=1) AS log_mb, (SELECT SUM(size)*8/1024 FROM sys.master_files f WHERE f.database_id=d.database_id AND f.type=0) AS data_mb FROM sys.databases d WHERE d.database_id > 4 AND d.state_desc='ONLINE'"
+            foreach ($db in $dbs.Rows) {
+                $logMB = [int]($db.log_mb); $dataMB = [int]($db.data_mb)
+                if ($db.recovery_model_desc -eq "FULL" -and $logMB -gt 10240) { Add-Finding "SQL ($inst) log do banco $($db.name)" "warning" "Log de $logMB MB (dados: $dataMB MB), recuperacao FULL" "Log gigante deixa tudo lento e enche o disco. Faca backup do log (BACKUP LOG) e agende backups de log periodicos, ou mude para SIMPLE se nao precisar de point-in-time." }
+                elseif ($logMB -gt ($dataMB * 2) -and $logMB -gt 2048) { Add-Finding "SQL ($inst) log do banco $($db.name)" "warning" "Log ($logMB MB) maior que o dobro dos dados ($dataMB MB)" "Faca backup do log e reduza (DBCC SHRINKFILE) apos o backup." }
+            }
+            if ($dbs.Rows.Count -gt 0) { Add-Finding "SQL ($inst) bancos" "ok" "$($dbs.Rows.Count) banco(s) online" }
+
+            # Ultimo backup de cada banco
+            $semBak = Invoke-Sql "SELECT d.name, MAX(b.backup_finish_date) AS ultimo FROM sys.databases d LEFT JOIN msdb.dbo.backupset b ON b.database_name=d.name AND b.type='D' WHERE d.database_id>4 AND d.state_desc='ONLINE' GROUP BY d.name"
+            foreach ($b in $semBak.Rows) {
+                if ($b.ultimo -eq [DBNull]::Value) { Add-Finding "SQL ($inst) backup $($b.name)" "error" "Nunca feito backup completo" "Agende backup completo diario (Plano de Manutencao ou script Ola Hallengren)." }
+                elseif ((Get-Date) - [datetime]$b.ultimo -gt (New-TimeSpan -Days 2)) { Add-Finding "SQL ($inst) backup $($b.name)" "warning" "Ultimo backup completo: $([datetime]$b.ultimo -f 'dd/MM/yyyy HH:mm')" "Backup atrasado ha mais de 2 dias; verifique o agendamento." }
+            }
+
+            $conn.Close()
+        } catch {
+            Add-Finding "SQL Server ($inst)" "warning" "Servico ativo, mas nao foi possivel conectar: $($_.Exception.Message)" "O teste usa autenticacao Windows do usuario que rodou o script. Rode como um administrador com acesso ao SQL, ou verifique se a instancia aceita conexoes locais."
+        }
+    }
+    # Porta 1433
+    $p1433 = Get-NetTCPConnection -LocalPort 1433 -State Listen -ErrorAction SilentlyContinue
+    if ($sqlServices | Where-Object Status -eq "Running") {
+        if ($p1433) { Add-Finding "SQL porta 1433" "ok" "Ouvindo conexoes" }
+        else { Add-Finding "SQL porta 1433" "warning" "Nada ouvindo na 1433" "Estacoes nao conectam: ative TCP/IP no SQL Server Configuration Manager e libere a porta no Firewall do Windows." }
+    }
+}
+
 # ---- Envio e relatorio ----
 $payload = @{ scope = "server"; hostname = $env:COMPUTERNAME; domain = $dominio; client_id = $CLIENT_ID; findings = $Findings } | ConvertTo-Json -Depth 5
 try {
