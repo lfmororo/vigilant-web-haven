@@ -10,10 +10,10 @@ const Index = () => {
   return (
     <>
       <Helmet>
-        <title>FM TechFlow - Segurança Eletrônica Inteligente | Câmeras, Alarmes e Monitoramento</title>
+        <title>Mororo.tech - Segurança Eletrônica Inteligente | Câmeras, Alarmes e Monitoramento</title>
         <meta
           name="description"
-          content="FM TechFlow oferece soluções completas em segurança eletrônica: câmeras de vigilância, alarmes monitorados, controle de acesso e monitoramento 24h. Solicite seu orçamento grátis!"
+          content="Mororo.tech oferece soluções completas em segurança eletrônica: câmeras de vigilância, alarmes monitorados, controle de acesso e monitoramento 24h. Solicite seu orçamento grátis!"
         />
         <meta
           name="keywords"

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Menu, X, Headphones } from "lucide-react";
-import fmLogo from "@/assets/fm-techflow-logo.png";
+import fmLogo from "@/assets/mororo-tech-logo.png.asset.json";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -23,7 +23,7 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <a href="#inicio" className="flex items-center gap-3 group">
-            <img alt="FM TechFlow" className="h-14" src="/lovable-uploads/6a5524af-fc9f-4a85-85ec-2236896048a6.png" />
+            <img alt="Mororo.tech" className="h-14" src={fmLogo.url} />
           </a>
 
           {/* Desktop Navigation */}

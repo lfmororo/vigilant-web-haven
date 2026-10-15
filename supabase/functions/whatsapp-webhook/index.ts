@@ -219,7 +219,7 @@ async function classifyAndReply(userText: string, history: string): Promise<{
   intent: "support" | "greeting" | "human_request" | "not_resolved" | "resolved" | "other";
   reply: string;
 }> {
-  const systemPrompt = `Você é um assistente virtual de suporte técnico da FM TechFlow (TI: redes, computadores, servidores, câmeras, DVR, MikroTik, VMware).
+  const systemPrompt = `Você é um assistente virtual de suporte técnico da Mororo.tech (TI: redes, computadores, servidores, câmeras, DVR, MikroTik, VMware).
 Sua tarefa: classificar a mensagem do cliente E gerar uma resposta amigável em português brasileiro.
 
 Retorne APENAS JSON válido no formato:
@@ -344,7 +344,7 @@ async function handleTextMessage(supabaseAdmin: any, phone: string, text: string
 
     // First contact from unknown number
     await sendWhatsApp(apiUrl, apiToken, phone,
-      "Olá! 👋 Sou o assistente virtual da *FM TechFlow*.\n\nSeu número ainda não está cadastrado em nosso sistema. Para atendê-lo, por favor informe:\n\n• Seu *nome completo*\n• Nome da *empresa*\n\nAssim que recebermos, nossa equipe entrará em contato. 🙌");
+      "Olá! 👋 Sou o assistente virtual da *Mororo.tech*.\n\nSeu número ainda não está cadastrado em nosso sistema. Para atendê-lo, por favor informe:\n\n• Seu *nome completo*\n• Nome da *empresa*\n\nAssim que recebermos, nossa equipe entrará em contato. 🙌");
     await supabaseAdmin.from("whatsapp_conversations").upsert({
       phone, state: "awaiting_identification", context: {}, last_message_at: new Date().toISOString(),
     });

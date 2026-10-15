@@ -14,7 +14,7 @@ const UserProvisioning = () => {
   return (
     <AdminLayout>
       <Helmet>
-        <title>Criação de Usuários | FM TechFlow</title>
+        <title>Criação de Usuários | Mororo.tech</title>
         <meta name="description" content="Crie usuários corporativos no Active Directory e organize as pastas de cada setor." />
       </Helmet>
       <div className="space-y-6">

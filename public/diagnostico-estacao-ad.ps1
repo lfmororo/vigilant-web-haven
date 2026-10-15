@@ -1,5 +1,5 @@
 # =====================================================================
-#  Diagnostico de Estacao do Dominio - FM TechFlow
+#  Diagnostico de Estacao do Dominio - Mororo.tech
 #  Resolve/Previne:
 #   - "Falha na relacao de confianca entre esta estacao e o dominio primario"
 #   - "Ha uma diferenca de horario e/ou data entre o cliente e o servidor"

@@ -682,7 +682,7 @@ const SystemSettings = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="smtp_from_name">Nome do Remetente</Label>
-                  <Input id="smtp_from_name" placeholder="FM TechFlow Suporte" value={smtpForm.smtp_from_name} onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_from_name: e.target.value }))} />
+                  <Input id="smtp_from_name" placeholder="Mororo.tech Suporte" value={smtpForm.smtp_from_name} onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_from_name: e.target.value }))} />
                 </div>
                 <div className="flex items-center gap-3 pt-2">
                   <Switch id="notification_enabled" checked={smtpForm.notification_enabled === "true"} onCheckedChange={(checked) => setSmtpForm((f) => ({ ...f, notification_enabled: checked ? "true" : "false" }))} />

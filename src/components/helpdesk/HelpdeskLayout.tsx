@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { TicketCheck, FileText, LayoutDashboard, LogOut, Menu, ArrowLeft } from "lucide-react";
-import fmLogo from "@/assets/fm-techflow-logo.png";
+import fmLogo from "@/assets/mororo-tech-logo.png.asset.json";
 
 interface HelpdeskLayoutProps {
   children: ReactNode;
@@ -34,7 +34,7 @@ const HelpdeskLayout = ({ children }: HelpdeskLayoutProps) => {
         <div className="flex flex-col h-full">
           <div className="p-6 border-b border-border">
             <Link to="/helpdesk" className="flex items-center gap-3">
-              <img src={fmLogo} alt="FM TechFlow" className="h-9" />
+              <img src={fmLogo.url} alt="Mororo.tech" className="h-9" />
               <p className="text-xs text-muted-foreground">Central de Suporte</p>
             </Link>
           </div>
@@ -76,7 +76,7 @@ const HelpdeskLayout = ({ children }: HelpdeskLayoutProps) => {
             <button onClick={() => setSidebarOpen(true)} className="p-2 hover:bg-muted rounded-lg">
               <Menu className="w-6 h-6" />
             </button>
-            <img src={fmLogo} alt="FM TechFlow" className="h-8" />
+            <img src={fmLogo.url} alt="Mororo.tech" className="h-8" />
             <div className="w-10" />
           </div>
         </header>

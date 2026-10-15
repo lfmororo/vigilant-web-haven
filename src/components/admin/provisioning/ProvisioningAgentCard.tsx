@@ -104,7 +104,7 @@ const ProvisioningAgentCard = () => {
             key,
             interval: 30,
             arguments: clientId ? `-ClientId ${clientId}` : "",
-            serviceName: `FMTechFlow_AD_${safeClientName}`,
+            serviceName: `MororoTech_AD_${safeClientName}`,
             zipName: `agente-ad-${safeClientName}`,
           }}
         />
