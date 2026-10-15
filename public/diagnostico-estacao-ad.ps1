@@ -10,7 +10,8 @@
 #  ou desconecte o cabo de rede, logue com a conta em cache e execute o script.
 # =====================================================================
 #  Teste de velocidade com servidores: -Servidores 192.168.0.10,192.168.0.20
-#  (sem o parametro, o script pergunta; use -NaoPerguntar para pular)
+#  Teste de comunicacao com SQL Server: -SqlServidores 192.168.0.30
+#  (sem os parametros, o script pergunta; use -NaoPerguntar para pular)
 param([switch]$Corrigir, [string[]]$Servidores = @(), [string[]]$SqlServidores = @(), [switch]$NaoPerguntar)
 
 $SUPABASE_URL = "__SUPABASE_URL__"
