@@ -87,6 +87,22 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
   const list = (reports || []).filter((r: any) => filter === "all" || r.client_id === filter);
   const sorted = (f: Finding[]) => [...f].sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status));
 
+  const PRINT_COLORS: Record<string, string> = {
+    error: "background:#fee2e2;color:#b91c1c;",
+    warning: "background:#fef3c7;color:#b45309;",
+    fixed: "background:#cffafe;color:#0e7490;",
+    ok: "background:#d1fae5;color:#047857;",
+  };
+
+  /** Imprime apenas o relatório: ativa a classe no body, imprime e remove. */
+  const printReport = () => {
+    document.body.classList.add("print-diagnostics");
+    const cleanup = () => document.body.classList.remove("print-diagnostics");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
+    setTimeout(cleanup, 1000);
+  };
+
   return (
     <div className="space-y-4">
       <Card>
@@ -153,7 +169,7 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
                 </p>
               </DialogHeader>
               <div className="flex gap-2 print:hidden">
-                <Button size="sm" variant="outline" onClick={() => window.print()}><Printer className="w-4 h-4 mr-1" /> Imprimir / PDF</Button>
+                <Button size="sm" variant="outline" onClick={printReport}><Printer className="w-4 h-4 mr-1" /> Imprimir / PDF</Button>
                 <Button size="sm" onClick={() => research(open.id)} disabled={researching || (open.error_count + open.warning_count) === 0}>
                   {researching ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Globe className="w-4 h-4 mr-1" />} Pesquisar soluções na internet
                 </Button>
