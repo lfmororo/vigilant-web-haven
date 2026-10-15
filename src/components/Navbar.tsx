@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Menu, X, Headphones } from "lucide-react";
-import fmLogo from "@/assets/fm-techflow-logo.png";
+import fmLogo from "@/assets/mororo-tech-logo.png.asset.json";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);

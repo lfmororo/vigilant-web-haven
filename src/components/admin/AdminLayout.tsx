@@ -27,7 +27,7 @@ import {
   UserPlus,
   Shield } from
 "lucide-react";
-import fmLogo from "@/assets/fm-techflow-logo.png";
+import fmLogo from "@/assets/mororo-tech-logo.png.asset.json";
 
 interface AdminLayoutProps {
   children: ReactNode;
