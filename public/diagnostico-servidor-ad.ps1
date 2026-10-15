@@ -1,5 +1,5 @@
 # =====================================================================
-#  Diagnostico do Servidor / Active Directory - FM TechFlow
+#  Diagnostico do Servidor / Active Directory - Mororo.tech
 #  Execute como Administrador do Dominio NO CONTROLADOR DE DOMINIO:
 #     powershell -ExecutionPolicy Bypass -File diagnostico-servidor-ad.ps1
 #  Opcional: -Corrigir  (aplica correcoes seguras: horario, servicos, DNS)

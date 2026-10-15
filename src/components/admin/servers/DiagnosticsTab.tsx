@@ -219,7 +219,7 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
       {open && (
         <div className="print-diagnostics-root hidden">
           <div className="print-diag-header">
-            <img src="/fm-techflow-logo-email.png" alt="FM TechFlow" />
+            <img src="/mororo-tech-logo.png" alt="Mororo.tech" />
             <div style={{ textAlign: "right" }}>
               <h1>Relatório de Diagnóstico</h1>
               <p>
@@ -252,7 +252,7 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
             </tbody>
           </table>
           <div className="print-diag-footer">
-            <span>FM TechFlow · contato@fmtechflow.com.br</span>
+            <span>Mororo.tech · contato@mororo.tech</span>
             <span>Emitido em {new Date().toLocaleString("pt-BR")}</span>
           </div>
         </div>

@@ -112,7 +112,7 @@ const MonthlyAiReport = () => {
     const selectedSectorNames = sectorIds.length > 0
       ? sectors?.filter(s => sectorIds.includes(s.id)).map(s => s.name).join(", ") || ""
       : "";
-    const logoUrl = `${window.location.origin}/fm-techflow-logo-email.png`;
+    const logoUrl = `${window.location.origin}/mororo-tech-logo.png`;
 
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Relatório Mensal - ${clientName}</title>
@@ -160,10 +160,10 @@ const MonthlyAiReport = () => {
 </style></head>
 <body>
   <div class="header">
-    <div class="header-logo"><img src="${logoUrl}" alt="FM TechFlow" /></div>
+    <div class="header-logo"><img src="${logoUrl}" alt="Mororo.tech" /></div>
     <div class="header-info">
-      <div class="company">FM TechFlow</div>
-      <div class="contact">contato@fmtechflow.com.br</div>
+      <div class="company">Mororo.tech</div>
+      <div class="contact">contato@mororo.tech</div>
     </div>
   </div>
 
@@ -181,7 +181,7 @@ const MonthlyAiReport = () => {
   <div class="content">${markdownToHtml(report || "")}</div>
 
   <div class="footer">
-    Documento gerado automaticamente por <span class="brand">FM TechFlow</span> em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+    Documento gerado automaticamente por <span class="brand">Mororo.tech</span> em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
   </div>
 </body></html>`;
     printWindow.document.write(html);

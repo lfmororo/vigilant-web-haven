@@ -12,7 +12,7 @@ const Footer = () => {
           {/* Logo & Description */}
           <div className="md:col-span-2">
             <a href="#inicio" className="flex items-center gap-3 mb-4">
-              <img src={fmLogo} alt="FM TechFlow" className="h-10" />
+              <img src={fmLogo} alt="Mororo.tech" className="h-10" />
             </a>
             <p className="text-muted-foreground leading-relaxed max-w-sm">
               Soluções completas em segurança eletrônica para empresas e 
