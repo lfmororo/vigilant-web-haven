@@ -151,14 +151,18 @@ foreach ($alvo in $alvos) {
     if (-not $destino) {
         foreach ($m in $maps) { if ($m.ProviderName -like "\\$alvo\*" -and (Test-Path "$($m.Name)\")) { $destino = "$($m.Name)\"; break } }
     }
+    # Fichier de test de 200 MB genere en local avant l'envoi
+    $origem = Join-Path $env:TEMP "fmtf_speed.bin"
+    $bytes = New-Object byte[] (200MB); (New-Object Random).NextBytes($bytes)
+    [IO.File]::WriteAllBytes($origem, $bytes)
     if ($destino) {
         $dest = Join-Path $destino ("fmtf_speed_{0}.bin" -f $env:COMPUTERNAME)
         $t = Measure-Command { Copy-Item $origem $dest -Force }
-        $up = if ($t.TotalSeconds -gt 0) { 400 / $t.TotalSeconds } else { 0 }
+        $up = if ($t.TotalSeconds -gt 0) { 1600 / $t.TotalSeconds } else { 0 }
         $t2 = Measure-Command { Copy-Item $dest "$origem.ret" -Force }
-        $down = if ($t2.TotalSeconds -gt 0) { 400 / $t2.TotalSeconds } else { 0 }
+        $down = if ($t2.TotalSeconds -gt 0) { 1600 / $t2.TotalSeconds } else { 0 }
         Remove-Item $dest, "$origem.ret" -Force
-        $txt = "Envio {0:N0} Mbps / Recebimento {1:N0} Mbps (arquivo 50 MB em {2})" -f $up, $down, $destino
+        $txt = "Envio {0:N0} Mbps / Recebimento {1:N0} Mbps (arquivo 200 MB em {2})" -f $up, $down, $destino
         $min = [math]::Min($up, $down)
         if ($min -lt 50) { Add-Finding "Velocidade $alvo" "error" $txt "Muito lento para rede local. Verifique se a placa negociou 100 Mbps/half-duplex, cabo danificado, Wi-Fi ou switch sobrecarregado." }
         elseif ($min -lt 300) { Add-Finding "Velocidade $alvo" "warning" $txt "Abaixo de rede gigabit. Confira cabo Cat5e/Cat6 e a velocidade negociada da placa." }
