@@ -123,6 +123,85 @@ if ($ev) {
     Add-Finding "Eventos de erro (24h)" "warning" ($top -join ", ") "Pesquise os IDs no Visualizador de Eventos. 5719/5722 = canal seguro; 1311/2042 = replicacao; 4013 = DNS."
 } else { Add-Finding "Eventos de erro (24h)" "ok" "Nenhum erro critico" }
 
+# 12) Lentidao - maquina virtual Proxmox (KVM/QEMU)
+try {
+    $cs = Get-CimInstance Win32_ComputerSystem
+    $bios = Get-CimInstance Win32_BIOS
+    $isProxmox = ($cs.Manufacturer -match "QEMU|Proxmox") -or ($cs.Model -match "Standard PC|KVM|QEMU") -or ($bios.Manufacturer -match "SeaBIOS|EDK|Proxmox")
+    if ($isProxmox) { Add-Finding "Virtualizacao" "ok" "VM Proxmox/KVM detectada ($($cs.Manufacturer) $($cs.Model))" }
+    else { Add-Finding "Virtualizacao" "warning" "Nao identificada como Proxmox ($($cs.Manufacturer) $($cs.Model))" "Verificacoes de VM rodarao mesmo assim." }
+
+    # CPU: uso e fila (fila alta com CPU baixa = host sobrecarregado / CPU steal)
+    $cpu = (Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 2 -MaxSamples 5).CounterSamples | Measure-Object CookedValue -Average
+    $fila = (Get-Counter '\System\Processor Queue Length' -SampleInterval 2 -MaxSamples 5).CounterSamples | Measure-Object CookedValue -Average
+    $nucleos = $cs.NumberOfLogicalProcessors
+    $cpuPct = [math]::Round($cpu.Average,1); $filaMed = [math]::Round($fila.Average,1)
+    if ($cpuPct -ge 85) {
+        $topProc = Get-Process | Sort-Object CPU -Descending | Select-Object -First 5 | ForEach-Object { $_.ProcessName }
+        Add-Finding "CPU da VM" "error" "$cpuPct% em uso ($nucleos vCPU). Maiores: $($topProc -join ', ')" "Aumente vCPUs no Proxmox (Hardware > Processadores) ou investigue os processos listados."
+    } elseif ($filaMed -gt ($nucleos * 2)) {
+        Add-Finding "Fila de processador" "error" "Fila $filaMed com CPU $cpuPct% ($nucleos vCPU)" "Fila alta com CPU baixa indica host Proxmox sobrecarregado (CPU steal). Verifique o uso de CPU do no no Proxmox, reduza vCPUs superdimensionadas de outras VMs ou migre a VM."
+    } else { Add-Finding "CPU da VM" "ok" "$cpuPct% em uso, fila $filaMed ($nucleos vCPU)" }
+
+    # Tipo de CPU (kvm64/qemu64 = sem instrucoes modernas)
+    $cpuNome = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name
+    if ($cpuNome -match "QEMU Virtual CPU|Common KVM|kvm64|qemu64") {
+        Add-Finding "Tipo de CPU virtual" "warning" $cpuNome "No Proxmox, mude Hardware > Processadores > Tipo para 'host' (ou x86-64-v2-AES) para habilitar AES/AVX e melhorar o desempenho."
+    } else { Add-Finding "Tipo de CPU virtual" "ok" $cpuNome }
+
+    # Memoria e balloon
+    $os = Get-CimInstance Win32_OperatingSystem
+    $memPct = [math]::Round((1 - $os.FreePhysicalMemory / $os.TotalVisibleMemorySize) * 100, 1)
+    $memGB = [math]::Round($os.TotalVisibleMemorySize / 1MB, 1)
+    $pf = (Get-Counter '\Memory\Pages/sec' -SampleInterval 2 -MaxSamples 3).CounterSamples | Measure-Object CookedValue -Average
+    $pfMed = [math]::Round($pf.Average,0)
+    if ($memPct -ge 90 -or $pfMed -gt 1000) { Add-Finding "Memoria da VM" "error" "$memPct% de $memGB GB, paginacao $pfMed/s" "Aumente a RAM da VM no Proxmox. Se usar Ballooning, defina memoria minima igual a maxima no controlador de dominio." }
+    elseif ($memPct -ge 80) { Add-Finding "Memoria da VM" "warning" "$memPct% de $memGB GB, paginacao $pfMed/s" "Considere aumentar a RAM." }
+    else { Add-Finding "Memoria da VM" "ok" "$memPct% de $memGB GB, paginacao $pfMed/s" }
+    $balloon = Get-Service BalloonService -ErrorAction SilentlyContinue
+    if (-not $balloon) { Add-Finding "Servico Balloon (VirtIO)" "warning" "Nao instalado" "Instale os drivers VirtIO (virtio-win.iso) e o QEMU Guest Agent." }
+    elseif ($balloon.Status -ne "Running") { Add-Finding "Servico Balloon (VirtIO)" "warning" "Status $($balloon.Status)" "Inicie: Start-Service BalloonService" }
+    else { Add-Finding "Servico Balloon (VirtIO)" "ok" "Em execucao" }
+
+    # QEMU Guest Agent
+    $qga = Get-Service QEMU-GA -ErrorAction SilentlyContinue
+    if (-not $qga) { Add-Finding "QEMU Guest Agent" "warning" "Nao instalado" "Instale o qemu-ga do virtio-win.iso e ative 'QEMU Guest Agent' nas Opcoes da VM no Proxmox (melhora desligamento, backup e horario)." }
+    elseif ($qga.Status -ne "Running") {
+        if ($Corrigir) { Set-Service QEMU-GA -StartupType Automatic; Start-Service QEMU-GA -ErrorAction SilentlyContinue; Add-Finding "QEMU Guest Agent" "fixed" "Servico iniciado" }
+        else { Add-Finding "QEMU Guest Agent" "warning" "Status $($qga.Status)" "Start-Service QEMU-GA (ou rode com -Corrigir)." }
+    } else { Add-Finding "QEMU Guest Agent" "ok" "Em execucao" }
+
+    # Drivers de disco e rede (IDE/SATA/E1000 sao lentos)
+    $discos = Get-CimInstance Win32_DiskDrive
+    $lentos = $discos | Where-Object { $_.Model -match "QEMU HARDDISK|ATA" -and $_.PNPDeviceID -notmatch "VEN_1AF4" }
+    if ($lentos) { Add-Finding "Controlador de disco" "error" "Disco(s) emulado(s) IDE/SATA: $(($lentos | ForEach-Object Model) -join ', ')" "No Proxmox use VirtIO SCSI single + disco SCSI com IO thread, cache 'Write back' (com no-break) ou 'none', e Discard ativo. Instale antes o driver vioscsi do virtio-win." }
+    else { Add-Finding "Controlador de disco" "ok" "VirtIO/SCSI" }
+    $nics = Get-CimInstance Win32_NetworkAdapter -Filter "PhysicalAdapter=True"
+    $e1000 = $nics | Where-Object { $_.Name -match "Intel.*(PRO/1000|82540|E1000)|Realtek.*8139" }
+    if ($e1000) { Add-Finding "Placa de rede virtual" "warning" "Emulada: $(($e1000 | ForEach-Object Name) -join ', ')" "Troque o modelo para VirtIO (paravirtualizado) no Proxmox apos instalar o driver netkvm." }
+    else { Add-Finding "Placa de rede virtual" "ok" (($nics | ForEach-Object Name) -join ', ') }
+
+    # Latencia de disco (armazenamento do host lento)
+    $lat = (Get-Counter '\PhysicalDisk(_Total)\Avg. Disk sec/Transfer','\PhysicalDisk(_Total)\Current Disk Queue Length' -SampleInterval 2 -MaxSamples 5).CounterSamples
+    $latMs = [math]::Round((($lat | Where-Object Path -match 'sec/transfer' | Measure-Object CookedValue -Average).Average) * 1000, 1)
+    $filaD = [math]::Round(($lat | Where-Object Path -match 'queue' | Measure-Object CookedValue -Average).Average, 1)
+    if ($latMs -gt 50) { Add-Finding "Latencia de disco" "error" "$latMs ms (fila $filaD)" "Armazenamento do Proxmox lento: verifique IO delay do no, uso de HD mecanico/ZFS sem cache, snapshots antigos e backups rodando no horario de uso." }
+    elseif ($latMs -gt 20) { Add-Finding "Latencia de disco" "warning" "$latMs ms (fila $filaD)" "Monitore o IO delay no resumo do no Proxmox; prefira SSD e IO thread." }
+    else { Add-Finding "Latencia de disco" "ok" "$latMs ms (fila $filaD)" }
+
+    # Plano de energia
+    $plano = (powercfg /getactivescheme) -join ""
+    if ($plano -notmatch "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c") {
+        if ($Corrigir) { powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c; Add-Finding "Plano de energia" "fixed" "Alterado para Alto desempenho" }
+        else { Add-Finding "Plano de energia" "warning" "Nao esta em Alto desempenho" "powercfg /setactive SCHEME_MIN (ou rode com -Corrigir)." }
+    } else { Add-Finding "Plano de energia" "ok" "Alto desempenho" }
+
+    # Tempo ligado
+    $dias = [math]::Round(((Get-Date) - $os.LastBootUpTime).TotalDays, 0)
+    if ($dias -gt 60) { Add-Finding "Tempo ligado" "warning" "$dias dias sem reiniciar" "Agende reinicio para aplicar atualizacoes e liberar memoria." }
+    else { Add-Finding "Tempo ligado" "ok" "$dias dia(s)" }
+} catch { Add-Finding "Analise de lentidao (VM)" "warning" "Falha ao coletar: $($_.Exception.Message)" "Execute como administrador." }
+
 # ---- Envio e relatorio ----
 $payload = @{ scope = "server"; hostname = $env:COMPUTERNAME; domain = $dominio; client_id = $CLIENT_ID; findings = $Findings } | ConvertTo-Json -Depth 5
 try {
