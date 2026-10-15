@@ -87,6 +87,22 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
   const list = (reports || []).filter((r: any) => filter === "all" || r.client_id === filter);
   const sorted = (f: Finding[]) => [...f].sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status));
 
+  const PRINT_COLORS: Record<string, React.CSSProperties> = {
+    error: { background: "#fee2e2", color: "#b91c1c" },
+    warning: { background: "#fef3c7", color: "#b45309" },
+    fixed: { background: "#cffafe", color: "#0e7490" },
+    ok: { background: "#d1fae5", color: "#047857" },
+  };
+
+  /** Imprime apenas o relatório: ativa a classe no body, imprime e remove. */
+  const printReport = () => {
+    document.body.classList.add("print-diagnostics");
+    const cleanup = () => document.body.classList.remove("print-diagnostics");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
+    setTimeout(cleanup, 1000);
+  };
+
   return (
     <div className="space-y-4">
       <Card>
@@ -153,7 +169,7 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
                 </p>
               </DialogHeader>
               <div className="flex gap-2 print:hidden">
-                <Button size="sm" variant="outline" onClick={() => window.print()}><Printer className="w-4 h-4 mr-1" /> Imprimir / PDF</Button>
+                <Button size="sm" variant="outline" onClick={printReport}><Printer className="w-4 h-4 mr-1" /> Imprimir / PDF</Button>
                 <Button size="sm" onClick={() => research(open.id)} disabled={researching || (open.error_count + open.warning_count) === 0}>
                   {researching ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Globe className="w-4 h-4 mr-1" />} Pesquisar soluções na internet
                 </Button>
@@ -198,6 +214,49 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Versão de impressão: cabeçalho com logo, dados do relatório e rodapé */}
+      {open && (
+        <div className="print-diagnostics-root hidden">
+          <div className="print-diag-header">
+            <img src="/fm-techflow-logo-email.png" alt="FM TechFlow" />
+            <div style={{ textAlign: "right" }}>
+              <h1>Relatório de Diagnóstico</h1>
+              <p>
+                {open.scope === "server" ? "Servidor" : "Estação"}: {open.hostname} · Domínio: {open.domain}
+                <br />
+                Empresa: {open.clients?.full_name || "Sem empresa"} · Data: {new Date(open.created_at).toLocaleString("pt-BR")}
+              </p>
+            </div>
+          </div>
+          <p style={{ fontSize: 11, margin: "0 0 8px" }}>
+            Resumo: {open.error_count} problema(s), {open.warning_count} atenção(ões), {open.fixed_count} corrigido(s), {open.ok_count} OK.
+          </p>
+          <table className="print-diag-table">
+            <thead>
+              <tr><th>Verificação</th><th>Situação</th><th>Problema encontrado</th><th>Solução sugerida</th></tr>
+            </thead>
+            <tbody>
+              {sorted(open.findings as Finding[]).map((f, i) => (
+                <tr key={i}>
+                  <td>{f.check}</td>
+                  <td>
+                    <span className="print-diag-badge" style={PRINT_COLORS[f.status]}>
+                      {(STATUS_LABEL[f.status] || STATUS_LABEL.warning).label}
+                    </span>
+                  </td>
+                  <td>{f.detail}</td>
+                  <td>{f.solution || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="print-diag-footer">
+            <span>FM TechFlow · contato@fmtechflow.com.br</span>
+            <span>Emitido em {new Date().toLocaleString("pt-BR")}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
