@@ -199,4 +199,78 @@
     margin: 10mm;
     size: A4;
   }
+
+  /* Relatório de diagnóstico: imprime só a área do relatório */
+  body.print-diagnostics > *:not(.print-diagnostics-root) {
+    display: none !important;
+  }
+
+  .print-diagnostics-root {
+    display: block !important;
+    color: #000;
+  }
+
+  .print-diag-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid #0f172a;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+  }
+
+  .print-diag-header img {
+    height: 48px;
+  }
+
+  .print-diag-header h1 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .print-diag-header p {
+    font-size: 11px;
+    color: #444;
+    margin: 2px 0 0;
+  }
+
+  .print-diag-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-top: 1px solid #999;
+    padding-top: 4px;
+    font-size: 10px;
+    color: #444;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .print-diag-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  .print-diag-table th,
+  .print-diag-table td {
+    border: 1px solid #bbb;
+    padding: 4px 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .print-diag-table th {
+    background: #e2e8f0;
+  }
+
+  .print-diag-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+  }
 }
