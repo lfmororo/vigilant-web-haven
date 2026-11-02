@@ -48,10 +48,10 @@ const IloServersTab = ({ clients }: IloServersTabProps) => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ilo_servers")
-        .select("*, clients(full_name)")
+        .select("id, client_id, name, host, port, username, is_active, status, health_summary, power_state, post_state, indicator_led, server_model, serial_number, ilo_version, ilo_firmware, bios_version, cpu_model, cpu_count, ram_total_gb, health_processor, health_memory, health_storage, health_fans, health_power, health_temperature, health_network, uptime_seconds, last_polled_at, last_error, created_at, updated_at, vendor, consecutive_failures, last_success_at, clients(full_name)")
         .order("name");
       if (error) throw error;
-      return (data || []) as IloServer[];
+      return (data || []) as unknown as IloServer[];
     },
     refetchInterval: 30000,
   });

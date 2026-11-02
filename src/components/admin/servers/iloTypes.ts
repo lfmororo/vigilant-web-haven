@@ -1,7 +1,7 @@
 import type { Tables } from "@/integrations/supabase/types";
 
 /** Servidor iLO com o nome do cliente resolvido pelo join da consulta. */
-export type IloServer = Tables<"ilo_servers"> & {
+export type IloServer = Omit<Tables<"ilo_servers">, "password"> & {
   clients?: { full_name: string } | null;
 };
 

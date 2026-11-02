@@ -94,7 +94,7 @@ const ServerMonitor = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("vmware_hosts")
-        .select("*, clients(full_name)")
+        .select("id, client_id, name, host, username, port, status, is_active, cpu_cores, cpu_usage_pct, ram_total_gb, ram_used_gb, ram_usage_pct, esxi_version, uptime_seconds, datastores, last_polled_at, last_error, created_at, updated_at, clients(full_name)")
         .order("name");
       return data || [];
     },
@@ -197,10 +197,13 @@ const ServerMonitor = () => {
     if (activeTab === "windows") {
       addWindowsServer.mutate({ name: formData.name, host: formData.host, client_id: formData.client_id });
     } else {
-      addVmwareHost.mutate({
+      const payload: Record<string, any> = {
         name: formData.name, host: formData.host, client_id: formData.client_id,
-        username: formData.username, password: formData.password, port: formData.port
-      });
+        username: formData.username, port: formData.port
+      };
+      // Senha vazia na edição = manter a atual.
+      if (formData.password) payload.password = formData.password;
+      addVmwareHost.mutate(payload);
     }
   };
 
@@ -208,7 +211,7 @@ const ServerMonitor = () => {
     setEditingItem(item);
     setFormData({
       name: item.name, host: item.host, client_id: item.client_id,
-      username: item.username || "root", password: item.password || "", port: item.port || 443
+      username: item.username || "root", password: "", port: item.port || 443
     });
     setActiveTab(type);
     setShowAddDialog(true);

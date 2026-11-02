@@ -46,9 +46,9 @@ const ProxmoxTab = ({ clients }: ProxmoxTabProps) => {
   const { data: nodes } = useQuery({
     queryKey: ["proxmox-nodes"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("proxmox_nodes").select("*, clients(full_name)").order("name");
+      const { data, error } = await supabase.from("proxmox_nodes").select("id, client_id, name, host, port, node_name, auth_mode, username, token_name, is_active, status, pve_version, cpu_model, cpu_cores, cpu_usage_pct, ram_total_gb, ram_used_gb, ram_usage_pct, swap_total_gb, swap_used_gb, disk_total_gb, disk_used_gb, disk_usage_pct, load_avg, uptime_seconds, storages, last_polled_at, last_error, created_at, updated_at, clients(full_name)").order("name");
       if (error) throw error;
-      return (data || []) as ProxmoxNode[];
+      return (data || []) as unknown as ProxmoxNode[];
     },
     refetchInterval: 30000,
   });
