@@ -148,8 +148,6 @@ collect_disks() {
     items+=("{\"mount\":$(json_str "$mount"),\"fstype\":$(json_str "$fstype"),\"pct\":$(json_num "$pct"),\"inode_pct\":$(json_num "$ipct"),\"total_gb\":$(awk -v k="$total" 'BEGIN{printf "%.1f", k/1048576}'),\"used_gb\":$(awk -v k="$used" 'BEGIN{printf "%.1f", k/1048576}')}")
   done < <(df -PT -k 2>/dev/null | awk 'NR>1{gsub("%","",$6); print $2, $3, $4, $6, $7}')
   printf '[%s]' "$(join_by_comma "${items[@]}")"
-  # maior uso
-  MAX_DISK=$(df -PT 2>/dev/null | awk 'NR>1 && $2!~/^(tmpfs|devtmpfs|overlay|squashfs|fuse\..*|iso9660)$/{gsub("%","",$6); if($6+0>m)m=$6+0} END{print m+0}')
 }
 
 collect_services() {
@@ -274,7 +272,7 @@ cmd_run() {
   [ -n "$ip" ] || ip=$(hostname -I 2>/dev/null | awk '{print $1}')
   local reboot=0; [ -f /var/run/reboot-required ] && reboot=1
   if [ "$reboot" = "0" ] && command -v needs-restarting >/dev/null 2>&1; then
-    needs-restarting -r >/dev/null 2>&1 || [ $? -eq 1 ] && reboot=1
+    needs-restarting -r >/dev/null 2>&1; [ $? -eq 1 ] && reboot=1
   fi
   local upd sec; read -r upd sec <<<"$(collect_updates)"
 
