@@ -19,8 +19,11 @@ import { formatTimeAgo } from "@/lib/formatTimeAgo";
 import {
   Server, Monitor, Plus, RefreshCw, Trash2, Edit, HardDrive,
   Cpu, MemoryStick, Activity, Clock, ChevronDown, ChevronRight,
-  Power, AlertTriangle, CheckCircle, XCircle, Download, ServerCog, Boxes, LayoutDashboard
+  Power, AlertTriangle, CheckCircle, XCircle, Download, ServerCog, Boxes, LayoutDashboard, Terminal, Database, KeyRound
 } from "lucide-react";
+import LinuxServersTab from "@/components/admin/servers/LinuxServersTab";
+import SqlServerTab from "@/components/admin/servers/SqlServerTab";
+import MonitorAgentsTab from "@/components/admin/servers/MonitorAgentsTab";
 import MonitoringOverview from "@/components/admin/servers/MonitoringOverview";
 import { UsageBar, fmtAgo } from "@/components/admin/servers/monitorUi";
 import IloServersTab from "@/components/admin/servers/IloServersTab";
@@ -201,7 +204,7 @@ const ServerMonitor = () => {
 
   return (
     <AdminLayout>
-      <AgentVersionAlert types={["windows", "vmware", "ilo", "idrac", "proxmox"]} className="mb-4" />
+      <AgentVersionAlert types={["windows", "linux", "sqlserver", "vmware", "ilo", "idrac", "proxmox"]} className="mb-4" />
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -274,9 +277,11 @@ const ServerMonitor = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
+          <TabsList className="h-auto flex-wrap justify-start">
             <TabsTrigger value="overview"><LayoutDashboard className="w-4 h-4 mr-1" /> Visão geral</TabsTrigger>
             <TabsTrigger value="windows"><Server className="w-4 h-4 mr-1" /> Windows</TabsTrigger>
+            <TabsTrigger value="linux"><Terminal className="w-4 h-4 mr-1" /> Linux</TabsTrigger>
+            <TabsTrigger value="sqlserver"><Database className="w-4 h-4 mr-1" /> SQL Server</TabsTrigger>
             <TabsTrigger value="vmware"><Monitor className="w-4 h-4 mr-1" /> VMware</TabsTrigger>
             <TabsTrigger value="ilo"><ServerCog className="w-4 h-4 mr-1" /> iLO4 / iDRAC9</TabsTrigger>
             <TabsTrigger value="proxmox"><Boxes className="w-4 h-4 mr-1" /> Proxmox</TabsTrigger>
@@ -284,6 +289,7 @@ const ServerMonitor = () => {
             <TabsTrigger value="diagnostics"><Activity className="w-4 h-4 mr-1" /> Diagnósticos</TabsTrigger>
             <TabsTrigger value="diagnostics-history"><Activity className="w-4 h-4 mr-1" /> Histórico Diagnósticos</TabsTrigger>
 
+            <TabsTrigger value="agents"><KeyRound className="w-4 h-4 mr-1" /> Agentes & Alertas</TabsTrigger>
             <TabsTrigger value="guide"><Download className="w-4 h-4 mr-1" /> Guia Coletor</TabsTrigger>
 
           </TabsList>
@@ -291,6 +297,10 @@ const ServerMonitor = () => {
           <TabsContent value="overview">
             <MonitoringOverview clients={clients} onOpenTab={setActiveTab} />
           </TabsContent>
+
+          <TabsContent value="linux"><LinuxServersTab clients={clients} /></TabsContent>
+          <TabsContent value="sqlserver"><SqlServerTab clients={clients} /></TabsContent>
+          <TabsContent value="agents"><MonitorAgentsTab clients={clients} /></TabsContent>
 
           {/* Windows Tab */}
           <TabsContent value="windows">
