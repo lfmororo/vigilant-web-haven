@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import type { Tables } from "@/integrations/supabase/types";
 
 /** Nó Proxmox com o nome do cliente resolvido pelo join da consulta. */
-export type ProxmoxNode = Tables<"proxmox_nodes"> & {
+export type ProxmoxNode = Omit<Tables<"proxmox_nodes">, "password" | "token_secret"> & {
   clients?: { full_name: string } | null;
 };
 
