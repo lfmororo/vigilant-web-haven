@@ -115,36 +115,6 @@ const ServerMonitor = () => {
     refetchInterval: 30000
   });
 
-  // Servidores HP iLO — usado para os cartões de resumo e para o painel de alertas.
-  const { data: iloServers } = useQuery({
-    queryKey: ["ilo-servers-summary"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("ilo_servers")
-        .select("id, name, status, health_summary, last_polled_at, health_storage, health_power, health_fans, health_temperature")
-        .order("name");
-      return data || [];
-    },
-    refetchInterval: 30000
-  });
-
-  // Nós Proxmox VE — usado para os cartões de resumo e para o painel de alertas.
-  const { data: proxmoxNodes } = useQuery({
-    queryKey: ["proxmox-nodes-summary"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("proxmox_nodes")
-        .select("id, name, status, cpu_usage_pct, ram_usage_pct, disk_usage_pct, last_polled_at")
-        .order("name");
-      return data || [];
-    },
-    refetchInterval: 30000
-  });
-
-
-
-
-
   const addWindowsServer = useMutation({
     mutationFn: async (data: any) => {
       if (editingItem) {
@@ -224,13 +194,6 @@ const ServerMonitor = () => {
     setFormData({ name: "", host: "", client_id: "", username: "root", password: "", port: 443 });
     setShowAddDialog(true);
   };
-
-  const winOnline = windowsServers?.filter(s => s.status === "online").length || 0;
-  const winOffline = windowsServers?.filter(s => s.status === "offline").length || 0;
-  const vmOnline = vmwareHosts?.filter(h => h.status === "online").length || 0;
-  const vmOffline = vmwareHosts?.filter(h => h.status === "offline").length || 0;
-  const totalVms = vmwareVms?.length || 0;
-  const runningVms = vmwareVms?.filter(v => v.power_state === "poweredOn").length || 0;
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
