@@ -134,10 +134,10 @@ const DiagnosticsHistoryTab = ({ clients }: { clients: { id: string; full_name: 
               {s.resolved.length > 0 && (
                 <div>
                   <p className="text-sm font-medium text-emerald-400 mb-1">
-                    Resolvidos desde o diagnóstico anterior ({new Date(s.rows[1].created_at).toLocaleDateString("pt-BR")}):
+                    Resolvidos desde o diagnóstico anterior de cada máquina:
                   </p>
                   <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
-                    {s.resolved.map((f, i) => <li key={i}><span className="text-foreground">{f.check}</span> — {f.detail}</li>)}
+                    {s.resolved.map((f, i) => <li key={i}><span className="text-foreground">{f.hostname} · {f.check}</span> — {f.detail}</li>)}
                   </ul>
                 </div>
               )}
