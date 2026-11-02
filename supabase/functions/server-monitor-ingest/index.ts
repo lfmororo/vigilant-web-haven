@@ -3,8 +3,37 @@ import { getEvolutionConfig, waFetch } from "../_shared/whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-monitor-token",
 };
+
+const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+const jsonResp = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: jsonHeaders });
+
+/** Mapeia o "type" da requisição para o escopo exigido do token. */
+const TYPE_SCOPE: Record<string, string> = {
+  windows: "windows", "list-windows": "windows",
+  linux: "linux", "list-linux": "linux",
+  sqlserver: "sqlserver", "list-sqlserver": "sqlserver",
+  vmware: "vmware", "list-vmware": "vmware",
+  proxmox: "proxmox", "proxmox-net": "proxmox", "list-proxmox": "proxmox",
+  ilo: "ilo", "list-ilo": "ilo",
+};
+
+/** Tabela/campo usados para descobrir a qual cliente pertence a fonte de uma ingestão. */
+const INGEST_SOURCE: Record<string, { table: string; field: string }> = {
+  windows: { table: "windows_servers", field: "server_id" },
+  vmware: { table: "vmware_hosts", field: "host_id" },
+  ilo: { table: "ilo_servers", field: "server_id" },
+  proxmox: { table: "proxmox_nodes", field: "node_id" },
+  "proxmox-net": { table: "proxmox_nodes", field: "node_id" },
+};
+
+async function sha256Hex(value: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+type MonitorToken = { id: string; client_id: string | null; scopes: string[] };
 
 /**
  * Envia um alerta de hardware por WhatsApp para todos os administradores que
@@ -230,6 +259,53 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const { type } = body;
+
+    // ---- Autenticação por token de agente (x-monitor-token) ----
+    const rawToken = (req.headers.get("x-monitor-token") || "").trim();
+    let token: MonitorToken | null = null;
+    if (rawToken) {
+      const hash = await sha256Hex(rawToken);
+      const { data: tk } = await supabase
+        .from("monitor_agent_tokens")
+        .select("id, client_id, scopes")
+        .eq("token_hash", hash)
+        .is("revoked_at", null)
+        .maybeSingle();
+      if (!tk) return jsonResp({ error: "Token inválido ou revogado" }, 401);
+      token = tk as MonitorToken;
+      const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
+      // Não bloqueia a resposta.
+      supabase.from("monitor_agent_tokens")
+        .update({ last_used_at: new Date().toISOString(), last_ip: ip })
+        .eq("id", token.id)
+        .then(({ error }) => { if (error) console.error("token last_used update", error); });
+    }
+
+    const isList = typeof type === "string" && type.startsWith("list-");
+    if (!token) {
+      if (isList) return jsonResp({ error: "x-monitor-token obrigatório" }, 401);
+      if (Deno.env.get("MONITOR_REQUIRE_TOKEN") === "true") return jsonResp({ error: "x-monitor-token obrigatório" }, 401);
+      console.warn(`[server-monitor-ingest] ingestão sem token (type=${type}) — legado`);
+    } else {
+      const scope = TYPE_SCOPE[type];
+      if (token.scopes?.length && (!scope || !token.scopes.includes(scope))) {
+        return jsonResp({ error: `Token sem permissão para '${type}'` }, 403);
+      }
+    }
+    const tokenClientId = token?.client_id ?? null;
+
+    /** 403 se a fonte pertencer a outro cliente que não o do token. */
+    const assertOwner = async (table: string, id: string | null | undefined): Promise<Response | null> => {
+      if (!tokenClientId || !id) return null;
+      const { data: src } = await supabase.from(table).select("client_id").eq("id", id).maybeSingle();
+      if (src && (src as any).client_id !== tokenClientId) return jsonResp({ error: "Fonte pertence a outro cliente" }, 403);
+      return null;
+    };
+    const src = INGEST_SOURCE[type];
+    if (src && body[src.field]) {
+      const denied = await assertOwner(src.table, body[src.field]);
+      if (denied) return denied;
+    }
 
     if (type === "windows") {
       const { server_id, status: serverStatus, cpu_usage, ram_total_gb, ram_used_gb, ram_usage_pct, disk_total_gb, disk_used_gb, disk_free_gb, disk_usage_pct, uptime_seconds, last_boot_time, os_version, services_status, last_error } = body;
@@ -641,7 +717,7 @@ Deno.serve(async (req) => {
       if (!resolvedId && hostname) {
         const { data: candidates } = await supabase
           .from("proxmox_nodes")
-          .select("id, name, node_name")
+          .select("id, name, node_name, client_id")
           .eq("is_active", true);
         const host = String(hostname).toLowerCase();
         const match = (candidates || []).find(
@@ -655,6 +731,11 @@ Deno.serve(async (req) => {
           JSON.stringify({ error: `Nó Proxmox não identificado (hostname: ${hostname || "—"}). Informe --node-id.` }),
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
+      }
+
+      if (!node_id) {
+        const denied = await assertOwner("proxmox_nodes", resolvedId);
+        if (denied) return denied;
       }
 
       const rows = interfaces.slice(0, 100).map((i: any) => ({
@@ -684,19 +765,20 @@ Deno.serve(async (req) => {
       const { data } = await supabase
         .from("proxmox_nodes")
         .select("id, name, host, port, node_name, auth_mode, username, token_name, token_secret, password")
-        .eq("is_active", true);
+        .eq("is_active", true)
+        .match(tokenClientId ? { client_id: tokenClientId } : {});
       return new Response(JSON.stringify(data || []), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
 
     // List servers/hosts for collector script
     if (type === "list-windows") {
-      const { data } = await supabase.from("windows_servers").select("id, name, host").eq("is_active", true);
+      const { data } = await supabase.from("windows_servers").select("id, name, host").eq("is_active", true).match(tokenClientId ? { client_id: tokenClientId } : {});
       return new Response(JSON.stringify(data || []), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (type === "list-vmware") {
-      const { data } = await supabase.from("vmware_hosts").select("id, name, host, username, password, port").eq("is_active", true);
+      const { data } = await supabase.from("vmware_hosts").select("id, name, host, username, password, port").eq("is_active", true).match(tokenClientId ? { client_id: tokenClientId } : {});
       return new Response(JSON.stringify(data || []), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -704,7 +786,8 @@ Deno.serve(async (req) => {
       const { data } = await supabase
         .from("ilo_servers")
         .select("id, name, host, username, password, port, vendor")
-        .eq("is_active", true);
+        .eq("is_active", true)
+        .match(tokenClientId ? { client_id: tokenClientId } : {});
       return new Response(JSON.stringify(data || []), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

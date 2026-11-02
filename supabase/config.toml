@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.agent-version-alert]
 verify_jwt = false
+
+[functions.server-monitor-ingest]
+verify_jwt = false
