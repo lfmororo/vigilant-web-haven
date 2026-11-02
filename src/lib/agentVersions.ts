@@ -16,11 +16,13 @@ export interface AgentVersionSpec {
 }
 
 export const AGENT_VERSIONS: Record<string, AgentVersionSpec> = {
-  proxmox: { label: "Coletor Proxmox VE", version: "1.1.0", bundle: "proxmox" },
-  vmware: { label: "Coletor VMware", version: "1.1.0", bundle: "vmware" },
-  ilo: { label: "Coletor HP iLO4", version: "1.1.0", bundle: "ilo" },
-  idrac: { label: "Coletor Dell iDRAC9", version: "1.1.0", bundle: "idrac" },
-  windows: { label: "Coletor Windows Server", version: "1.1.0", bundle: "windows" },
+  proxmox: { label: "Coletor Proxmox VE", version: "1.2.0", bundle: "proxmox" },
+  vmware: { label: "Coletor VMware", version: "1.2.0", bundle: "vmware" },
+  ilo: { label: "Coletor HP iLO4", version: "1.2.0", bundle: "ilo" },
+  idrac: { label: "Coletor Dell iDRAC9", version: "1.2.0", bundle: "idrac" },
+  windows: { label: "Coletor Windows Server", version: "2.0.0", bundle: "windows" },
+  linux: { label: "Coletor Linux", version: "1.0.0" },
+  sqlserver: { label: "Coletor SQL Server", version: "1.0.0" },
   dvr: { label: "Coletor DVR Intelbras", version: "1.1.0", bundle: "dvr" },
   mikrotik: { label: "Coletor MikroTik/SNMP", version: "1.1.0" },
   "backup-nuvem": { label: "Agente de Backup em Nuvem", version: "1.1.0", bundle: "cloudBackup" },
