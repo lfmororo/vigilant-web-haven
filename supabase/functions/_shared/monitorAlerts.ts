@@ -521,3 +521,28 @@ export async function notifyEvent(
     `monitor_event_${src.type}`,
   );
 }
+
+/** Envia um texto pronto só para os administradores (ex.: resumo diário). */
+export async function sendTextToAdmins(
+  supabase: SupabaseClient,
+  text: string,
+  logType: string,
+): Promise<{ sent: number; failed: number }> {
+  const result = { sent: 0, failed: 0 };
+  const evo = await getEvolutionConfig();
+  if (!evo.enabled || !evo.baseUrl || !evo.apiKey) return result;
+  const { data: roles } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
+  const ids = (roles || []).map((r: { user_id: string }) => r.user_id);
+  if (!ids.length) return result;
+  const { data: profs } = await supabase.from("profiles").select("phone").in("id", ids);
+  const phones = [...new Set((profs || []).map((p: { phone: string | null }) => (p.phone || "").trim()).filter(Boolean))];
+  await Promise.all(phones.map(async (to) => {
+    const res = await sendEvolution(evo, to, text);
+    if (res.ok) result.sent++; else result.failed++;
+    await supabase.from("whatsapp_notification_logs").insert({
+      notification_type: logType, recipient_phone: to, message_preview: text.slice(0, 500),
+      status: res.ok ? "sent" : "failed", error_message: res.error,
+    });
+  }));
+  return result;
+}
