@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.server-monitor-ingest]
 verify_jwt = false
+
+[functions.server-monitor-watchdog]
+verify_jwt = false
