@@ -405,6 +405,8 @@ export type Database = {
           email_domain: string | null
           full_name: string
           id: string
+          monitor_min_severity: string
+          monitor_notify_group: boolean
           neighborhood: string | null
           parent_client_id: string | null
           phone: string | null
@@ -421,6 +423,8 @@ export type Database = {
           email_domain?: string | null
           full_name: string
           id?: string
+          monitor_min_severity?: string
+          monitor_notify_group?: boolean
           neighborhood?: string | null
           parent_client_id?: string | null
           phone?: string | null
@@ -437,6 +441,8 @@ export type Database = {
           email_domain?: string | null
           full_name?: string
           id?: string
+          monitor_min_severity?: string
+          monitor_notify_group?: boolean
           neighborhood?: string | null
           parent_client_id?: string | null
           phone?: string | null
@@ -981,6 +987,7 @@ export type Database = {
           serial_number: string | null
           server_model: string | null
           status: string
+          thresholds: Json | null
           updated_at: string
           uptime_seconds: number | null
           username: string
@@ -1019,6 +1026,7 @@ export type Database = {
           serial_number?: string | null
           server_model?: string | null
           status?: string
+          thresholds?: Json | null
           updated_at?: string
           uptime_seconds?: number | null
           username: string
@@ -1057,6 +1065,7 @@ export type Database = {
           serial_number?: string | null
           server_model?: string | null
           status?: string
+          thresholds?: Json | null
           updated_at?: string
           uptime_seconds?: number | null
           username?: string
@@ -1225,6 +1234,143 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      linux_servers: {
+        Row: {
+          agent_version: string | null
+          client_id: string
+          consecutive_failures: number
+          cpu_cores: number | null
+          cpu_model: string | null
+          cpu_usage_pct: number | null
+          created_at: string
+          disk_usage_pct: number | null
+          disks: Json | null
+          distro: string | null
+          failed_units: Json | null
+          host: string
+          hostname: string | null
+          id: string
+          iowait_pct: number | null
+          is_active: boolean
+          kernel: string | null
+          last_error: string | null
+          last_polled_at: string | null
+          last_success_at: string | null
+          load_1: number | null
+          load_15: number | null
+          load_5: number | null
+          name: string
+          pending_updates: number | null
+          raid_status: Json | null
+          ram_total_gb: number | null
+          ram_usage_pct: number | null
+          ram_used_gb: number | null
+          reboot_required: boolean | null
+          security_updates: number | null
+          services_status: Json | null
+          status: string
+          swap_total_gb: number | null
+          swap_used_gb: number | null
+          thresholds: Json | null
+          top_processes: Json | null
+          updated_at: string
+          uptime_seconds: number | null
+          zfs_pools: Json | null
+        }
+        Insert: {
+          agent_version?: string | null
+          client_id: string
+          consecutive_failures?: number
+          cpu_cores?: number | null
+          cpu_model?: string | null
+          cpu_usage_pct?: number | null
+          created_at?: string
+          disk_usage_pct?: number | null
+          disks?: Json | null
+          distro?: string | null
+          failed_units?: Json | null
+          host: string
+          hostname?: string | null
+          id?: string
+          iowait_pct?: number | null
+          is_active?: boolean
+          kernel?: string | null
+          last_error?: string | null
+          last_polled_at?: string | null
+          last_success_at?: string | null
+          load_1?: number | null
+          load_15?: number | null
+          load_5?: number | null
+          name: string
+          pending_updates?: number | null
+          raid_status?: Json | null
+          ram_total_gb?: number | null
+          ram_usage_pct?: number | null
+          ram_used_gb?: number | null
+          reboot_required?: boolean | null
+          security_updates?: number | null
+          services_status?: Json | null
+          status?: string
+          swap_total_gb?: number | null
+          swap_used_gb?: number | null
+          thresholds?: Json | null
+          top_processes?: Json | null
+          updated_at?: string
+          uptime_seconds?: number | null
+          zfs_pools?: Json | null
+        }
+        Update: {
+          agent_version?: string | null
+          client_id?: string
+          consecutive_failures?: number
+          cpu_cores?: number | null
+          cpu_model?: string | null
+          cpu_usage_pct?: number | null
+          created_at?: string
+          disk_usage_pct?: number | null
+          disks?: Json | null
+          distro?: string | null
+          failed_units?: Json | null
+          host?: string
+          hostname?: string | null
+          id?: string
+          iowait_pct?: number | null
+          is_active?: boolean
+          kernel?: string | null
+          last_error?: string | null
+          last_polled_at?: string | null
+          last_success_at?: string | null
+          load_1?: number | null
+          load_15?: number | null
+          load_5?: number | null
+          name?: string
+          pending_updates?: number | null
+          raid_status?: Json | null
+          ram_total_gb?: number | null
+          ram_usage_pct?: number | null
+          ram_used_gb?: number | null
+          reboot_required?: boolean | null
+          security_updates?: number | null
+          services_status?: Json | null
+          status?: string
+          swap_total_gb?: number | null
+          swap_used_gb?: number | null
+          thresholds?: Json | null
+          top_processes?: Json | null
+          updated_at?: string
+          uptime_seconds?: number | null
+          zfs_pools?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linux_servers_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mikrotik_devices: {
         Row: {
@@ -1674,6 +1820,134 @@ export type Database = {
           },
         ]
       }
+      monitor_alerts: {
+        Row: {
+          ack_note: string | null
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          alert_key: string
+          breach_count: number
+          category: string | null
+          client_id: string | null
+          created_at: string
+          first_detected_at: string
+          id: string
+          last_notified_at: string | null
+          last_seen_at: string
+          message: string | null
+          notify_count: number
+          resolved_at: string | null
+          severity: string
+          source_id: string
+          source_name: string | null
+          source_type: string
+          status: string
+          threshold: number | null
+          ticket_id: string | null
+          title: string
+          updated_at: string
+          value: number | null
+        }
+        Insert: {
+          ack_note?: string | null
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          alert_key: string
+          breach_count?: number
+          category?: string | null
+          client_id?: string | null
+          created_at?: string
+          first_detected_at?: string
+          id?: string
+          last_notified_at?: string | null
+          last_seen_at?: string
+          message?: string | null
+          notify_count?: number
+          resolved_at?: string | null
+          severity?: string
+          source_id: string
+          source_name?: string | null
+          source_type: string
+          status?: string
+          threshold?: number | null
+          ticket_id?: string | null
+          title: string
+          updated_at?: string
+          value?: number | null
+        }
+        Update: {
+          ack_note?: string | null
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          alert_key?: string
+          breach_count?: number
+          category?: string | null
+          client_id?: string | null
+          created_at?: string
+          first_detected_at?: string
+          id?: string
+          last_notified_at?: string | null
+          last_seen_at?: string
+          message?: string | null
+          notify_count?: number
+          resolved_at?: string | null
+          severity?: string
+          source_id?: string
+          source_name?: string | null
+          source_type?: string
+          status?: string
+          threshold?: number | null
+          ticket_id?: string | null
+          title?: string
+          updated_at?: string
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monitor_alerts_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monitor_metric_samples: {
+        Row: {
+          client_id: string | null
+          collected_at: string
+          cpu_pct: number | null
+          disk_pct: number | null
+          extra: Json | null
+          id: number
+          ram_pct: number | null
+          source_id: string
+          source_type: string
+        }
+        Insert: {
+          client_id?: string | null
+          collected_at?: string
+          cpu_pct?: number | null
+          disk_pct?: number | null
+          extra?: Json | null
+          id?: number
+          ram_pct?: number | null
+          source_id: string
+          source_type: string
+        }
+        Update: {
+          client_id?: string | null
+          collected_at?: string
+          cpu_pct?: number | null
+          disk_pct?: number | null
+          extra?: Json | null
+          id?: number
+          ram_pct?: number | null
+          source_id?: string
+          source_type?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           address: string | null
@@ -2046,6 +2320,7 @@ export type Database = {
         Row: {
           auth_mode: string
           client_id: string
+          consecutive_failures: number
           cpu_cores: number | null
           cpu_model: string | null
           cpu_usage_pct: number | null
@@ -2055,9 +2330,11 @@ export type Database = {
           disk_used_gb: number | null
           host: string
           id: string
+          iowait_pct: number | null
           is_active: boolean
           last_error: string | null
           last_polled_at: string | null
+          last_success_at: string | null
           load_avg: number | null
           name: string
           node_name: string | null
@@ -2071,6 +2348,7 @@ export type Database = {
           storages: Json | null
           swap_total_gb: number | null
           swap_used_gb: number | null
+          thresholds: Json | null
           token_name: string | null
           token_secret: string | null
           updated_at: string
@@ -2080,6 +2358,7 @@ export type Database = {
         Insert: {
           auth_mode?: string
           client_id: string
+          consecutive_failures?: number
           cpu_cores?: number | null
           cpu_model?: string | null
           cpu_usage_pct?: number | null
@@ -2089,9 +2368,11 @@ export type Database = {
           disk_used_gb?: number | null
           host: string
           id?: string
+          iowait_pct?: number | null
           is_active?: boolean
           last_error?: string | null
           last_polled_at?: string | null
+          last_success_at?: string | null
           load_avg?: number | null
           name: string
           node_name?: string | null
@@ -2105,6 +2386,7 @@ export type Database = {
           storages?: Json | null
           swap_total_gb?: number | null
           swap_used_gb?: number | null
+          thresholds?: Json | null
           token_name?: string | null
           token_secret?: string | null
           updated_at?: string
@@ -2114,6 +2396,7 @@ export type Database = {
         Update: {
           auth_mode?: string
           client_id?: string
+          consecutive_failures?: number
           cpu_cores?: number | null
           cpu_model?: string | null
           cpu_usage_pct?: number | null
@@ -2123,9 +2406,11 @@ export type Database = {
           disk_used_gb?: number | null
           host?: string
           id?: string
+          iowait_pct?: number | null
           is_active?: boolean
           last_error?: string | null
           last_polled_at?: string | null
+          last_success_at?: string | null
           load_avg?: number | null
           name?: string
           node_name?: string | null
@@ -2139,6 +2424,7 @@ export type Database = {
           storages?: Json | null
           swap_total_gb?: number | null
           swap_used_gb?: number | null
+          thresholds?: Json | null
           token_name?: string | null
           token_secret?: string | null
           updated_at?: string
@@ -2595,6 +2881,138 @@ export type Database = {
           },
         ]
       }
+      sql_instances: {
+        Row: {
+          agent_running: boolean | null
+          agent_version: string | null
+          auth_mode: string
+          batch_requests_sec: number | null
+          blocked_sessions: number | null
+          buffer_cache_hit_pct: number | null
+          client_id: string
+          consecutive_failures: number
+          created_at: string
+          databases: Json
+          edition: string | null
+          failed_jobs: Json
+          id: string
+          instance: string
+          io_latency: Json
+          is_active: boolean
+          last_error: string | null
+          last_polled_at: string | null
+          last_success_at: string | null
+          long_running_queries: Json
+          longest_block_seconds: number | null
+          max_server_memory_mb: number | null
+          memory_used_mb: number | null
+          name: string
+          password: string | null
+          ple_seconds: number | null
+          sql_cpu_pct: number | null
+          status: string
+          thresholds: Json | null
+          top_waits: Json
+          updated_at: string
+          uptime_seconds: number | null
+          user_connections: number | null
+          username: string | null
+          version: string | null
+          windows_server_id: string | null
+        }
+        Insert: {
+          agent_running?: boolean | null
+          agent_version?: string | null
+          auth_mode?: string
+          batch_requests_sec?: number | null
+          blocked_sessions?: number | null
+          buffer_cache_hit_pct?: number | null
+          client_id: string
+          consecutive_failures?: number
+          created_at?: string
+          databases?: Json
+          edition?: string | null
+          failed_jobs?: Json
+          id?: string
+          instance: string
+          io_latency?: Json
+          is_active?: boolean
+          last_error?: string | null
+          last_polled_at?: string | null
+          last_success_at?: string | null
+          long_running_queries?: Json
+          longest_block_seconds?: number | null
+          max_server_memory_mb?: number | null
+          memory_used_mb?: number | null
+          name: string
+          password?: string | null
+          ple_seconds?: number | null
+          sql_cpu_pct?: number | null
+          status?: string
+          thresholds?: Json | null
+          top_waits?: Json
+          updated_at?: string
+          uptime_seconds?: number | null
+          user_connections?: number | null
+          username?: string | null
+          version?: string | null
+          windows_server_id?: string | null
+        }
+        Update: {
+          agent_running?: boolean | null
+          agent_version?: string | null
+          auth_mode?: string
+          batch_requests_sec?: number | null
+          blocked_sessions?: number | null
+          buffer_cache_hit_pct?: number | null
+          client_id?: string
+          consecutive_failures?: number
+          created_at?: string
+          databases?: Json
+          edition?: string | null
+          failed_jobs?: Json
+          id?: string
+          instance?: string
+          io_latency?: Json
+          is_active?: boolean
+          last_error?: string | null
+          last_polled_at?: string | null
+          last_success_at?: string | null
+          long_running_queries?: Json
+          longest_block_seconds?: number | null
+          max_server_memory_mb?: number | null
+          memory_used_mb?: number | null
+          name?: string
+          password?: string | null
+          ple_seconds?: number | null
+          sql_cpu_pct?: number | null
+          status?: string
+          thresholds?: Json | null
+          top_waits?: Json
+          updated_at?: string
+          uptime_seconds?: number | null
+          user_connections?: number | null
+          username?: string | null
+          version?: string | null
+          windows_server_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sql_instances_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sql_instances_windows_server_id_fkey"
+            columns: ["windows_server_id"]
+            isOneToOne: false
+            referencedRelation: "windows_servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       system_settings: {
         Row: {
           description: string | null
@@ -2958,6 +3376,7 @@ export type Database = {
       vmware_hosts: {
         Row: {
           client_id: string
+          consecutive_failures: number
           cpu_cores: number | null
           cpu_usage_pct: number | null
           created_at: string
@@ -2968,6 +3387,7 @@ export type Database = {
           is_active: boolean
           last_error: string | null
           last_polled_at: string | null
+          last_success_at: string | null
           name: string
           password: string
           port: number
@@ -2975,12 +3395,14 @@ export type Database = {
           ram_usage_pct: number | null
           ram_used_gb: number | null
           status: string
+          thresholds: Json | null
           updated_at: string
           uptime_seconds: number | null
           username: string
         }
         Insert: {
           client_id: string
+          consecutive_failures?: number
           cpu_cores?: number | null
           cpu_usage_pct?: number | null
           created_at?: string
@@ -2991,6 +3413,7 @@ export type Database = {
           is_active?: boolean
           last_error?: string | null
           last_polled_at?: string | null
+          last_success_at?: string | null
           name: string
           password?: string
           port?: number
@@ -2998,12 +3421,14 @@ export type Database = {
           ram_usage_pct?: number | null
           ram_used_gb?: number | null
           status?: string
+          thresholds?: Json | null
           updated_at?: string
           uptime_seconds?: number | null
           username?: string
         }
         Update: {
           client_id?: string
+          consecutive_failures?: number
           cpu_cores?: number | null
           cpu_usage_pct?: number | null
           created_at?: string
@@ -3014,6 +3439,7 @@ export type Database = {
           is_active?: boolean
           last_error?: string | null
           last_polled_at?: string | null
+          last_success_at?: string | null
           name?: string
           password?: string
           port?: number
@@ -3021,6 +3447,7 @@ export type Database = {
           ram_usage_pct?: number | null
           ram_used_gb?: number | null
           status?: string
+          thresholds?: Json | null
           updated_at?: string
           uptime_seconds?: number | null
           username?: string
@@ -3158,6 +3585,7 @@ export type Database = {
           error_message: string | null
           id: string
           message_preview: string | null
+          monitor_alert_id: string | null
           notification_type: string
           recipient_phone: string
           status: string
@@ -3169,6 +3597,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           message_preview?: string | null
+          monitor_alert_id?: string | null
           notification_type: string
           recipient_phone: string
           status?: string
@@ -3180,6 +3609,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           message_preview?: string | null
+          monitor_alert_id?: string | null
           notification_type?: string
           recipient_phone?: string
           status?: string
@@ -3187,6 +3617,13 @@ export type Database = {
           ticket_number?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "whatsapp_notification_logs_monitor_alert_id_fkey"
+            columns: ["monitor_alert_id"]
+            isOneToOne: false
+            referencedRelation: "monitor_alerts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "whatsapp_notification_logs_ticket_id_fkey"
             columns: ["ticket_id"]
@@ -3198,74 +3635,107 @@ export type Database = {
       }
       windows_servers: {
         Row: {
+          agent_version: string | null
           client_id: string
+          consecutive_failures: number
+          cpu_cores: number | null
+          cpu_model: string | null
           cpu_usage: number | null
           created_at: string
           disk_free_gb: number | null
           disk_total_gb: number | null
           disk_usage_pct: number | null
           disk_used_gb: number | null
+          disks: Json | null
+          event_errors: Json | null
           host: string
           id: string
           is_active: boolean
           last_boot_time: string | null
           last_error: string | null
           last_polled_at: string | null
+          last_success_at: string | null
           name: string
           os_version: string | null
+          pending_reboot: boolean | null
+          pending_updates: number | null
           ram_total_gb: number | null
           ram_usage_pct: number | null
           ram_used_gb: number | null
           services_status: Json | null
           status: string
+          thresholds: Json | null
+          top_processes: Json | null
           updated_at: string
           uptime_seconds: number | null
         }
         Insert: {
+          agent_version?: string | null
           client_id: string
+          consecutive_failures?: number
+          cpu_cores?: number | null
+          cpu_model?: string | null
           cpu_usage?: number | null
           created_at?: string
           disk_free_gb?: number | null
           disk_total_gb?: number | null
           disk_usage_pct?: number | null
           disk_used_gb?: number | null
+          disks?: Json | null
+          event_errors?: Json | null
           host: string
           id?: string
           is_active?: boolean
           last_boot_time?: string | null
           last_error?: string | null
           last_polled_at?: string | null
+          last_success_at?: string | null
           name: string
           os_version?: string | null
+          pending_reboot?: boolean | null
+          pending_updates?: number | null
           ram_total_gb?: number | null
           ram_usage_pct?: number | null
           ram_used_gb?: number | null
           services_status?: Json | null
           status?: string
+          thresholds?: Json | null
+          top_processes?: Json | null
           updated_at?: string
           uptime_seconds?: number | null
         }
         Update: {
+          agent_version?: string | null
           client_id?: string
+          consecutive_failures?: number
+          cpu_cores?: number | null
+          cpu_model?: string | null
           cpu_usage?: number | null
           created_at?: string
           disk_free_gb?: number | null
           disk_total_gb?: number | null
           disk_usage_pct?: number | null
           disk_used_gb?: number | null
+          disks?: Json | null
+          event_errors?: Json | null
           host?: string
           id?: string
           is_active?: boolean
           last_boot_time?: string | null
           last_error?: string | null
           last_polled_at?: string | null
+          last_success_at?: string | null
           name?: string
           os_version?: string | null
+          pending_reboot?: boolean | null
+          pending_updates?: number | null
           ram_total_gb?: number | null
           ram_usage_pct?: number | null
           ram_used_gb?: number | null
           services_status?: Json | null
           status?: string
+          thresholds?: Json | null
+          top_processes?: Json | null
           updated_at?: string
           uptime_seconds?: number | null
         }
@@ -3292,6 +3762,32 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      monitor_disk_forecast: {
+        Args: { p_days?: number }
+        Returns: {
+          current_pct: number
+          days_to_full: number
+          growth_pct_per_day: number
+          source_id: string
+          source_type: string
+        }[]
+      }
+      monitor_metric_series: {
+        Args: {
+          p_bucket_minutes?: number
+          p_hours?: number
+          p_source_id: string
+          p_source_type: string
+        }
+        Returns: {
+          bucket: string
+          cpu_avg: number
+          cpu_max: number
+          disk_max: number
+          extra: Json
+          ram_avg: number
+        }[]
       }
     }
     Enums: {
