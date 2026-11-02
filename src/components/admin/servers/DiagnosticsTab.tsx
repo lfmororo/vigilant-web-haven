@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -216,7 +217,7 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
       </Dialog>
 
       {/* Versão de impressão: cabeçalho com logo, dados do relatório e rodapé */}
-      {open && (
+      {open && createPortal(
         <div className="print-diagnostics-root hidden">
           <div className="print-diag-header">
             <img src="/mororo-tech-logo.png" alt="Mororo.tech" />
@@ -255,7 +256,8 @@ const DiagnosticsTab = ({ clients }: { clients: { id: string; full_name: string 
             <span>Mororo.tech · contato@mororo.tech</span>
             <span>Emitido em {new Date().toLocaleString("pt-BR")}</span>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
