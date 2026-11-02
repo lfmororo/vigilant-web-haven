@@ -22,7 +22,7 @@ export interface AgentBundleDefinition {
   /** Script principal executado pelo instalador (deve constar em `files`). */
   mainScript?: string;
   /** Runtime necessário — usado apenas no texto do LEIA-ME. */
-  runtime?: "node" | "powershell" | "python";
+  runtime?: "node" | "powershell" | "python" | "bash";
   /** Instruções extras específicas do agente. */
   notes?: string[];
   /** Quando falso, o instalador de serviço não é incluído. */
@@ -88,6 +88,37 @@ export const AGENT_BUNDLES: Record<string, AgentBundleDefinition> = {
       "Os servidores monitorados precisam aceitar WinRM (porta 5985; rode 'winrm quickconfig' neles) ou, como alternativa, DCOM/RPC (porta 135).",
       "A conta do servico precisa de permissao WMI/administrador nos servidores remotos.",
       "Roda em loop continuo por padrao (ideal como servico). Use -UmaVez para um teste rapido.",
+    ],
+  },
+  sqlserver: {
+    id: "sqlserver",
+    label: "Coletor SQL Server",
+    zipName: "agente-sqlserver",
+    files: ["/sqlserver-collector.ps1"],
+    mainScript: "sqlserver-collector.ps1",
+    runtime: "powershell",
+    notes: [
+      "Obrigatorio informar o token do agente: -Token <MONITOR_TOKEN> (ou variavel de ambiente MONITOR_TOKEN).",
+      "Cadastre as instancias no painel (ex.: SRV\\SQLEXPRESS ou 10.0.0.5,1433) com autenticacao Windows ou SQL.",
+      "Permissoes minimas do login: VIEW SERVER STATE, VIEW ANY DEFINITION, SQLAgentReaderRole no msdb e SELECT em msdb.dbo.backupset.",
+      "Com autenticacao Windows, a conta do servico do coletor e quem se conecta ao SQL Server.",
+      "Roda em loop continuo por padrao. Use -UmaVez para um teste rapido.",
+    ],
+  },
+  linux: {
+    id: "linux",
+    label: "Agente Linux",
+    zipName: "agente-linux",
+    files: ["/linux-agent.sh"],
+    mainScript: "linux-agent.sh",
+    runtime: "bash",
+    includeInstaller: false,
+    notes: [
+      "Instale em cada servidor Linux (requer bash, curl e systemd ou cron).",
+      "O servidor e cadastrado automaticamente pelo hostname quando o token estiver vinculado a um cliente.",
+      "Opcional: instale smartmontools para checagem SMART dos discos.",
+      "Teste manual: sudo mororo-linux-agent run --verbose",
+      "Desinstalar: sudo mororo-linux-agent uninstall",
     ],
   },
   dvr: {
@@ -174,7 +205,8 @@ function buildReadme(def: AgentBundleDefinition, opts: BundleOptions): string {
   const interval = opts.interval ?? 300;
   const extraArguments = opts.arguments ? ` ${opts.arguments}` : "";
   const main = def.mainScript ?? def.files[0].replace(/^\//, "");
-  const isNode = def.runtime !== "powershell" && def.runtime !== "python";
+  const isNode = def.runtime !== "powershell" && def.runtime !== "python" && def.runtime !== "bash";
+  const isBash = def.runtime === "bash";
 
   const lines: string[] = [
     `${def.label}`,
@@ -187,14 +219,19 @@ function buildReadme(def: AgentBundleDefinition, opts: BundleOptions): string {
     "  - LEIA-ME.txt (este arquivo)",
     "",
     "REQUISITOS",
-    isNode
+    isBash
+      ? "  - Linux com bash, curl e systemd (ou cron); executar como root"
+      : isNode
       ? "  - Node.js 18 ou superior instalado (https://nodejs.org)"
       : def.runtime === "python"
         ? "  - Python 3.8 ou superior"
         : "  - Windows PowerShell 5.1 ou superior",
     "",
-    "EXECUCAO MANUAL",
-    isNode
+    isBash ? "INSTALACAO" : "EXECUCAO MANUAL",
+    isBash
+      ? `  sudo bash ${main} install --token <MONITOR_TOKEN> --url "${url}"${extraArguments}\n` +
+        `  (opcionais: --server-id <ID> --services "nginx postgresql")`
+      : isNode
       ? `  node ${main} --url "${url}" --key "${key}" --intervalo ${interval}`
       : def.runtime === "python"
         ? `  python ${main} --url "${url}" --key "${key}" --intervalo ${interval}`
