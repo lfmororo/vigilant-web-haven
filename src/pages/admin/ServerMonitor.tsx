@@ -19,8 +19,10 @@ import { formatTimeAgo } from "@/lib/formatTimeAgo";
 import {
   Server, Monitor, Plus, RefreshCw, Trash2, Edit, HardDrive,
   Cpu, MemoryStick, Activity, Clock, ChevronDown, ChevronRight,
-  Power, AlertTriangle, CheckCircle, XCircle, Download, ServerCog, Boxes
+  Power, AlertTriangle, CheckCircle, XCircle, Download, ServerCog, Boxes, LayoutDashboard
 } from "lucide-react";
+import MonitoringOverview from "@/components/admin/servers/MonitoringOverview";
+import { UsageBar, fmtAgo } from "@/components/admin/servers/monitorUi";
 import IloServersTab from "@/components/admin/servers/IloServersTab";
 import ProxmoxTab from "@/components/admin/servers/ProxmoxTab";
 import DiagnosticsTab from "@/components/admin/servers/DiagnosticsTab";
@@ -59,7 +61,7 @@ const formatPct = (val: number | null | undefined) => val != null ? `${val.toFix
 
 const ServerMonitor = () => {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState("windows");
+  const [activeTab, setActiveTab] = useState("overview");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [expandedVmHost, setExpandedVmHost] = useState<string | null>(null);
@@ -112,36 +114,6 @@ const ServerMonitor = () => {
     },
     refetchInterval: 30000
   });
-
-  // Servidores HP iLO — usado para os cartões de resumo e para o painel de alertas.
-  const { data: iloServers } = useQuery({
-    queryKey: ["ilo-servers-summary"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("ilo_servers")
-        .select("id, name, status, health_summary, last_polled_at, health_storage, health_power, health_fans, health_temperature")
-        .order("name");
-      return data || [];
-    },
-    refetchInterval: 30000
-  });
-
-  // Nós Proxmox VE — usado para os cartões de resumo e para o painel de alertas.
-  const { data: proxmoxNodes } = useQuery({
-    queryKey: ["proxmox-nodes-summary"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("proxmox_nodes")
-        .select("id, name, status, cpu_usage_pct, ram_usage_pct, disk_usage_pct, last_polled_at")
-        .order("name");
-      return data || [];
-    },
-    refetchInterval: 30000
-  });
-
-
-
-
 
   const addWindowsServer = useMutation({
     mutationFn: async (data: any) => {
@@ -223,121 +195,9 @@ const ServerMonitor = () => {
     setShowAddDialog(true);
   };
 
-  const winOnline = windowsServers?.filter(s => s.status === "online").length || 0;
-  const winOffline = windowsServers?.filter(s => s.status === "offline").length || 0;
-  const vmOnline = vmwareHosts?.filter(h => h.status === "online").length || 0;
-  const vmOffline = vmwareHosts?.filter(h => h.status === "offline").length || 0;
-  const totalVms = vmwareVms?.length || 0;
-  const runningVms = vmwareVms?.filter(v => v.power_state === "poweredOn").length || 0;
-
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   const bundleOptions = { url: supabaseUrl, key: anonKey, interval: 300 };
-
-  // Generate alerts
-  const STALE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
-  const now = Date.now();
-
-  const alerts: { type: "critical" | "warning" | "info"; message: string }[] = [];
-
-  // Windows server alerts
-  windowsServers?.forEach(srv => {
-    if (srv.status === "offline") alerts.push({ type: "critical", message: `🔴 ${srv.name} está offline` });
-    if (srv.cpu_usage != null && srv.cpu_usage > 90) alerts.push({ type: "critical", message: `🔥 ${srv.name} — CPU em ${srv.cpu_usage.toFixed(1)}%` });
-    if (srv.cpu_usage != null && srv.cpu_usage > 70 && srv.cpu_usage <= 90) alerts.push({ type: "warning", message: `⚠️ ${srv.name} — CPU em ${srv.cpu_usage.toFixed(1)}%` });
-    if (srv.ram_usage_pct != null && srv.ram_usage_pct > 90) alerts.push({ type: "critical", message: `🔥 ${srv.name} — RAM em ${srv.ram_usage_pct.toFixed(1)}%` });
-    if (srv.ram_usage_pct != null && srv.ram_usage_pct > 70 && srv.ram_usage_pct <= 90) alerts.push({ type: "warning", message: `⚠️ ${srv.name} — RAM em ${srv.ram_usage_pct.toFixed(1)}%` });
-    if (srv.disk_usage_pct != null && srv.disk_usage_pct > 90) alerts.push({ type: "critical", message: `🔥 ${srv.name} — Disco em ${srv.disk_usage_pct.toFixed(1)}%` });
-    if (srv.disk_usage_pct != null && srv.disk_usage_pct > 70 && srv.disk_usage_pct <= 90) alerts.push({ type: "warning", message: `⚠️ ${srv.name} — Disco em ${srv.disk_usage_pct.toFixed(1)}%` });
-    if (srv.last_polled_at && (now - new Date(srv.last_polled_at).getTime()) > STALE_THRESHOLD_MS) {
-      alerts.push({ type: "warning", message: `⏰ ${srv.name} — Coletor sem atualização há ${formatTimeAgo(srv.last_polled_at)}` });
-    }
-    if (srv.services_status && Array.isArray(srv.services_status)) {
-      (srv.services_status as any[]).filter((svc: any) => svc.status !== "Running").forEach((svc: any) => {
-        alerts.push({ type: "critical", message: `🛑 ${srv.name} — Serviço "${svc.display_name || svc.name}" parado` });
-      });
-    }
-  });
-
-  // VMware host alerts
-  vmwareHosts?.forEach(host => {
-    if (host.status === "offline") alerts.push({ type: "critical", message: `🔴 Host VMware ${host.name} está offline` });
-    if (host.cpu_usage_pct != null && host.cpu_usage_pct > 90) alerts.push({ type: "critical", message: `🔥 Host ${host.name} — CPU em ${host.cpu_usage_pct.toFixed(1)}%` });
-    if (host.ram_usage_pct != null && host.ram_usage_pct > 90) alerts.push({ type: "critical", message: `🔥 Host ${host.name} — RAM em ${host.ram_usage_pct.toFixed(1)}%` });
-    if (host.last_polled_at && (now - new Date(host.last_polled_at).getTime()) > STALE_THRESHOLD_MS) {
-      alerts.push({ type: "warning", message: `⏰ Host ${host.name} — Coletor sem atualização há ${formatTimeAgo(host.last_polled_at)}` });
-    }
-    // Datastore alerts
-    const datastores = (host.datastores || []) as any[];
-    datastores.forEach((ds: any) => {
-      if (ds.capacity_gb > 0) {
-        const usedPct = ((ds.capacity_gb - ds.free_gb) / ds.capacity_gb) * 100;
-        if (usedPct > 90) alerts.push({ type: "critical", message: `🔥 ${host.name} — Datastore "${ds.name}" em ${usedPct.toFixed(1)}%` });
-        else if (usedPct > 70) alerts.push({ type: "warning", message: `⚠️ ${host.name} — Datastore "${ds.name}" em ${usedPct.toFixed(1)}%` });
-      }
-    });
-  });
-
-  // Alertas de hardware HP iLO
-  const HEALTH_LABELS: Record<string, string> = {
-    health_storage: "Armazenamento",
-    health_power: "Fontes",
-    health_fans: "Ventiladores",
-    health_temperature: "Temperatura",
-  };
-
-  iloServers?.forEach(srv => {
-    if (srv.status === "offline") alerts.push({ type: "critical", message: `🔴 iLO ${srv.name} inacessível` });
-    if (srv.health_summary === "Critical") alerts.push({ type: "critical", message: `🔥 iLO ${srv.name} — saúde do hardware CRÍTICA` });
-    else if (srv.health_summary === "Warning") alerts.push({ type: "warning", message: `⚠️ iLO ${srv.name} — hardware em atenção` });
-
-    Object.entries(HEALTH_LABELS).forEach(([field, label]) => {
-      const value = (srv as any)[field];
-      if (value === "Critical") alerts.push({ type: "critical", message: `🔥 iLO ${srv.name} — ${label} em estado crítico` });
-      else if (value === "Warning") alerts.push({ type: "warning", message: `⚠️ iLO ${srv.name} — ${label} em atenção` });
-    });
-
-    if (srv.last_polled_at && (now - new Date(srv.last_polled_at).getTime()) > STALE_THRESHOLD_MS) {
-      alerts.push({ type: "warning", message: `⏰ iLO ${srv.name} — Coletor sem atualização há ${formatTimeAgo(srv.last_polled_at)}` });
-    }
-  });
-
-  // Alertas de nós Proxmox VE (indisponibilidade, disco cheio e coleta parada).
-  proxmoxNodes?.forEach(node => {
-    if (node.status === "offline") alerts.push({ type: "critical", message: `🔴 Proxmox ${node.name} inacessível` });
-    if (node.disk_usage_pct != null && node.disk_usage_pct >= 90) {
-      alerts.push({ type: "critical", message: `💾 Proxmox ${node.name} — disco do nó em ${Number(node.disk_usage_pct).toFixed(0)}%` });
-    }
-    if (node.ram_usage_pct != null && node.ram_usage_pct >= 90) {
-      alerts.push({ type: "warning", message: `🧠 Proxmox ${node.name} — memória em ${Number(node.ram_usage_pct).toFixed(0)}%` });
-    }
-    if (node.last_polled_at && (now - new Date(node.last_polled_at).getTime()) > STALE_THRESHOLD_MS) {
-      alerts.push({ type: "warning", message: `⏰ Proxmox ${node.name} — Coletor sem atualização há ${formatTimeAgo(node.last_polled_at)}` });
-    }
-  });
-
-
-
-
-
-  // Sort: critical first, then warning, then info
-  alerts.sort((a, b) => {
-    const order = { critical: 0, warning: 1, info: 2 };
-    return order[a.type] - order[b.type];
-  });
-
-  // Collector status
-  const lastWinPoll = windowsServers?.reduce((latest: string | null, s) => {
-    if (!s.last_polled_at) return latest;
-    if (!latest || new Date(s.last_polled_at) > new Date(latest)) return s.last_polled_at;
-    return latest;
-  }, null) || null;
-
-  const lastVmPoll = vmwareHosts?.reduce((latest: string | null, h) => {
-    if (!h.last_polled_at) return latest;
-    if (!latest || new Date(h.last_polled_at) > new Date(latest)) return h.last_polled_at;
-    return latest;
-  }, null) || null;
 
   return (
     <AdminLayout>
@@ -358,8 +218,8 @@ const ServerMonitor = () => {
             </Button>
             <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
               <DialogTrigger asChild>
-                {/* Nas abas iLO e Guia o cadastro é feito dentro da própria aba. */}
-                <Button onClick={openAdd} disabled={activeTab === "ilo" || activeTab === "proxmox" || activeTab === "guide"}>
+                {/* Cadastro manual só para Windows e VMware; as demais abas têm o próprio cadastro. */}
+                <Button onClick={openAdd} disabled={activeTab !== "windows" && activeTab !== "vmware"}>
                   <Plus className="w-4 h-4 mr-1" /> Adicionar
                 </Button>
               </DialogTrigger>
@@ -413,133 +273,9 @@ const ServerMonitor = () => {
           </div>
         </div>
 
-        {/* Collector Status */}
-        <div className="flex flex-wrap gap-4 text-sm">
-          <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
-            <Server className="w-4 h-4 text-blue-400" />
-            <span className="text-muted-foreground">Coletor Windows:</span>
-            {lastWinPoll ? (
-              <span className={`font-medium ${(now - new Date(lastWinPoll).getTime()) > STALE_THRESHOLD_MS ? "text-amber-400" : "text-emerald-400"}`}>
-                {formatTimeAgo(lastWinPoll)}
-              </span>
-            ) : <span className="text-muted-foreground">Nunca</span>}
-          </div>
-          <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
-            <Monitor className="w-4 h-4 text-purple-400" />
-            <span className="text-muted-foreground">Coletor VMware:</span>
-            {lastVmPoll ? (
-              <span className={`font-medium ${(now - new Date(lastVmPoll).getTime()) > STALE_THRESHOLD_MS ? "text-amber-400" : "text-emerald-400"}`}>
-                {formatTimeAgo(lastVmPoll)}
-              </span>
-            ) : <span className="text-muted-foreground">Nunca</span>}
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-500/10"><Server className="w-5 h-5 text-blue-400" /></div>
-              <div>
-                <p className="text-sm text-muted-foreground">Windows Servers</p>
-                <p className="text-2xl font-bold">{windowsServers?.length || 0}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-emerald-500/10"><CheckCircle className="w-5 h-5 text-emerald-400" /></div>
-              <div>
-                <p className="text-sm text-muted-foreground">Online</p>
-                <p className="text-2xl font-bold text-emerald-400">{winOnline + vmOnline}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-purple-500/10"><Monitor className="w-5 h-5 text-purple-400" /></div>
-              <div>
-                <p className="text-sm text-muted-foreground">VMware Hosts</p>
-                <p className="text-2xl font-bold">{vmwareHosts?.length || 0}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-orange-500/10"><ServerCog className="w-5 h-5 text-orange-400" /></div>
-              <div>
-                <p className="text-sm text-muted-foreground">Servidores iLO</p>
-                <p className="text-2xl font-bold">
-                  {iloServers?.filter(s => s.health_summary === "OK" && s.status !== "offline").length || 0}/{iloServers?.length || 0}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-emerald-500/10"><Boxes className="w-5 h-5 text-emerald-400" /></div>
-              <div>
-                <p className="text-sm text-muted-foreground">Nós Proxmox</p>
-                <p className="text-2xl font-bold">
-                  {proxmoxNodes?.filter(n => n.status === "online").length || 0}/{proxmoxNodes?.length || 0}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-
-
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-cyan-500/10"><Power className="w-5 h-5 text-cyan-400" /></div>
-              <div>
-                <p className="text-sm text-muted-foreground">VMs Rodando</p>
-                <p className="text-2xl font-bold">{runningVms}/{totalVms}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Alerts Panel */}
-        {alerts.length > 0 && (
-          <Card className="border-amber-500/30">
-            <CardHeader className="py-3 px-4">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-400" />
-                Alertas ({alerts.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="max-h-60 overflow-y-auto divide-y divide-border">
-                {alerts.map((alert, i) => (
-                  <div
-                    key={i}
-                    className={`px-4 py-2 text-sm flex items-center gap-2 ${
-                      alert.type === "critical" ? "bg-red-500/5 text-red-400" :
-                      alert.type === "warning" ? "bg-amber-500/5 text-amber-400" :
-                      "bg-blue-500/5 text-blue-400"
-                    }`}
-                  >
-                    {alert.type === "critical" && <XCircle className="w-4 h-4 shrink-0" />}
-                    {alert.type === "warning" && <AlertTriangle className="w-4 h-4 shrink-0" />}
-                    {alert.type === "info" && <CheckCircle className="w-4 h-4 shrink-0" />}
-                    {alert.message}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {alerts.length === 0 && (
-          <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-4 py-3">
-            <CheckCircle className="w-4 h-4" />
-            Todos os servidores estão operando normalmente.
-          </div>
-        )}
-
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
+            <TabsTrigger value="overview"><LayoutDashboard className="w-4 h-4 mr-1" /> Visão geral</TabsTrigger>
             <TabsTrigger value="windows"><Server className="w-4 h-4 mr-1" /> Windows</TabsTrigger>
             <TabsTrigger value="vmware"><Monitor className="w-4 h-4 mr-1" /> VMware</TabsTrigger>
             <TabsTrigger value="ilo"><ServerCog className="w-4 h-4 mr-1" /> iLO4 / iDRAC9</TabsTrigger>
@@ -551,6 +287,10 @@ const ServerMonitor = () => {
             <TabsTrigger value="guide"><Download className="w-4 h-4 mr-1" /> Guia Coletor</TabsTrigger>
 
           </TabsList>
+
+          <TabsContent value="overview">
+            <MonitoringOverview clients={clients} onOpenTab={setActiveTab} />
+          </TabsContent>
 
           {/* Windows Tab */}
           <TabsContent value="windows">
@@ -604,14 +344,14 @@ const ServerMonitor = () => {
                           ) : "—"}
                         </TableCell>
                         <TableCell>
-                          {srv.disk_usage_pct != null ? (
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full ${srv.disk_usage_pct > 90 ? "bg-red-500" : srv.disk_usage_pct > 70 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${srv.disk_usage_pct}%` }} />
-                              </div>
-                              <span className="text-xs">{formatPct(srv.disk_usage_pct)}</span>
+                          {Array.isArray((srv as any).disks) && (srv as any).disks.length > 0 ? (
+                            <div className="space-y-1">
+                              {((srv as any).disks as any[]).map((d: any, i: number) => (
+                                <UsageBar key={i} label={String(d.drive ?? d.letter ?? d.name ?? "").replace(/\\$/, "")} value={d.usage_pct} />
+                              ))}
                             </div>
-                          ) : "—"}
+                          ) : <UsageBar value={srv.disk_usage_pct} />}
+                          {(srv as any).pending_reboot && <Badge variant="outline" className="mt-1 border-amber-500/40 text-amber-400 text-[10px]">reboot pendente</Badge>}
                         </TableCell>
                         <TableCell className="text-xs">{formatUptime(srv.uptime_seconds as number | null)}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">
@@ -637,42 +377,70 @@ const ServerMonitor = () => {
               </CardContent>
             </Card>
 
-            {/* Services detail for each server */}
-            {windowsServers?.filter(s => s.services_status && (s.services_status as any[]).length > 0).map(srv => (
-              <Card key={srv.id} className="mt-4">
-                <CardHeader className="py-3 px-4">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Activity className="w-4 h-4" /> Serviços — {srv.name}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Serviço</TableHead>
-                        <TableHead>Display Name</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(srv.services_status as any[])?.map((svc: any, i: number) => (
-                        <TableRow key={i}>
-                          <TableCell className="font-mono text-xs">{svc.name}</TableCell>
-                          <TableCell>{svc.display_name || svc.name}</TableCell>
-                          <TableCell>
-                            {svc.status === "Running" ? (
-                              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Rodando</Badge>
-                            ) : (
-                              <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Parado</Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            ))}
+            {/* Detalhe por servidor: serviços, top processos e eventos */}
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              {windowsServers?.filter((s: any) => (s.services_status as any[])?.length || (s.top_processes as any[])?.length || (s.event_errors as any[])?.length).map((srv: any) => {
+                const services = (Array.isArray(srv.services_status) ? srv.services_status : []) as any[];
+                const procs = (Array.isArray(srv.top_processes) ? srv.top_processes : []) as any[];
+                const events = (Array.isArray(srv.event_errors) ? srv.event_errors : []) as any[];
+                const byCpu = procs.filter((p) => p.by !== "memory").slice(0, 5);
+                const byMem = procs.filter((p) => p.by === "memory").slice(0, 5);
+                return (
+                  <Card key={srv.id}>
+                    <CardHeader className="py-3 px-4">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Server className="w-4 h-4" /> {srv.name}
+                        {srv.pending_reboot && <Badge variant="outline" className="border-amber-500/40 text-amber-400 text-[10px]">reboot pendente</Badge>}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 pb-4 space-y-3 text-xs">
+                      {services.length > 0 && (
+                        <div>
+                          <p className="mb-1 font-medium text-muted-foreground">Serviços</p>
+                          <div className="flex flex-wrap gap-1">
+                            {services.map((svc, i) => (
+                              <Badge key={i} variant="outline" title={svc.display_name || svc.name}
+                                className={svc.status === "Running" ? "border-emerald-500/30 text-emerald-400" : "border-red-500/30 bg-red-500/10 text-red-400"}>
+                                {svc.name}{svc.status !== "Running" ? ` · ${svc.status || "parado"}` : ""}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {procs.length > 0 && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="mb-1 font-medium text-muted-foreground">Top CPU</p>
+                            {byCpu.map((p, i) => <div key={i} className="flex justify-between gap-2"><span className="truncate">{p.name}</span><span className="tabular-nums">{p.cpu_pct ?? 0}%</span></div>)}
+                          </div>
+                          <div>
+                            <p className="mb-1 font-medium text-muted-foreground">Top memória</p>
+                            {byMem.map((p, i) => <div key={i} className="flex justify-between gap-2"><span className="truncate">{p.name}</span><span className="tabular-nums">{p.mem_mb != null ? `${Math.round(p.mem_mb)} MB` : "—"}</span></div>)}
+                          </div>
+                        </div>
+                      )}
+                      <div>
+                        <p className="mb-1 font-medium text-muted-foreground">Eventos recentes (System)</p>
+                        {events.length === 0 ? <p className="text-muted-foreground">Nenhum erro desde a última coleta.</p> : (
+                          <div className="max-h-40 space-y-1 overflow-y-auto">
+                            {events.slice(0, 10).map((e, i) => (
+                              <div key={i} className="rounded border border-border px-2 py-1">
+                                <div className="flex justify-between gap-2">
+                                  <span className={e.level === "Critical" ? "font-medium text-red-400" : "text-amber-400"}>{e.level} · {e.source} ({e.event_id})</span>
+                                  <span className="text-muted-foreground">{e.time ? fmtAgo(e.time) : ""}</span>
+                                </div>
+                                {e.message && <p className="line-clamp-2 text-muted-foreground">{e.message}</p>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          
           </TabsContent>
 
           {/* VMware Tab */}
