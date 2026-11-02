@@ -7,8 +7,8 @@ export type Severity = "info" | "warning" | "critical";
 
 export const SOURCE_META: Record<SourceType, { label: string; icon: LucideIcon; tab: string | null; table: string }> = {
   windows: { label: "Windows", icon: Server, tab: "windows", table: "windows_servers" },
-  linux: { label: "Linux", icon: Terminal, tab: null, table: "linux_servers" },
-  sqlserver: { label: "SQL Server", icon: Database, tab: null, table: "sql_instances" },
+  linux: { label: "Linux", icon: Terminal, tab: "linux", table: "linux_servers" },
+  sqlserver: { label: "SQL Server", icon: Database, tab: "sqlserver", table: "sql_instances" },
   vmware: { label: "VMware", icon: Monitor, tab: "vmware", table: "vmware_hosts" },
   proxmox: { label: "Proxmox", icon: Boxes, tab: "proxmox", table: "proxmox_nodes" },
   ilo: { label: "iLO / iDRAC", icon: ServerCog, tab: "ilo", table: "ilo_servers" },
