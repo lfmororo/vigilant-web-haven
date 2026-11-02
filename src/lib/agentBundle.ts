@@ -80,9 +80,15 @@ export const AGENT_BUNDLES: Record<string, AgentBundleDefinition> = {
     id: "windows",
     label: "Coletor Windows Server",
     zipName: "agente-windows-server",
-    files: ["/windows-server-collector.ps1", "/windows-server-agent.ps1"],
+    files: ["/windows-server-collector.ps1"],
     mainScript: "windows-server-collector.ps1",
     runtime: "powershell",
+    notes: [
+      "Obrigatorio informar o token do agente: -Token <MONITOR_TOKEN> (ou variavel de ambiente MONITOR_TOKEN). Gere o token no painel.",
+      "Os servidores monitorados precisam aceitar WinRM (porta 5985; rode 'winrm quickconfig' neles) ou, como alternativa, DCOM/RPC (porta 135).",
+      "A conta do servico precisa de permissao WMI/administrador nos servidores remotos.",
+      "Roda em loop continuo por padrao (ideal como servico). Use -UmaVez para um teste rapido.",
+    ],
   },
   dvr: {
     id: "dvr",
