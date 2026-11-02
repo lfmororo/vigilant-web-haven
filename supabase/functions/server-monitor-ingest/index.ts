@@ -1,80 +1,92 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
-import { getEvolutionConfig, waFetch } from "../_shared/whatsapp.ts";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import {
+  type AlertCondition,
+  type AlertSource,
+  type MonitorConfig,
+  type Severity,
+  authenticateAgent,
+  effectiveThresholds,
+  failureState,
+  loadMonitorConfig,
+  notifyEvent,
+  pctCondition,
+  reconcileAlerts,
+  recordSample,
+} from "../_shared/monitorAlerts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-monitor-token",
 };
-
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 const jsonResp = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: jsonHeaders });
 
-/** Mapeia o "type" da requisição para o escopo exigido do token. */
-const TYPE_SCOPE: Record<string, string> = {
-  windows: "windows", "list-windows": "windows",
-  linux: "linux", "list-linux": "linux",
-  sqlserver: "sqlserver", "list-sqlserver": "sqlserver",
-  vmware: "vmware", "list-vmware": "vmware",
-  proxmox: "proxmox", "proxmox-net": "proxmox", "list-proxmox": "proxmox",
-  ilo: "ilo", "list-ilo": "ilo",
-};
+// ---------------------------------------------------------------- utilidades
 
-/** Tabela/campo usados para descobrir a qual cliente pertence a fonte de uma ingestão. */
-const INGEST_SOURCE: Record<string, { table: string; field: string }> = {
-  windows: { table: "windows_servers", field: "server_id" },
-  vmware: { table: "vmware_hosts", field: "host_id" },
-  ilo: { table: "ilo_servers", field: "server_id" },
-  proxmox: { table: "proxmox_nodes", field: "node_id" },
-  "proxmox-net": { table: "proxmox_nodes", field: "node_id" },
+/** Converte para número finito ou null. */
+const num = (v: unknown): number | null => {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 };
+const r1 = (v: number) => Math.round(v * 10) / 10;
+const maxOf = (vals: (number | null)[]) => {
+  const ok = vals.filter((v): v is number => v !== null);
+  return ok.length ? Math.max(...ok) : null;
+};
+const hoursSince = (iso: unknown): number | null => {
+  if (!iso) return null;
+  const t = new Date(String(iso)).getTime();
+  return Number.isFinite(t) ? (Date.now() - t) / 3_600_000 : null;
+};
+const push = (list: AlertCondition[], c: AlertCondition | null) => { if (c) list.push(c); };
+const cond = (
+  key: string, category: string, severity: Severity, title: string,
+  message?: string, extra: Partial<AlertCondition> = {},
+): AlertCondition => ({ key, category, severity, title, message, ...extra });
 
-async function sha256Hex(value: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+/** Chaves de alertas abertos da fonte (para manter alertas de "continua desligado"). */
+async function openAlertKeys(supabase: SupabaseClient, sourceType: string, sourceId: string): Promise<Set<string>> {
+  const { data } = await supabase.from("monitor_alerts").select("alert_key")
+    .eq("source_type", sourceType).eq("source_id", sourceId).in("status", ["active", "acknowledged"]);
+  return new Set((data || []).map((r: { alert_key: string }) => r.alert_key));
 }
-
-type MonitorToken = { id: string; client_id: string | null; scopes: string[] };
 
 /**
- * Envia um alerta de hardware por WhatsApp para todos os administradores que
- * possuem telefone cadastrado. Falhas de envio nunca derrubam a ingestão.
+ * Fluxo comum de falha de coleta.
+ * - Não confirmado: reconcilia com lista vazia e partial (nada é resolvido).
+ * - Confirmado: alerta "offline" crítico, também partial (disco/CPU não são "normalizados").
  */
-async function notifyAdmins(supabase: any, text: string): Promise<void> {
-  try {
-    const cfg = await getEvolutionConfig();
-    if (!cfg.enabled || !cfg.baseUrl || !cfg.apiKey) return;
-
-    const { data: adminRoles } = await supabase
-      .from("user_roles")
-      .select("user_id")
-      .eq("role", "admin");
-    if (!adminRoles?.length) return;
-
-    const ids = adminRoles.map((r: any) => r.user_id);
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("phone")
-      .in("id", ids);
-
-    const phones = new Set<string>(
-      (profiles || [])
-        .map((p: any) => String(p.phone || "").replace(/[\s\-()+]/g, ""))
-        .filter((p: string) => p.length >= 10),
-    );
-
-    for (const number of phones) {
-      await waFetch(`${cfg.baseUrl}/send/text`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", token: cfg.apiKey },
-        body: JSON.stringify({ number, text, linkPreview: false }),
-      });
-    }
-  } catch (err) {
-    console.error("notifyAdmins error:", err);
-  }
+async function handleCollectFailure(
+  supabase: SupabaseClient,
+  src: AlertSource,
+  fs: ReturnType<typeof failureState>,
+  error: unknown,
+) {
+  const conditions = fs.confirmedOffline
+    ? [cond("offline", "availability", "critical", "Sem resposta",
+      `Falhou ${fs.consecutive_failures} coletas seguidas${error ? `: ${String(error).substring(0, 200)}` : ""}`)]
+    : [];
+  return reconcileAlerts(supabase, src, conditions, { partial: true });
 }
 
-/** Sensor recebido do coletor (Redfish/iLO). */
+/** Normaliza lista de serviços (array [{name,status}] ou objeto {nome: status}). */
+function serviceList(raw: unknown): { name: string; status: string }[] {
+  if (Array.isArray(raw)) {
+    return raw.map((s: any) => ({ name: String(s?.name ?? s?.Name ?? ""), status: String(s?.status ?? s?.Status ?? "") }))
+      .filter((s) => s.name);
+  }
+  if (raw && typeof raw === "object") {
+    return Object.entries(raw as Record<string, unknown>).map(([name, v]) => ({
+      name,
+      status: String(typeof v === "object" && v ? (v as any).status ?? (v as any).Status ?? "" : v ?? ""),
+    }));
+  }
+  return [];
+}
+
+// ---------------------------------------------------------------- sensores iLO
+
 interface SensorPayload {
   sensor_type?: string;
   name?: string;
@@ -86,28 +98,24 @@ interface SensorPayload {
   location?: string | null;
 }
 
-/** Saúde considerada normal pelo Redfish. */
 const SAUDE_OK = new Set(["ok", "enabled", "absent", "n/a", ""]);
 
-/**
- * Classifica um sensor. Devolve `null` quando ele está saudável.
- * Regras:
- *  - health "Critical" -> alerta crítico
- *  - health "Warning" / status não habilitado -> alerta de atenção
- *  - leitura acima do limite crítico informado pelo hardware -> alerta crítico
- */
-function classificarSensor(s: SensorPayload): { severity: "warning" | "critical"; motivo: string } | null {
+/** Classifica um sensor. Devolve null quando está saudável. */
+function classificarSensor(s: SensorPayload, tempMargin: number): { severity: "warning" | "critical"; motivo: string } | null {
   const health = String(s.health || "").trim().toLowerCase();
   const status = String(s.status || "").trim().toLowerCase();
+  const reading = typeof s.reading === "number" ? s.reading : null;
+  const upper = typeof s.upper_critical === "number" && s.upper_critical > 0 ? s.upper_critical : null;
 
   if (health === "critical") return { severity: "critical", motivo: "saúde crítica" };
+  if (reading !== null && upper !== null && reading >= upper) {
+    return { severity: "critical", motivo: `leitura acima do limite (${upper}${s.unit || ""})` };
+  }
   if (
-    typeof s.reading === "number" &&
-    typeof s.upper_critical === "number" &&
-    s.upper_critical > 0 &&
-    s.reading >= s.upper_critical
+    String(s.sensor_type) === "temperature" && reading !== null && upper !== null &&
+    reading >= upper - tempMargin
   ) {
-    return { severity: "critical", motivo: `leitura acima do limite (${s.upper_critical}${s.unit || ""})` };
+    return { severity: "warning", motivo: `a menos de ${tempMargin}°C do limite crítico (${upper}°C)` };
   }
   if (health === "warning") return { severity: "warning", motivo: "saúde em atenção" };
   if (health && !SAUDE_OK.has(health)) return { severity: "warning", motivo: `saúde "${s.health}"` };
@@ -115,686 +123,852 @@ function classificarSensor(s: SensorPayload): { severity: "warning" | "critical"
   return null;
 }
 
-/** Rótulos amigáveis por tipo de sensor. */
 const TIPO_LABEL: Record<string, string> = {
-  temperature: "🌡️ Temperatura",
-  fan: "🌀 Ventilador",
-  power: "🔌 Fonte",
-  voltage: "⚡ Tensão",
-  storage: "💽 Armazenamento",
-  memory: "🧠 Memória",
-  processor: "🖳 Processador",
-  network: "🌐 Rede",
-  other: "🔧 Sensor",
+  temperature: "Temperatura", fan: "Ventilador", power: "Fonte", voltage: "Tensão",
+  storage: "Armazenamento", memory: "Memória", processor: "Processador", network: "Rede", other: "Sensor",
 };
 
 /**
- * Reconcilia o estado dos sensores com a tabela `server_sensor_alerts` e envia
- * UMA notificação de WhatsApp por sensor que entrou em alerta (e uma por
- * normalização). O estado persistido evita reenvio a cada coleta.
+ * Mantém a tabela server_sensor_alerts (usada pelo painel) — sem notificar.
+ * As notificações agora saem por monitor_alerts.
  */
-async function processarAlertasDeSensores(
-  supabase: any,
+async function syncSensorAlertTable(
+  supabase: SupabaseClient,
   serverId: string,
-  serverName: string,
   sensors: SensorPayload[],
-): Promise<{ novos: number; resolvidos: number }> {
+  tempMargin: number,
+): Promise<void> {
   const atuais = new Map<string, { s: SensorPayload; c: { severity: "warning" | "critical"; motivo: string } }>();
-
   for (const s of sensors) {
-    const classificacao = classificarSensor(s);
-    if (!classificacao) continue;
-    const key = `${String(s.sensor_type || "other")}:${String(s.name || "—")}`.substring(0, 200);
-    atuais.set(key, { s, c: classificacao });
+    const c = classificarSensor(s, tempMargin);
+    if (!c) continue;
+    atuais.set(`${String(s.sensor_type || "other")}:${String(s.name || "—")}`.substring(0, 200), { s, c });
   }
 
-  const { data: existentes, error: exErr } = await supabase
-    .from("server_sensor_alerts")
-    .select("id, sensor_key, sensor_name, severity, status")
-    .eq("server_id", serverId);
-  if (exErr) {
-    console.error("server_sensor_alerts select error:", exErr.message);
-    return { novos: 0, resolvidos: 0 };
-  }
-
+  const { data: existentes, error } = await supabase
+    .from("server_sensor_alerts").select("id, sensor_key, status").eq("server_id", serverId);
+  if (error) { console.error("server_sensor_alerts select:", error.message); return; }
   const porChave = new Map<string, any>((existentes || []).map((r: any) => [r.sensor_key, r]));
   const agora = new Date().toISOString();
-  let novos = 0;
-  let resolvidos = 0;
 
-  // 1) Sensores em alerta -> cria/atualiza e notifica somente na abertura ou piora.
   for (const [key, { s, c }] of atuais) {
     const anterior = porChave.get(key);
-    const deveNotificar =
-      !anterior || anterior.status === "resolved" || (anterior.severity !== "critical" && c.severity === "critical");
-
+    const novo = !anterior || anterior.status === "resolved";
     const leitura = typeof s.reading === "number" ? `${s.reading}${s.unit ? ` ${s.unit}` : ""}` : "—";
-    const mensagem = `${c.motivo} (leitura: ${leitura})`;
-
-    const { error: upErr } = await supabase.from("server_sensor_alerts").upsert(
-      {
-        server_id: serverId,
-        sensor_key: key,
-        sensor_name: String(s.name || "—").substring(0, 200),
-        sensor_type: String(s.sensor_type || "other"),
-        severity: c.severity,
-        status: "active",
-        reading: typeof s.reading === "number" ? s.reading : null,
-        unit: s.unit ?? null,
-        message: mensagem.substring(0, 500),
-        last_seen_at: agora,
-        resolved_at: null,
-        ...(deveNotificar ? { last_notified_at: agora, first_detected_at: agora } : {}),
-      },
-      { onConflict: "server_id,sensor_key" },
-    );
-    if (upErr) {
-      console.error("server_sensor_alerts upsert error:", upErr.message);
-      continue;
-    }
-
-    if (deveNotificar) {
-      novos++;
-      const icone = c.severity === "critical" ? "🔥" : "⚠️";
-      const tipo = TIPO_LABEL[String(s.sensor_type || "other")] || TIPO_LABEL.other;
-      await notifyAdmins(
-        supabase,
-        [
-          `${icone} *Alerta de sensor — ${serverName}*`,
-          "",
-          `${tipo}: *${s.name || "—"}*`,
-          `Severidade: ${c.severity === "critical" ? "CRÍTICO" : "Atenção"}`,
-          `Motivo: ${c.motivo}`,
-          `Leitura: ${leitura}`,
-          s.location ? `Local: ${s.location}` : "",
-          "",
-          `_Detectado em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}_`,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      );
-    }
+    const { error: upErr } = await supabase.from("server_sensor_alerts").upsert({
+      server_id: serverId,
+      sensor_key: key,
+      sensor_name: String(s.name || "—").substring(0, 200),
+      sensor_type: String(s.sensor_type || "other"),
+      severity: c.severity,
+      status: "active",
+      reading: typeof s.reading === "number" ? s.reading : null,
+      unit: s.unit ?? null,
+      message: `${c.motivo} (leitura: ${leitura})`.substring(0, 500),
+      last_seen_at: agora,
+      resolved_at: null,
+      ...(novo ? { first_detected_at: agora } : {}),
+    }, { onConflict: "server_id,sensor_key" });
+    if (upErr) console.error("server_sensor_alerts upsert:", upErr.message);
   }
 
-  // 2) Sensores que voltaram ao normal -> marca resolvido e avisa uma única vez.
   for (const anterior of existentes || []) {
     if (atuais.has(anterior.sensor_key) || anterior.status === "resolved") continue;
-
-    const { error: resErr } = await supabase
-      .from("server_sensor_alerts")
-      .update({ status: "resolved", resolved_at: agora, last_notified_at: agora })
-      .eq("id", anterior.id);
-    if (resErr) {
-      console.error("server_sensor_alerts resolve error:", resErr.message);
-      continue;
-    }
-
-    resolvidos++;
-    await notifyAdmins(
-      supabase,
-      [
-        `✅ *Sensor normalizado — ${serverName}*`,
-        "",
-        `Sensor: *${anterior.sensor_name}*`,
-        "O hardware voltou a reportar estado saudável.",
-      ].join("\n"),
-    );
+    await supabase.from("server_sensor_alerts")
+      .update({ status: "resolved", resolved_at: agora }).eq("id", anterior.id);
   }
-
-  return { novos, resolvidos };
 }
 
+// ---------------------------------------------------------------- handlers
 
+type Ctx = { supabase: SupabaseClient; cfg: MonitorConfig; body: any; tokenClientId: string | null };
 
+const forbidden = () => jsonResp({ error: "Fonte pertence a outro cliente" }, 403);
+const ownedByOther = (ctx: Ctx, clientId: string | null) => !!ctx.tokenClientId && clientId !== ctx.tokenClientId;
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+// ---- Windows
+async function handleWindows(ctx: Ctx) {
+  const { supabase, cfg, body } = ctx;
+  const { server_id } = body;
+  if (!server_id) return jsonResp({ error: "server_id required" }, 400);
+
+  const { data: prev } = await supabase.from("windows_servers")
+    .select("id, name, client_id, status, consecutive_failures, thresholds").eq("id", server_id).maybeSingle();
+  if (!prev) return jsonResp({ error: "Server not found" }, 404);
+  if (ownedByOther(ctx, prev.client_id)) return forbidden();
+
+  const src: AlertSource = { type: "windows", id: prev.id, name: prev.name, clientId: prev.client_id };
+  const fs = failureState(cfg, body.status, prev);
+  const now = new Date().toISOString();
+  const update: Record<string, any> = {
+    status: fs.status, consecutive_failures: fs.consecutive_failures,
+    last_polled_at: now, last_error: body.last_error || null,
+  };
+
+  if (body.status === "offline") {
+    await supabase.from("windows_servers").update(update).eq("id", server_id);
+    const lines = await handleCollectFailure(supabase, src, fs, body.last_error);
+    return jsonResp({ success: true, status: fs.status, alerts: lines.length });
   }
 
-  try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceKey);
+  const disks: any[] = Array.isArray(body.disks) ? body.disks.slice(0, 50) : [];
+  const diskPct = (d: any) => num(d.usage_pct ?? d.pct);
+  const diskName = (d: any) => String(d.letter ?? d.drive ?? d.name ?? d.mount ?? "?").replace(/\\$/, "");
+  const maxDisk = maxOf(disks.map(diskPct));
 
-    const body = await req.json();
-    const { type } = body;
+  const fields = [
+    "cpu_usage", "ram_total_gb", "ram_used_gb", "ram_usage_pct", "disk_total_gb", "disk_used_gb",
+    "disk_free_gb", "disk_usage_pct", "uptime_seconds", "last_boot_time", "os_version", "services_status",
+    "top_processes", "event_errors", "pending_reboot", "pending_updates", "cpu_model", "cpu_cores", "agent_version",
+  ];
+  for (const f of fields) if (body[f] !== undefined) update[f] = body[f];
+  if (disks.length) { update.disks = disks; update.disk_usage_pct = maxDisk; }
 
-    // ---- Autenticação por token de agente (x-monitor-token) ----
-    const rawToken = (req.headers.get("x-monitor-token") || "").trim();
-    let token: MonitorToken | null = null;
-    if (rawToken) {
-      const hash = await sha256Hex(rawToken);
-      const { data: tk } = await supabase
-        .from("monitor_agent_tokens")
-        .select("id, client_id, scopes")
-        .eq("token_hash", hash)
-        .is("revoked_at", null)
-        .maybeSingle();
-      if (!tk) return jsonResp({ error: "Token inválido ou revogado" }, 401);
-      token = tk as MonitorToken;
-      const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
-      // Não bloqueia a resposta.
-      supabase.from("monitor_agent_tokens")
-        .update({ last_used_at: new Date().toISOString(), last_ip: ip })
-        .eq("id", token.id)
-        .then(({ error }) => { if (error) console.error("token last_used update", error); });
+  const hasMetrics = body.cpu_usage !== undefined || body.ram_usage_pct !== undefined || disks.length > 0;
+  const th = effectiveThresholds(cfg, prev.thresholds);
+  const conditions: AlertCondition[] = [];
+
+  if (body.status === "warning" && !hasMetrics) {
+    push(conditions, cond("collect", "collect", "warning", "Coleta incompleta",
+      `O agente respondeu sem métricas${body.last_error ? `: ${String(body.last_error).substring(0, 200)}` : ""}`, { sustain: 3 }));
+    await supabase.from("windows_servers").update(update).eq("id", server_id);
+    // Sem métricas não dá para afirmar que disco/CPU normalizaram.
+    const lines = await reconcileAlerts(supabase, src, conditions, { partial: true });
+    return jsonResp({ success: true, status: fs.status, alerts: lines.length });
+  }
+
+  push(conditions, pctCondition("cpu", "cpu", "CPU", num(body.cpu_usage), th.cpu));
+  push(conditions, pctCondition("ram", "ram", "Memória RAM", num(body.ram_usage_pct), th.ram));
+  for (const d of disks) {
+    const name = diskName(d);
+    push(conditions, pctCondition(`disk:${name}`, "disk", `Disco ${name}`, diskPct(d), th.disk,
+      num(d.free_gb) !== null ? { message: `Livre: ${r1(Number(d.free_gb))} GB` } : undefined));
+    if (d.predict_failure === true) {
+      push(conditions, cond(`smart:${name}`, "smart", "critical", `Disco ${name} com previsão de falha (SMART)`,
+        "O próprio disco informa que pode falhar em breve. Faça backup e planeje a troca."));
     }
-
-    const isList = typeof type === "string" && type.startsWith("list-");
-    if (!token) {
-      if (isList) return jsonResp({ error: "x-monitor-token obrigatório" }, 401);
-      if (Deno.env.get("MONITOR_REQUIRE_TOKEN") === "true") return jsonResp({ error: "x-monitor-token obrigatório" }, 401);
-      console.warn(`[server-monitor-ingest] ingestão sem token (type=${type}) — legado`);
-    } else {
-      const scope = TYPE_SCOPE[type];
-      if (token.scopes?.length && (!scope || !token.scopes.includes(scope))) {
-        return jsonResp({ error: `Token sem permissão para '${type}'` }, 403);
-      }
+  }
+  for (const s of serviceList(body.services_status)) {
+    if (s.status.toLowerCase() !== "running") {
+      push(conditions, cond(`service:${s.name}`, "service", "critical", `Serviço ${s.name} parado`, `Estado: ${s.status || "desconhecido"}`));
     }
-    const tokenClientId = token?.client_id ?? null;
+  }
+  if (body.pending_reboot === true) {
+    push(conditions, cond("pending_reboot", "maintenance", "info", "Reinicialização pendente", "Atualizações aguardam reinício."));
+  }
+  const events: any[] = Array.isArray(body.event_errors) ? body.event_errors : [];
+  const critEvents = events.filter((e) => String(e?.level ?? e?.Level ?? "").toLowerCase() === "critical");
+  if (critEvents.length) {
+    const first = critEvents[0];
+    push(conditions, cond("events:critical", "events", "warning", `${critEvents.length} evento(s) crítico(s) no Windows`,
+      String(first?.message ?? first?.Message ?? first?.source ?? "").substring(0, 200) || undefined));
+  }
 
-    /** 403 se a fonte pertencer a outro cliente que não o do token. */
-    const assertOwner = async (table: string, id: string | null | undefined): Promise<Response | null> => {
-      if (!tokenClientId || !id) return null;
-      const { data: src } = await supabase.from(table).select("client_id").eq("id", id).maybeSingle();
-      if (src && (src as any).client_id !== tokenClientId) return jsonResp({ error: "Fonte pertence a outro cliente" }, 403);
-      return null;
-    };
-    const src = INGEST_SOURCE[type];
-    if (src && body[src.field]) {
-      const denied = await assertOwner(src.table, body[src.field]);
-      if (denied) return denied;
+  update.last_success_at = now;
+  const { error } = await supabase.from("windows_servers").update(update).eq("id", server_id);
+  if (error) throw error;
+
+  await recordSample(supabase, src, { cpu: num(body.cpu_usage), ram: num(body.ram_usage_pct), disk: maxDisk ?? num(body.disk_usage_pct) });
+  const lines = await reconcileAlerts(supabase, src, conditions);
+  return jsonResp({ success: true, status: fs.status, alerts: lines.length });
+}
+
+// ---- Linux
+async function handleLinux(ctx: Ctx) {
+  const { supabase, cfg, body } = ctx;
+  const info = body.info || {};
+  let serverId: string | null = body.server_id || null;
+
+  if (!serverId) {
+    const hostname = String(info.hostname || "").trim();
+    if (!ctx.tokenClientId || !hostname) {
+      return jsonResp({ error: "server_id required (ou token com cliente + info.hostname para autocadastro)" }, 400);
     }
-
-    if (type === "windows") {
-      const { server_id, status: serverStatus, cpu_usage, ram_total_gb, ram_used_gb, ram_usage_pct, disk_total_gb, disk_used_gb, disk_free_gb, disk_usage_pct, uptime_seconds, last_boot_time, os_version, services_status, last_error } = body;
-
-      if (!server_id) {
-        return new Response(JSON.stringify({ error: "server_id required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      const updateData: Record<string, any> = {
-        status: serverStatus || "online",
-        last_polled_at: new Date().toISOString(),
-        last_error: last_error || null,
-        updated_at: new Date().toISOString(),
-      };
-
-      // Only set metrics if provided (online with full data)
-      if (cpu_usage !== undefined) updateData.cpu_usage = cpu_usage;
-      if (ram_total_gb !== undefined) updateData.ram_total_gb = ram_total_gb;
-      if (ram_used_gb !== undefined) updateData.ram_used_gb = ram_used_gb;
-      if (ram_usage_pct !== undefined) updateData.ram_usage_pct = ram_usage_pct;
-      if (disk_total_gb !== undefined) updateData.disk_total_gb = disk_total_gb;
-      if (disk_used_gb !== undefined) updateData.disk_used_gb = disk_used_gb;
-      if (disk_free_gb !== undefined) updateData.disk_free_gb = disk_free_gb;
-      if (disk_usage_pct !== undefined) updateData.disk_usage_pct = disk_usage_pct;
-      if (uptime_seconds !== undefined) updateData.uptime_seconds = uptime_seconds;
-      if (last_boot_time !== undefined) updateData.last_boot_time = last_boot_time;
-      if (os_version !== undefined) updateData.os_version = os_version;
-      if (services_status !== undefined) updateData.services_status = services_status;
-
-      const { error } = await supabase.from("windows_servers").update(updateData).eq("id", server_id);
-
+    const { data: found } = await supabase.from("linux_servers").select("id")
+      .eq("client_id", ctx.tokenClientId).ilike("hostname", hostname).maybeSingle();
+    if (found) serverId = found.id;
+    else {
+      const { data: created, error } = await supabase.from("linux_servers").insert({
+        client_id: ctx.tokenClientId, name: hostname, host: String(body.host || info.ip || hostname), hostname,
+      }).select("id").single();
       if (error) throw error;
-
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      serverId = created.id;
     }
+  }
 
-    if (type === "vmware") {
-      const { host_id, cpu_cores, cpu_usage_pct, ram_total_gb, ram_used_gb, ram_usage_pct, esxi_version, uptime_seconds, datastores, vms } = body;
+  const { data: prev } = await supabase.from("linux_servers")
+    .select("id, name, client_id, status, consecutive_failures, thresholds").eq("id", serverId).maybeSingle();
+  if (!prev) return jsonResp({ error: "Server not found" }, 404);
+  if (ownedByOther(ctx, prev.client_id)) return forbidden();
 
-      if (!host_id) {
-        return new Response(JSON.stringify({ error: "host_id required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
+  const src: AlertSource = { type: "linux", id: prev.id, name: prev.name, clientId: prev.client_id };
+  const fs = failureState(cfg, body.status, prev);
+  const now = new Date().toISOString();
+  const update: Record<string, any> = {
+    status: fs.status, consecutive_failures: fs.consecutive_failures, last_polled_at: now, last_error: body.last_error || null,
+  };
 
-      // Update host
-      const { error: hostErr } = await supabase.from("vmware_hosts").update({
-        status: "online",
-        cpu_cores,
-        cpu_usage_pct,
-        ram_total_gb,
-        ram_used_gb,
-        ram_usage_pct,
-        esxi_version,
-        uptime_seconds,
-        datastores,
-        last_polled_at: new Date().toISOString(),
-        last_error: null,
-        updated_at: new Date().toISOString(),
-      }).eq("id", host_id);
+  if (body.status === "offline") {
+    await supabase.from("linux_servers").update(update).eq("id", prev.id);
+    const lines = await handleCollectFailure(supabase, src, fs, body.last_error);
+    return jsonResp({ success: true, server_id: prev.id, status: fs.status, alerts: lines.length });
+  }
 
-      if (hostErr) throw hostErr;
+  const infoFields = [
+    "hostname", "distro", "kernel", "cpu_model", "cpu_cores", "cpu_usage_pct", "iowait_pct", "load_1", "load_5", "load_15",
+    "ram_total_gb", "ram_used_gb", "ram_usage_pct", "swap_total_gb", "swap_used_gb", "pending_updates",
+    "security_updates", "reboot_required", "uptime_seconds", "agent_version",
+  ];
+  for (const f of infoFields) if (info[f] !== undefined) update[f] = info[f];
 
-      // Sync VMs
-      if (vms && Array.isArray(vms)) {
-        // Delete old VMs for this host
-        await supabase.from("vmware_vms").delete().eq("host_id", host_id);
+  const disks: any[] = Array.isArray(body.disks) ? body.disks.slice(0, 100) : [];
+  const services: any[] = Array.isArray(body.services) ? body.services.slice(0, 200) : [];
+  const failedUnits: any[] = Array.isArray(body.failed_units) ? body.failed_units.slice(0, 100) : [];
+  const raid: any[] = Array.isArray(body.raid) ? body.raid : [];
+  const zfs: any[] = Array.isArray(body.zfs) ? body.zfs : [];
+  const smart: any[] = Array.isArray(body.smart) ? body.smart : [];
+  const maxDisk = maxOf(disks.map((d) => num(d.pct)));
 
-        // Insert new ones
-        if (vms.length > 0) {
-          const vmRecords = vms.map((vm: any) => ({
-            host_id,
-            name: vm.name,
-            power_state: vm.power_state || "unknown",
-            guest_os: vm.guest_os,
-            cpu_count: vm.cpu_count,
-            ram_mb: vm.ram_mb,
-            ip_address: vm.ip_address,
-            tools_status: vm.tools_status,
-            disk_used_gb: vm.disk_used_gb,
-            disk_provisioned_gb: vm.disk_provisioned_gb,
-            uptime_seconds: vm.uptime_seconds,
-          }));
-          const { error: vmErr } = await supabase.from("vmware_vms").insert(vmRecords);
-          if (vmErr) throw vmErr;
-        }
-      }
+  update.disks = disks;
+  update.disk_usage_pct = maxDisk;
+  update.services_status = services;
+  update.failed_units = failedUnits;
+  update.raid_status = raid;
+  update.zfs_pools = zfs;
+  if (body.top_processes !== undefined) update.top_processes = body.top_processes;
 
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  const th = effectiveThresholds(cfg, prev.thresholds);
+  const conditions: AlertCondition[] = [];
+  const ramPct = num(info.ram_usage_pct) ?? (num(info.ram_total_gb) && num(info.ram_used_gb) !== null
+    ? (Number(info.ram_used_gb) / Number(info.ram_total_gb)) * 100 : null);
+  const swapPct = num(info.swap_total_gb) && num(info.swap_used_gb) !== null
+    ? (Number(info.swap_used_gb) / Number(info.swap_total_gb)) * 100 : null;
+
+  push(conditions, pctCondition("cpu", "cpu", "CPU", num(info.cpu_usage_pct), th.cpu));
+  push(conditions, pctCondition("iowait", "cpu", "Espera de disco (iowait)", num(info.iowait_pct), th.iowait,
+    { message: "A CPU está esperando o disco — armazenamento lento ou sobrecarregado." }));
+  push(conditions, pctCondition("ram", "ram", "Memória RAM", ramPct, th.ram));
+  push(conditions, pctCondition("swap", "ram", "Swap", swapPct, th.swap,
+    { message: "Uso de swap alto indica falta de memória RAM." }));
+
+  const cores = num(info.cpu_cores);
+  const load5 = num(info.load_5);
+  if (cores && cores > 0 && load5 !== null) {
+    const ratio = load5 / cores;
+    if (ratio >= 2) {
+      push(conditions, cond("load", "cpu", ratio >= 4 ? "critical" : "warning", `Carga ${r1(load5)} (${r1(ratio)}× os núcleos)`,
+        `Load average de 5 min acima de ${ratio >= 4 ? 4 : 2}× os ${cores} núcleos — processos aguardando CPU/disco.`,
+        { value: r1(ratio), threshold: ratio >= 4 ? 4 : 2, sustain: 3 }));
     }
-
-    /**
-     * HP iLO4 (Redfish). O coletor roda na rede do cliente e envia o snapshot
-     * completo do servidor: saúde, sensores e eventos de hardware (IML).
-     */
-    if (type === "ilo") {
-      const {
-        server_id,
-        status: iloStatus,
-        last_error: iloError,
-        info,
-        health,
-        sensors,
-        events,
-      } = body;
-
-      if (!server_id) {
-        return new Response(JSON.stringify({ error: "server_id required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      // Estado anterior — usado para notificar apenas mudanças para crítico.
-      const { data: previous } = await supabase
-        .from("ilo_servers")
-        .select("id, name, status, health_summary, client_id, consecutive_failures")
-        .eq("id", server_id)
-        .maybeSingle();
-
-      if (!previous) {
-        return new Response(JSON.stringify({ error: "Server not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      /**
-       * Anti-falso-positivo: uma única coleta com falha (timeout de rede,
-       * iLO/iDRAC reiniciando a interface web, 403 momentâneo) NÃO marca o
-       * servidor como offline. Só consideramos offline após N tentativas
-       * consecutivas sem sucesso.
-       */
-      const LIMITE_FALHAS = 3;
-      const coletaFalhou = iloStatus === "offline";
-      const falhasAnteriores = Number(previous.consecutive_failures ?? 0);
-      const falhas = coletaFalhou ? falhasAnteriores + 1 : 0;
-      const offlineConfirmado = coletaFalhou && falhas >= LIMITE_FALHAS;
-
-      // Enquanto não confirmado, preservamos o status anterior (não piscamos a UI).
-      const statusEfetivo = coletaFalhou
-        ? (offlineConfirmado ? "offline" : (previous.status === "offline" ? "offline" : previous.status || "warning"))
-        : (iloStatus || "online");
-
-      const updateData: Record<string, any> = {
-        status: statusEfetivo,
-        last_error: iloError || null,
-        consecutive_failures: falhas,
-        last_polled_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      if (!coletaFalhou) updateData.last_success_at = new Date().toISOString();
-
-
-      const infoFields = [
-        "server_model", "serial_number", "ilo_version", "ilo_firmware", "bios_version",
-        "cpu_model", "cpu_count", "ram_total_gb", "power_state", "post_state",
-        "indicator_led", "uptime_seconds", "health_summary",
-      ];
-      for (const field of infoFields) {
-        if (info && info[field] !== undefined) updateData[field] = info[field];
-      }
-
-      const healthFields = [
-        "health_processor", "health_memory", "health_storage",
-        "health_fans", "health_power", "health_temperature", "health_network",
-      ];
-      for (const field of healthFields) {
-        if (health && health[field] !== undefined) updateData[field] = health[field];
-      }
-
-      const { error: srvErr } = await supabase.from("ilo_servers").update(updateData).eq("id", server_id);
-      if (srvErr) throw srvErr;
-
-      // Sensores: substituição total do snapshot (mesma estratégia usada nas VMs).
-      if (Array.isArray(sensors)) {
-        await supabase.from("ilo_sensors").delete().eq("server_id", server_id);
-        if (sensors.length > 0) {
-          const rows = sensors.slice(0, 500).map((s: any) => ({
-            server_id,
-            sensor_type: String(s.sensor_type || "other"),
-            name: String(s.name || "—"),
-            reading: s.reading ?? null,
-            unit: s.unit ?? null,
-            status: s.status ?? null,
-            health: s.health ?? null,
-            upper_critical: s.upper_critical ?? null,
-            location: s.location ?? null,
-            details: s.details ?? null,
-          }));
-          const { error: sensorErr } = await supabase.from("ilo_sensors").insert(rows);
-          if (sensorErr) throw sensorErr;
-        }
-      }
-
-      // Alertas individuais por sensor (uma notificação por sensor em falha).
-      let sensorAlerts = { novos: 0, resolvidos: 0 };
-      if (Array.isArray(sensors) && iloStatus !== "offline") {
-        sensorAlerts = await processarAlertasDeSensores(
-          supabase,
-          server_id,
-          previous.name,
-          sensors.slice(0, 500) as SensorPayload[],
-        );
-      }
-
-
-
-      // Eventos IML: upsert por chave única para não duplicar a cada coleta.
-      const newCritical: string[] = [];
-      if (Array.isArray(events) && events.length > 0) {
-        const rows = events.slice(0, 200).map((e: any) => ({
-          server_id,
-          event_key: String(e.event_key ?? `${e.recorded_at}-${e.message}`).substring(0, 200),
-          severity: String(e.severity || "info"),
-          category: e.category ?? null,
-          message: String(e.message || "").substring(0, 2000),
-          recorded_at: e.recorded_at || new Date().toISOString(),
-        }));
-
-        const { data: inserted, error: evErr } = await supabase
-          .from("ilo_events")
-          .upsert(rows, { onConflict: "server_id,event_key", ignoreDuplicates: true })
-          .select("id, severity, message");
-        if (evErr) console.error("ilo events upsert error:", evErr.message);
-
-        (inserted || []).forEach((e: any) => {
-          if (e.severity === "critical") newCritical.push(e.message);
-        });
-      }
-
-      // Alertas: apenas em transições confirmadas (evita spam e falso positivo).
-      const becameOffline = offlineConfirmado && previous.status !== "offline";
-      const voltouOnline = !coletaFalhou && previous.status === "offline";
-      const becameCritical =
-        updateData.health_summary === "Critical" && previous.health_summary !== "Critical";
-
-      if (becameOffline || voltouOnline || becameCritical || newCritical.length > 0) {
-        const lines = [`🖥️ *Alerta iLO — ${previous.name}*`, ""];
-        if (becameOffline) {
-          lines.push(`🔴 Servidor inacessível após ${falhas} tentativas consecutivas.`);
-          if (iloError) lines.push(`Detalhe: ${String(iloError).substring(0, 200)}`);
-        }
-        if (voltouOnline) lines.push("✅ Servidor voltou a responder (online).");
-        if (becameCritical) lines.push("🔥 Saúde geral do hardware em estado CRÍTICO.");
-        newCritical.slice(0, 5).forEach((m) => lines.push(`⚠️ ${m}`));
-        await notifyAdmins(supabase, lines.join("\n"));
-      }
-
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          new_critical: newCritical.length,
-          sensor_alerts_new: sensorAlerts.novos,
-          sensor_alerts_resolved: sensorAlerts.resolvidos,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-
+  }
+  for (const d of disks) {
+    const mount = String(d.mount || "?");
+    push(conditions, pctCondition(`disk:${mount}`, "disk", `Disco ${mount}`, num(d.pct), th.disk,
+      num(d.total_gb) !== null && num(d.used_gb) !== null ? { message: `${r1(Number(d.used_gb))} de ${r1(Number(d.total_gb))} GB` } : undefined));
+    push(conditions, pctCondition(`inode:${mount}`, "disk", `Inodes de ${mount}`, num(d.inode_pct), { warn: 90, crit: 97, sustain: 1 },
+      { message: "Muitos arquivos pequenos: mesmo com espaço livre, não será possível criar arquivos." }));
+  }
+  for (const s of services) {
+    const st = String(s?.status || "").toLowerCase();
+    if (s?.name && st !== "active") {
+      push(conditions, cond(`service:${s.name}`, "service", "critical", `Serviço ${s.name} parado`, `Estado: ${s.status || "desconhecido"}`));
     }
-
-    /**
-     * Proxmox VE. O coletor roda na rede do cliente, consulta a API REST do
-     * Proxmox e envia o snapshot do nó (métricas, storages e VMs/containers).
-     */
-    if (type === "proxmox") {
-      const { node_id, status: pveStatus, last_error: pveError, info, storages, guests, interfaces } = body;
-
-      if (!node_id) {
-        return new Response(JSON.stringify({ error: "node_id required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      const { data: previousNode } = await supabase
-        .from("proxmox_nodes")
-        .select("id, name, status, ram_usage_pct, swap_total_gb, swap_used_gb")
-        .eq("id", node_id)
-        .maybeSingle();
-
-      if (!previousNode) {
-        return new Response(JSON.stringify({ error: "Node not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      const nodeUpdate: Record<string, any> = {
-        status: pveStatus || "online",
-        last_error: pveError || null,
-        last_polled_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      const infoFields = [
-        "node_name", "pve_version", "cpu_model", "cpu_cores", "cpu_usage_pct",
-        "ram_total_gb", "ram_used_gb", "ram_usage_pct", "swap_total_gb", "swap_used_gb",
-        "disk_total_gb", "disk_used_gb", "disk_usage_pct", "load_avg", "uptime_seconds",
-      ];
-      for (const field of infoFields) {
-        if (info && info[field] !== undefined) nodeUpdate[field] = info[field];
-      }
-      if (Array.isArray(storages)) nodeUpdate.storages = storages.slice(0, 100);
-
-      const { error: nodeErr } = await supabase.from("proxmox_nodes").update(nodeUpdate).eq("id", node_id);
-      if (nodeErr) throw nodeErr;
-
-      // VMs e containers: substituição total do snapshot (mesma estratégia do VMware).
-      if (Array.isArray(guests)) {
-        await supabase.from("proxmox_guests").delete().eq("node_id", node_id);
-        if (guests.length > 0) {
-          const rows = guests.slice(0, 500).map((g: any) => ({
-            node_id,
-            vmid: Number(g.vmid) || 0,
-            name: String(g.name || `VM ${g.vmid}`).substring(0, 200),
-            guest_type: g.guest_type === "lxc" ? "lxc" : "qemu",
-            status: String(g.status || "unknown"),
-            cpu_count: g.cpu_count ?? null,
-            cpu_usage_pct: g.cpu_usage_pct ?? null,
-            ram_total_gb: g.ram_total_gb ?? null,
-            ram_used_gb: g.ram_used_gb ?? null,
-            ram_usage_pct: g.ram_usage_pct ?? null,
-            disk_total_gb: g.disk_total_gb ?? null,
-            disk_used_gb: g.disk_used_gb ?? null,
-            uptime_seconds: g.uptime_seconds ?? null,
-            tags: g.tags ?? null,
-          }));
-          const { error: guestErr } = await supabase.from("proxmox_guests").insert(rows);
-          if (guestErr) throw guestErr;
-        }
-      }
-
-      // Rede segue no mesmo snapshot do nó. Mantemos também o endpoint
-      // `proxmox-net` abaixo para compatibilidade com o coletor shell antigo.
-      if (Array.isArray(interfaces) && interfaces.length > 0) {
-        const networkRows = interfaces.slice(0, 100).map((i: any) => ({
-          node_id,
-          interface_name: String(i.interface_name || "").substring(0, 100),
-          status: String(i.status || "unknown").substring(0, 30),
-          mac_address: i.mac_address ? String(i.mac_address).substring(0, 40) : null,
-          speed_mbps: Number.isFinite(Number(i.speed_mbps)) ? Number(i.speed_mbps) : null,
-          rx_bytes: Number.isFinite(Number(i.rx_bytes)) ? Number(i.rx_bytes) : null,
-          tx_bytes: Number.isFinite(Number(i.tx_bytes)) ? Number(i.tx_bytes) : null,
-          rx_rate_bps: Number.isFinite(Number(i.rx_rate_bps)) ? Number(i.rx_rate_bps) : null,
-          tx_rate_bps: Number.isFinite(Number(i.tx_rate_bps)) ? Number(i.tx_rate_bps) : null,
-          rx_errors: Number.isFinite(Number(i.rx_errors)) ? Number(i.rx_errors) : null,
-          tx_errors: Number.isFinite(Number(i.tx_errors)) ? Number(i.tx_errors) : null,
-          updated_at: new Date().toISOString(),
-        })).filter((r: any) => r.interface_name);
-
-        if (networkRows.length > 0) {
-          const { error: networkErr } = await supabase
-            .from("proxmox_interfaces")
-            .upsert(networkRows, { onConflict: "node_id,interface_name" });
-          if (networkErr) throw networkErr;
-        }
-      }
-
-      // Alertas apenas em transições, evitando spam a cada coleta.
-      const pveBecameOffline = (pveStatus === "offline") && previousNode.status !== "offline";
-      const diskCritical = typeof nodeUpdate.disk_usage_pct === "number" && nodeUpdate.disk_usage_pct >= 90;
-      if (pveBecameOffline || diskCritical) {
-        const lines = [`🧱 *Alerta Proxmox — ${previousNode.name}*`, ""];
-        if (pveBecameOffline) lines.push(`🔴 Nó inacessível: ${pveError || "sem resposta da API"}`);
-        if (diskCritical) lines.push(`💾 Disco do nó em ${nodeUpdate.disk_usage_pct}% de uso.`);
-        await notifyAdmins(supabase, lines.join("\n"));
-      }
-
-      // Memória e swap altos: avisa só ao entrar e ao sair do alerta.
-      const MEM_LIMIT = 90; // % de RAM
-      const SWAP_LIMIT = 50; // % de swap
-      const swapPct = (total: any, used: any) =>
-        typeof total === "number" && total > 0 && typeof used === "number" ? (used / total) * 100 : null;
-      const prevMem = typeof previousNode.ram_usage_pct === "number" ? previousNode.ram_usage_pct : null;
-      const curMem = typeof nodeUpdate.ram_usage_pct === "number" ? nodeUpdate.ram_usage_pct : null;
-      const prevSwap = swapPct(previousNode.swap_total_gb, previousNode.swap_used_gb);
-      const curSwap = swapPct(nodeUpdate.swap_total_gb, nodeUpdate.swap_used_gb);
-      const prevHigh = (prevMem ?? 0) >= MEM_LIMIT || (prevSwap ?? 0) >= SWAP_LIMIT;
-      const curHigh = (curMem ?? 0) >= MEM_LIMIT || (curSwap ?? 0) >= SWAP_LIMIT;
-      if (curMem !== null || curSwap !== null) {
-        const memTxt = curMem !== null ? `${curMem.toFixed(1)}%` : "—";
-        const swapTxt = curSwap !== null
-          ? `${curSwap.toFixed(1)}% (${Number(nodeUpdate.swap_used_gb).toFixed(1)} de ${Number(nodeUpdate.swap_total_gb).toFixed(1)} GB)`
-          : "—";
-        if (curHigh && !prevHigh) {
-          await notifyAdmins(supabase, [
-            `🧠 *Proxmox com uso alto de memória — ${previousNode.name}*`,
-            "",
-            `Memória RAM: *${memTxt}* (limite ${MEM_LIMIT}%)`,
-            `Swap: *${swapTxt}* (limite ${SWAP_LIMIT}%)`,
-            "",
-            "Verifique as VMs/containers que mais consomem memória.",
-            `_Detectado em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}_`,
-          ].join("\n"));
-        } else if (!curHigh && prevHigh) {
-          await notifyAdmins(supabase, [
-            `✅ *Memória normalizada — ${previousNode.name}*`,
-            "",
-            `Memória RAM: ${memTxt}`,
-            `Swap: ${swapTxt}`,
-          ].join("\n"));
-        }
-      }
-
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  for (const u of failedUnits) {
+    const name = String(typeof u === "string" ? u : u?.name || u?.unit || "");
+    if (name) push(conditions, cond(`unit:${name}`, "service", "warning", `Unidade ${name} com falha`, "systemctl reporta estado failed."));
+  }
+  for (const r of raid) {
+    if (r?.degraded === true) {
+      push(conditions, cond(`raid:${r.device}`, "raid", "critical", `RAID ${r.device} degradado`, `Estado: ${r.state || "degraded"} — substitua o disco com falha.`));
     }
+  }
+  for (const z of zfs) {
+    const name = String(z?.name || "?");
+    if (String(z?.health || "").toUpperCase() !== "ONLINE") {
+      push(conditions, cond(`zfs:${name}`, "zfs", "critical", `Pool ZFS ${name} ${z?.health || "com problema"}`,
+        z?.errors ? `Erros: ${String(z.errors).substring(0, 200)}` : undefined));
+    }
+    push(conditions, pctCondition(`zfs:${name}:capacity`, "zfs", `Pool ZFS ${name}`, num(z?.capacity_pct), th.disk,
+      { message: "ZFS perde desempenho acima de ~80% de ocupação." }));
+  }
+  for (const s of smart) {
+    if (s?.passed === false) {
+      push(conditions, cond(`smart:${s.device}`, "smart", "critical", `Disco ${s.device} reprovado no SMART`,
+        `${s.result ? `${String(s.result).substring(0, 150)} — ` : ""}faça backup e planeje a troca.`));
+    }
+  }
+  if (info.reboot_required === true) {
+    push(conditions, cond("pending_reboot", "maintenance", "info", "Reinicialização pendente", "Kernel ou bibliotecas atualizados aguardam reinício."));
+  }
+  const secUpd = num(info.security_updates);
+  if (secUpd && secUpd > 0) {
+    push(conditions, cond("security_updates", "maintenance", "info", `${secUpd} atualização(ões) de segurança pendentes`));
+  }
 
-    /**
-     * Trafego de rede das placas do host Proxmox. O script roda no proprio host
-     * e le os contadores do kernel (/proc/net/dev), equivalente ao `nload`.
-     */
-    if (type === "proxmox-net") {
-      const { node_id, hostname, interfaces } = body;
+  update.last_success_at = now;
+  const { error } = await supabase.from("linux_servers").update(update).eq("id", prev.id);
+  if (error) throw error;
 
-      if (!Array.isArray(interfaces) || interfaces.length === 0) {
-        return new Response(JSON.stringify({ error: "interfaces required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  await recordSample(supabase, src, { cpu: num(info.cpu_usage_pct), ram: ramPct, disk: maxDisk, extra: { iowait: num(info.iowait_pct), load_5: load5 } });
+  const lines = await reconcileAlerts(supabase, src, conditions);
+  return jsonResp({ success: true, server_id: prev.id, status: fs.status, alerts: lines.length });
+}
+
+// ---- SQL Server
+async function handleSqlServer(ctx: Ctx) {
+  const { supabase, cfg, body } = ctx;
+  const { instance_id } = body;
+  if (!instance_id) return jsonResp({ error: "instance_id required" }, 400);
+
+  const { data: prev } = await supabase.from("sql_instances")
+    .select("id, name, client_id, status, consecutive_failures, thresholds").eq("id", instance_id).maybeSingle();
+  if (!prev) return jsonResp({ error: "Instance not found" }, 404);
+  if (ownedByOther(ctx, prev.client_id)) return forbidden();
+
+  const src: AlertSource = { type: "sqlserver", id: prev.id, name: prev.name, clientId: prev.client_id };
+  const fs = failureState(cfg, body.status, prev);
+  const now = new Date().toISOString();
+  const update: Record<string, any> = {
+    status: fs.status, consecutive_failures: fs.consecutive_failures, last_polled_at: now, last_error: body.last_error || null,
+  };
+
+  if (body.status === "offline") {
+    await supabase.from("sql_instances").update(update).eq("id", prev.id);
+    const lines = await handleCollectFailure(supabase, src, fs, body.last_error);
+    return jsonResp({ success: true, status: fs.status, alerts: lines.length });
+  }
+
+  const info = body.info || {};
+  const infoFields = [
+    "version", "edition", "uptime_seconds", "sql_cpu_pct", "ple_seconds", "buffer_cache_hit_pct", "batch_requests_sec",
+    "user_connections", "blocked_sessions", "longest_block_seconds", "agent_running", "max_server_memory_mb", "memory_used_mb",
+  ];
+  for (const f of infoFields) if (info[f] !== undefined) update[f] = info[f];
+  if (body.agent_version !== undefined) update.agent_version = body.agent_version;
+
+  const dbs: any[] = Array.isArray(body.databases) ? body.databases.slice(0, 500) : [];
+  const jobs: any[] = Array.isArray(body.failed_jobs) ? body.failed_jobs.slice(0, 100) : [];
+  const io: any[] = Array.isArray(body.io_latency) ? body.io_latency.slice(0, 500) : [];
+  update.databases = dbs;
+  update.failed_jobs = jobs;
+  update.io_latency = io;
+  update.long_running_queries = Array.isArray(body.long_running_queries) ? body.long_running_queries.slice(0, 50) : [];
+  update.top_waits = Array.isArray(body.top_waits) ? body.top_waits.slice(0, 30) : [];
+
+  const th = effectiveThresholds(cfg, prev.thresholds);
+  const conditions: AlertCondition[] = [];
+
+  push(conditions, pctCondition("cpu", "cpu", "CPU do SQL Server", num(info.sql_cpu_pct), th.cpu));
+
+  const ple = num(info.ple_seconds);
+  if (ple !== null && ple < th.sql_ple_min) {
+    push(conditions, cond("ple", "memory", "warning", `Page Life Expectancy baixo (${Math.round(ple)} s)`,
+      `As páginas ficam pouco tempo no cache (mínimo ${th.sql_ple_min} s): falta memória para o SQL Server e ele lê mais do disco.`,
+      { value: ple, threshold: th.sql_ple_min, sustain: 3 }));
+  }
+
+  const block = num(info.longest_block_seconds);
+  if (block !== null && block >= th.sql_block_seconds) {
+    const crit = block >= th.sql_block_seconds * 5;
+    push(conditions, cond("blocking", "locks", crit ? "critical" : "warning",
+      `Bloqueio há ${Math.round(block)} s (${num(info.blocked_sessions) ?? "?"} sessão(ões) esperando)`,
+      "Uma transação está segurando registros e outras ficam paradas aguardando. Verifique a sessão bloqueadora.",
+      { value: block, threshold: th.sql_block_seconds }));
+  }
+
+  const isExpress = /express/i.test(String(info.edition || ""));
+  if (info.agent_running === false && !isExpress) {
+    push(conditions, cond("agent", "service", "warning", "SQL Server Agent parado",
+      "Jobs agendados (inclusive backups) não serão executados."));
+  }
+
+  const logPct = th.sql_log_pct;
+  for (const d of dbs) {
+    const name = String(d?.name || "?");
+    const state = String(d?.state || "").toUpperCase();
+    if (state && state !== "ONLINE") {
+      push(conditions, cond(`db:${name}:state`, "database", "critical", `Banco ${name} ${state}`,
+        "O banco não está disponível para os sistemas."));
+    }
+    push(conditions, pctCondition(`db:${name}:log`, "database", `Log do banco ${name}`, num(d?.log_used_pct),
+      { warn: logPct.warn, crit: logPct.crit, sustain: 1 },
+      { message: `Log de transações quase cheio${d?.log_reuse_wait ? ` (aguardando: ${d.log_reuse_wait})` : ""}.` }));
+
+    const lower = name.toLowerCase();
+    if (lower === "tempdb" || lower === "model" || state !== "ONLINE") continue;
+    const fullH = hoursSince(d?.last_full_backup);
+    const limitFull = th.sql_backup_hours.full;
+    if (fullH === null || fullH > limitFull) {
+      const crit = fullH === null || fullH > limitFull * 3;
+      push(conditions, cond(`db:${name}:backup`, "backup", crit ? "critical" : "warning",
+        fullH === null ? `Banco ${name} sem backup completo` : `Backup completo de ${name} há ${Math.round(fullH)} h`,
+        `Limite: ${limitFull} h. Sem backup recente, uma falha pode causar perda de dados.`,
+        { value: fullH === null ? null : r1(fullH), threshold: limitFull }));
+    }
+    if (String(d?.recovery || "").toUpperCase() === "FULL") {
+      const logH = hoursSince(d?.last_log_backup);
+      const limitLog = th.sql_backup_hours.log;
+      if (logH === null || logH > limitLog) {
+        push(conditions, cond(`db:${name}:logbackup`, "backup", "warning",
+          logH === null ? `Banco ${name} sem backup de log` : `Backup de log de ${name} há ${r1(logH)} h`,
+          `Banco em recuperação FULL precisa de backup de log a cada ${limitLog} h; senão o log cresce sem parar.`,
+          { value: logH === null ? null : r1(logH), threshold: limitLog }));
       }
+    }
+  }
 
-      // Resolve o no por id ou, na falta dele, pelo hostname informado.
-      let resolvedId: string | null = node_id || null;
-      if (!resolvedId && hostname) {
-        const { data: candidates } = await supabase
-          .from("proxmox_nodes")
-          .select("id, name, node_name, client_id")
-          .eq("is_active", true);
-        const host = String(hostname).toLowerCase();
-        const match = (candidates || []).find(
-          (n: any) => String(n.node_name || "").toLowerCase() === host || String(n.name || "").toLowerCase() === host,
-        );
-        resolvedId = match?.id ?? null;
+  for (const j of jobs) {
+    const name = String(j?.name || j?.job_name || "?");
+    push(conditions, cond(`job:${name}`, "job", "warning", `Job ${name} falhou`,
+      j?.message ? String(j.message).substring(0, 200) : undefined));
+  }
+
+  for (const l of io) {
+    const ms = maxOf([num(l?.read_ms), num(l?.write_ms)]);
+    if (ms === null || ms < 50) continue;
+    push(conditions, cond(`io:${l?.db}:${l?.type}`, "io", ms >= 200 ? "critical" : "warning",
+      `Disco lento em ${l?.db} (${l?.type}): ${Math.round(ms)} ms`,
+      "Latência de leitura/escrita alta: o armazenamento está lento ou sobrecarregado.",
+      { value: Math.round(ms), threshold: ms >= 200 ? 200 : 50, sustain: 3 }));
+  }
+
+  update.last_success_at = now;
+  const { error } = await supabase.from("sql_instances").update(update).eq("id", prev.id);
+  if (error) throw error;
+
+  await recordSample(supabase, src, {
+    cpu: num(info.sql_cpu_pct),
+    ram: num(info.max_server_memory_mb) && num(info.memory_used_mb) !== null
+      ? (Number(info.memory_used_mb) / Number(info.max_server_memory_mb)) * 100 : null,
+    extra: { ple, blocked: num(info.blocked_sessions), connections: num(info.user_connections) },
+  });
+  const lines = await reconcileAlerts(supabase, src, conditions);
+  return jsonResp({ success: true, status: fs.status, alerts: lines.length });
+}
+
+// ---- VMware
+const vmIsOn = (s: unknown) => /on/i.test(String(s || "")) && !/off/i.test(String(s || ""));
+
+async function handleVmware(ctx: Ctx) {
+  const { supabase, cfg, body } = ctx;
+  const { host_id } = body;
+  if (!host_id) return jsonResp({ error: "host_id required" }, 400);
+
+  const { data: prev } = await supabase.from("vmware_hosts")
+    .select("id, name, client_id, status, consecutive_failures, thresholds").eq("id", host_id).maybeSingle();
+  if (!prev) return jsonResp({ error: "Host not found" }, 404);
+  if (ownedByOther(ctx, prev.client_id)) return forbidden();
+
+  const src: AlertSource = { type: "vmware", id: prev.id, name: prev.name, clientId: prev.client_id };
+  const vms: any[] = Array.isArray(body.vms) ? body.vms : [];
+  const failed = body.status === "offline" ||
+    (num(body.cpu_usage_pct) === null && num(body.ram_usage_pct) === null && vms.length === 0);
+  const fs = failureState(cfg, failed ? "offline" : (body.status || "online"), prev);
+  const now = new Date().toISOString();
+
+  if (failed) {
+    // Nunca apaga as VMs nem marca online numa coleta vazia.
+    await supabase.from("vmware_hosts").update({
+      status: fs.status, consecutive_failures: fs.consecutive_failures, last_polled_at: now,
+      last_error: body.last_error || "Coleta sem dados",
+    }).eq("id", prev.id);
+    const lines = await handleCollectFailure(supabase, src, fs, body.last_error || "coleta sem dados");
+    return jsonResp({ success: true, status: fs.status, alerts: lines.length });
+  }
+
+  const th = effectiveThresholds(cfg, prev.thresholds);
+  const conditions: AlertCondition[] = [];
+  push(conditions, pctCondition("cpu", "cpu", "CPU", num(body.cpu_usage_pct), th.cpu));
+  push(conditions, pctCondition("ram", "ram", "Memória RAM", num(body.ram_usage_pct), th.ram));
+
+  const datastores: any[] = Array.isArray(body.datastores) ? body.datastores : [];
+  let maxDs: number | null = null;
+  for (const ds of datastores) {
+    const cap = num(ds?.capacity_gb ?? ds?.capacity);
+    const free = num(ds?.free_gb ?? ds?.free);
+    if (!cap || cap <= 0 || free === null) continue;
+    const pct = ((cap - free) / cap) * 100;
+    maxDs = Math.max(maxDs ?? 0, pct);
+    push(conditions, pctCondition(`datastore:${ds?.name}`, "datastore", `Datastore ${ds?.name}`, pct, th.datastore,
+      { message: `Livre: ${r1(free)} de ${r1(cap)} GB` }));
+  }
+
+  // VMs que desligaram: compara com o snapshot anterior e mantém o alerta enquanto seguir desligada.
+  const { data: prevVms } = await supabase.from("vmware_vms").select("name, power_state").eq("host_id", prev.id);
+  const wasOn = new Set((prevVms || []).filter((v: any) => vmIsOn(v.power_state)).map((v: any) => String(v.name)));
+  const openKeys = await openAlertKeys(supabase, "vmware", prev.id);
+  for (const vm of vms) {
+    const name = String(vm?.name || "");
+    const key = `vm:${name}`;
+    if (name && !vmIsOn(vm?.power_state) && (wasOn.has(name) || openKeys.has(key))) {
+      push(conditions, cond(key, "vm", "warning", `VM ${name} desligada`, `Estado: ${vm?.power_state || "desconhecido"}`));
+    }
+  }
+
+  const { error: hostErr } = await supabase.from("vmware_hosts").update({
+    status: fs.status, consecutive_failures: 0, last_success_at: now,
+    cpu_cores: body.cpu_cores, cpu_usage_pct: body.cpu_usage_pct, ram_total_gb: body.ram_total_gb,
+    ram_used_gb: body.ram_used_gb, ram_usage_pct: body.ram_usage_pct, esxi_version: body.esxi_version,
+    uptime_seconds: body.uptime_seconds, datastores: body.datastores, last_polled_at: now, last_error: null,
+  }).eq("id", prev.id);
+  if (hostErr) throw hostErr;
+
+  if (vms.length > 0) {
+    await supabase.from("vmware_vms").delete().eq("host_id", prev.id);
+    const { error: vmErr } = await supabase.from("vmware_vms").insert(vms.slice(0, 1000).map((vm: any) => ({
+      host_id: prev.id, name: vm.name, power_state: vm.power_state || "unknown", guest_os: vm.guest_os,
+      cpu_count: vm.cpu_count, ram_mb: vm.ram_mb, ip_address: vm.ip_address, tools_status: vm.tools_status,
+      disk_used_gb: vm.disk_used_gb, disk_provisioned_gb: vm.disk_provisioned_gb, uptime_seconds: vm.uptime_seconds,
+    })));
+    if (vmErr) throw vmErr;
+  }
+
+  await recordSample(supabase, src, { cpu: num(body.cpu_usage_pct), ram: num(body.ram_usage_pct), disk: maxDs });
+  const lines = await reconcileAlerts(supabase, src, conditions);
+  return jsonResp({ success: true, status: fs.status, alerts: lines.length });
+}
+
+// ---- Proxmox
+const CRITICAL_TAGS = /(^|[;,\s])(critico|crítico|prod|monitor)($|[;,\s])/i;
+
+async function handleProxmox(ctx: Ctx) {
+  const { supabase, cfg, body } = ctx;
+  const { node_id, info = {}, storages, guests, interfaces } = body;
+  if (!node_id) return jsonResp({ error: "node_id required" }, 400);
+
+  const { data: prev } = await supabase.from("proxmox_nodes")
+    .select("id, name, client_id, status, consecutive_failures, thresholds").eq("id", node_id).maybeSingle();
+  if (!prev) return jsonResp({ error: "Node not found" }, 404);
+  if (ownedByOther(ctx, prev.client_id)) return forbidden();
+
+  const src: AlertSource = { type: "proxmox", id: prev.id, name: prev.name, clientId: prev.client_id };
+  const fs = failureState(cfg, body.status, prev);
+  const now = new Date().toISOString();
+  const update: Record<string, any> = {
+    status: fs.status, consecutive_failures: fs.consecutive_failures, last_polled_at: now, last_error: body.last_error || null,
+  };
+
+  if (body.status === "offline") {
+    await supabase.from("proxmox_nodes").update(update).eq("id", prev.id);
+    const lines = await handleCollectFailure(supabase, src, fs, body.last_error || "sem resposta da API");
+    return jsonResp({ success: true, status: fs.status, alerts: lines.length });
+  }
+
+  const infoFields = [
+    "node_name", "pve_version", "cpu_model", "cpu_cores", "cpu_usage_pct", "iowait_pct",
+    "ram_total_gb", "ram_used_gb", "ram_usage_pct", "swap_total_gb", "swap_used_gb",
+    "disk_total_gb", "disk_used_gb", "disk_usage_pct", "load_avg", "uptime_seconds",
+  ];
+  for (const f of infoFields) if (info[f] !== undefined) update[f] = info[f];
+  const storageList: any[] = Array.isArray(storages) ? storages.slice(0, 100) : [];
+  if (Array.isArray(storages)) update.storages = storageList;
+
+  const th = effectiveThresholds(cfg, prev.thresholds);
+  const conditions: AlertCondition[] = [];
+  const swapPct = num(info.swap_total_gb) && num(info.swap_used_gb) !== null
+    ? (Number(info.swap_used_gb) / Number(info.swap_total_gb)) * 100 : null;
+
+  push(conditions, pctCondition("cpu", "cpu", "CPU", num(info.cpu_usage_pct), th.cpu));
+  push(conditions, pctCondition("ram", "ram", "Memória RAM", num(info.ram_usage_pct), th.ram,
+    { message: "Verifique as VMs/containers que mais consomem memória." }));
+  push(conditions, pctCondition("iowait", "cpu", "Espera de disco (iowait)", num(info.iowait_pct), th.iowait,
+    { message: "A CPU está esperando o disco — armazenamento lento ou sobrecarregado." }));
+  push(conditions, pctCondition("swap", "ram", "Swap", swapPct, th.swap,
+    { message: "Uso de swap alto indica falta de memória RAM no host." }));
+  push(conditions, pctCondition("disk:root", "disk", "Disco do sistema (/)", num(info.disk_usage_pct), th.disk));
+
+  for (const s of storageList) {
+    const name = String(s?.storage ?? s?.name ?? "?");
+    let pct = num(s?.used_pct ?? s?.usage_pct);
+    if (pct === null) {
+      const total = num(s?.total_gb ?? s?.total);
+      const used = num(s?.used_gb ?? s?.used);
+      if (total && total > 0 && used !== null) pct = (used / total) * 100;
+    }
+    push(conditions, pctCondition(`storage:${name}`, "storage", `Storage ${name}`, pct, th.datastore));
+  }
+
+  const guestList: any[] = Array.isArray(guests) ? guests.slice(0, 500) : [];
+  if (Array.isArray(guests)) {
+    const { data: prevGuests } = await supabase.from("proxmox_guests").select("vmid, status").eq("node_id", prev.id);
+    const wasRunning = new Set((prevGuests || []).filter((g: any) => g.status === "running").map((g: any) => Number(g.vmid)));
+    const openKeys = await openAlertKeys(supabase, "proxmox", prev.id);
+    for (const g of guestList) {
+      const vmid = Number(g?.vmid) || 0;
+      if (!vmid || g?.status === "running") continue;
+      const key = `guest:${vmid}`;
+      const critical = CRITICAL_TAGS.test(String(g?.tags || ""));
+      if (critical || wasRunning.has(vmid) || openKeys.has(key)) {
+        push(conditions, cond(key, "guest", critical ? "critical" : "warning",
+          `${g?.guest_type === "lxc" ? "Container" : "VM"} ${vmid} (${g?.name || "—"}) parada`,
+          `Estado: ${g?.status || "desconhecido"}${critical ? " — marcada como crítica" : ""}`));
       }
-
-      if (!resolvedId) {
-        return new Response(
-          JSON.stringify({ error: `Nó Proxmox não identificado (hostname: ${hostname || "—"}). Informe --node-id.` }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-
-      if (!node_id) {
-        const denied = await assertOwner("proxmox_nodes", resolvedId);
-        if (denied) return denied;
-      }
-
-      const rows = interfaces.slice(0, 100).map((i: any) => ({
-        node_id: resolvedId,
-        interface_name: String(i.interface_name || "").substring(0, 100),
-        status: String(i.status || "unknown").substring(0, 30),
-        mac_address: i.mac_address ? String(i.mac_address).substring(0, 40) : null,
-        speed_mbps: Number.isFinite(Number(i.speed_mbps)) ? Number(i.speed_mbps) : null,
-        rx_bytes: i.rx_bytes ?? null,
-        tx_bytes: i.tx_bytes ?? null,
-        rx_rate_bps: i.rx_rate_bps ?? null,
-        tx_rate_bps: i.tx_rate_bps ?? null,
-        rx_errors: i.rx_errors ?? null,
-        tx_errors: i.tx_errors ?? null,
-        updated_at: new Date().toISOString(),
-      })).filter((r: any) => r.interface_name);
-
-      const { error: netErr } = await supabase
-        .from("proxmox_interfaces")
-        .upsert(rows, { onConflict: "node_id,interface_name" });
-      if (netErr) throw netErr;
-
-      return new Response(JSON.stringify({ success: true, node_id: resolvedId, interfaces: rows.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+  }
 
-    if (type === "list-proxmox") {
-      const { data } = await supabase
-        .from("proxmox_nodes")
-        .select("id, name, host, port, node_name, auth_mode, username, token_name, token_secret, password")
-        .eq("is_active", true)
-        .match(tokenClientId ? { client_id: tokenClientId } : {});
-      return new Response(JSON.stringify(data || []), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  update.last_success_at = now;
+  const { error: nodeErr } = await supabase.from("proxmox_nodes").update(update).eq("id", prev.id);
+  if (nodeErr) throw nodeErr;
+
+  if (Array.isArray(guests)) {
+    await supabase.from("proxmox_guests").delete().eq("node_id", prev.id);
+    if (guestList.length > 0) {
+      const { error: guestErr } = await supabase.from("proxmox_guests").insert(guestList.map((g: any) => ({
+        node_id: prev.id,
+        vmid: Number(g.vmid) || 0,
+        name: String(g.name || `VM ${g.vmid}`).substring(0, 200),
+        guest_type: g.guest_type === "lxc" ? "lxc" : "qemu",
+        status: String(g.status || "unknown"),
+        cpu_count: g.cpu_count ?? null,
+        cpu_usage_pct: g.cpu_usage_pct ?? null,
+        ram_total_gb: g.ram_total_gb ?? null,
+        ram_used_gb: g.ram_used_gb ?? null,
+        ram_usage_pct: g.ram_usage_pct ?? null,
+        disk_total_gb: g.disk_total_gb ?? null,
+        disk_used_gb: g.disk_used_gb ?? null,
+        uptime_seconds: g.uptime_seconds ?? null,
+        tags: g.tags ?? null,
+      })));
+      if (guestErr) throw guestErr;
     }
+  }
 
+  if (Array.isArray(interfaces) && interfaces.length > 0) {
+    await upsertProxmoxInterfaces(supabase, prev.id, interfaces);
+  }
 
-    // List servers/hosts for collector script
-    if (type === "list-windows") {
-      const { data } = await supabase.from("windows_servers").select("id, name, host").eq("is_active", true).match(tokenClientId ? { client_id: tokenClientId } : {});
-      return new Response(JSON.stringify(data || []), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  await recordSample(supabase, src, {
+    cpu: num(info.cpu_usage_pct), ram: num(info.ram_usage_pct), disk: num(info.disk_usage_pct),
+    extra: { iowait: num(info.iowait_pct), swap_pct: swapPct === null ? null : r1(swapPct) },
+  });
+  const lines = await reconcileAlerts(supabase, src, conditions);
+  return jsonResp({ success: true, status: fs.status, alerts: lines.length });
+}
+
+async function upsertProxmoxInterfaces(supabase: SupabaseClient, nodeId: string, interfaces: any[]) {
+  const rows = interfaces.slice(0, 100).map((i: any) => ({
+    node_id: nodeId,
+    interface_name: String(i.interface_name || "").substring(0, 100),
+    status: String(i.status || "unknown").substring(0, 30),
+    mac_address: i.mac_address ? String(i.mac_address).substring(0, 40) : null,
+    speed_mbps: num(i.speed_mbps),
+    rx_bytes: num(i.rx_bytes),
+    tx_bytes: num(i.tx_bytes),
+    rx_rate_bps: num(i.rx_rate_bps),
+    tx_rate_bps: num(i.tx_rate_bps),
+    rx_errors: num(i.rx_errors),
+    tx_errors: num(i.tx_errors),
+    updated_at: new Date().toISOString(),
+  })).filter((r: any) => r.interface_name);
+  if (!rows.length) return 0;
+  const { error } = await supabase.from("proxmox_interfaces").upsert(rows, { onConflict: "node_id,interface_name" });
+  if (error) throw error;
+  return rows.length;
+}
+
+async function handleProxmoxNet(ctx: Ctx) {
+  const { supabase, body } = ctx;
+  const { node_id, hostname, interfaces } = body;
+  if (!Array.isArray(interfaces) || interfaces.length === 0) return jsonResp({ error: "interfaces required" }, 400);
+
+  let resolvedId: string | null = node_id || null;
+  if (!resolvedId && hostname) {
+    let q = supabase.from("proxmox_nodes").select("id, name, node_name").eq("is_active", true);
+    if (ctx.tokenClientId) q = q.eq("client_id", ctx.tokenClientId);
+    const { data: candidates } = await q;
+    const host = String(hostname).toLowerCase();
+    const match = (candidates || []).find(
+      (n: any) => String(n.node_name || "").toLowerCase() === host || String(n.name || "").toLowerCase() === host,
+    );
+    resolvedId = match?.id ?? null;
+  }
+  if (!resolvedId) {
+    return jsonResp({ error: `Nó Proxmox não identificado (hostname: ${hostname || "—"}). Informe --node-id.` }, 404);
+  }
+  if (ctx.tokenClientId) {
+    const { data: n } = await supabase.from("proxmox_nodes").select("client_id").eq("id", resolvedId).maybeSingle();
+    if (n && n.client_id !== ctx.tokenClientId) return forbidden();
+  }
+  const count = await upsertProxmoxInterfaces(supabase, resolvedId, interfaces);
+  return jsonResp({ success: true, node_id: resolvedId, interfaces: count });
+}
+
+// ---- iLO / iDRAC
+async function handleIlo(ctx: Ctx) {
+  const { supabase, cfg, body } = ctx;
+  const { server_id, info, health, sensors, events } = body;
+  if (!server_id) return jsonResp({ error: "server_id required" }, 400);
+
+  const { data: prev } = await supabase.from("ilo_servers")
+    .select("id, name, client_id, status, consecutive_failures, thresholds").eq("id", server_id).maybeSingle();
+  if (!prev) return jsonResp({ error: "Server not found" }, 404);
+  if (ownedByOther(ctx, prev.client_id)) return forbidden();
+
+  const src: AlertSource = { type: "ilo", id: prev.id, name: prev.name, clientId: prev.client_id };
+  const fs = failureState(cfg, body.status, prev);
+  const now = new Date().toISOString();
+  const update: Record<string, any> = {
+    status: fs.status, consecutive_failures: fs.consecutive_failures, last_polled_at: now,
+    last_error: body.last_error || null, updated_at: now,
+  };
+
+  if (body.status === "offline") {
+    await supabase.from("ilo_servers").update(update).eq("id", prev.id);
+    const lines = await handleCollectFailure(supabase, src, fs, body.last_error);
+    return jsonResp({ success: true, status: fs.status, alerts: lines.length });
+  }
+
+  const infoFields = [
+    "server_model", "serial_number", "ilo_version", "ilo_firmware", "bios_version",
+    "cpu_model", "cpu_count", "ram_total_gb", "power_state", "post_state",
+    "indicator_led", "uptime_seconds", "health_summary",
+  ];
+  for (const f of infoFields) if (info && info[f] !== undefined) update[f] = info[f];
+  const healthFields = [
+    "health_processor", "health_memory", "health_storage",
+    "health_fans", "health_power", "health_temperature", "health_network",
+  ];
+  for (const f of healthFields) if (health && health[f] !== undefined) update[f] = health[f];
+  update.last_success_at = now;
+
+  const { error: srvErr } = await supabase.from("ilo_servers").update(update).eq("id", prev.id);
+  if (srvErr) throw srvErr;
+
+  const th = effectiveThresholds(cfg, prev.thresholds);
+  const tempMargin = Number(th.temperature_margin_c) || 0;
+  const sensorList: SensorPayload[] = Array.isArray(sensors) ? sensors.slice(0, 500) : [];
+
+  if (Array.isArray(sensors)) {
+    await supabase.from("ilo_sensors").delete().eq("server_id", prev.id);
+    if (sensorList.length > 0) {
+      const { error: sensorErr } = await supabase.from("ilo_sensors").insert(sensorList.map((s: any) => ({
+        server_id: prev.id,
+        sensor_type: String(s.sensor_type || "other"),
+        name: String(s.name || "—"),
+        reading: s.reading ?? null,
+        unit: s.unit ?? null,
+        status: s.status ?? null,
+        health: s.health ?? null,
+        upper_critical: s.upper_critical ?? null,
+        location: s.location ?? null,
+        details: s.details ?? null,
+      })));
+      if (sensorErr) throw sensorErr;
     }
+    await syncSensorAlertTable(supabase, prev.id, sensorList, tempMargin);
+  }
 
-    if (type === "list-vmware") {
-      const { data } = await supabase.from("vmware_hosts").select("id, name, host, username, password, port").eq("is_active", true).match(tokenClientId ? { client_id: tokenClientId } : {});
-      return new Response(JSON.stringify(data || []), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  const conditions: AlertCondition[] = [];
+  for (const s of sensorList) {
+    const c = classificarSensor(s, tempMargin);
+    if (!c) continue;
+    const t = String(s.sensor_type || "other");
+    const leitura = typeof s.reading === "number" ? `${s.reading}${s.unit ? ` ${s.unit}` : ""}` : "—";
+    push(conditions, cond(`sensor:${t}:${s.name || "—"}`.substring(0, 200), "sensor", c.severity,
+      `${TIPO_LABEL[t] || TIPO_LABEL.other} ${s.name || "—"}: ${c.motivo}`,
+      `Leitura: ${leitura}${s.location ? ` · Local: ${s.location}` : ""}`,
+      { value: typeof s.reading === "number" ? s.reading : null, threshold: s.upper_critical ?? null }));
+  }
+
+  const healthMap: Record<string, string> = {
+    health_summary: "Saúde geral", health_processor: "Processador", health_memory: "Memória",
+    health_storage: "Armazenamento", health_fans: "Ventilação", health_power: "Fontes",
+    health_temperature: "Temperatura", health_network: "Rede",
+  };
+  for (const [field, label] of Object.entries(healthMap)) {
+    const v = String(update[field] ?? "").toLowerCase();
+    if (v === "critical" || v === "warning") {
+      push(conditions, cond(`health:${field.replace("health_", "")}`, "health", v === "critical" ? "critical" : "warning",
+        `${label} do hardware em ${v === "critical" ? "estado CRÍTICO" : "atenção"}`));
     }
+  }
+  if (String(update.power_state ?? "").toLowerCase() === "off") {
+    push(conditions, cond("power", "power", "critical", "Servidor desligado", "A controladora informa energia Off."));
+  }
 
-    if (type === "list-ilo") {
-      const { data } = await supabase
-        .from("ilo_servers")
-        .select("id, name, host, username, password, port, vendor")
-        .eq("is_active", true)
-        .match(tokenClientId ? { client_id: tokenClientId } : {});
-      return new Response(JSON.stringify(data || []), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  // Eventos IML/SEL: só os críticos novos geram aviso pontual.
+  const newCritical: string[] = [];
+  if (Array.isArray(events) && events.length > 0) {
+    const rows = events.slice(0, 200).map((e: any) => ({
+      server_id: prev.id,
+      event_key: String(e.event_key ?? `${e.recorded_at}-${e.message}`).substring(0, 200),
+      severity: String(e.severity || "info"),
+      category: e.category ?? null,
+      message: String(e.message || "").substring(0, 2000),
+      recorded_at: e.recorded_at || now,
+    }));
+    const { data: inserted, error: evErr } = await supabase.from("ilo_events")
+      .upsert(rows, { onConflict: "server_id,event_key", ignoreDuplicates: true })
+      .select("severity, message");
+    if (evErr) console.error("ilo events upsert:", evErr.message);
+    (inserted || []).forEach((e: any) => { if (e.severity === "critical") newCritical.push(e.message); });
+  }
+  if (newCritical.length) {
+    await notifyEvent(supabase, src, "critical",
+      newCritical.slice(0, 5).map((m) => ({ title: "Evento crítico no log do hardware", message: String(m).substring(0, 300) })));
+  }
+
+  const temps = sensorList.filter((s) => s.sensor_type === "temperature").map((s) => num(s.reading));
+  const watts = sensorList
+    .filter((s) => /^w(atts)?$/i.test(String(s.unit || "").trim()))
+    .map((s) => num(s.reading)).filter((v): v is number => v !== null);
+  await recordSample(supabase, src, {
+    extra: { temp_max: maxOf(temps), watts: watts.length ? r1(watts.reduce((a, b) => a + b, 0)) : null },
+  });
+
+  const lines = await reconcileAlerts(supabase, src, conditions);
+  return jsonResp({ success: true, status: fs.status, alerts: lines.length, new_critical: newCritical.length });
+}
+
+// ---- Listas para os coletores (exigem token)
+async function handleList(ctx: Ctx, type: string) {
+  const { supabase } = ctx;
+  const map: Record<string, { table: string; cols: string }> = {
+    "list-windows": { table: "windows_servers", cols: "id, name, host" },
+    "list-vmware": { table: "vmware_hosts", cols: "id, name, host, username, password, port" },
+    "list-ilo": { table: "ilo_servers", cols: "id, name, host, username, password, port, vendor" },
+    "list-proxmox": { table: "proxmox_nodes", cols: "id, name, host, port, node_name, auth_mode, username, token_name, token_secret, password" },
+    "list-sqlserver": { table: "sql_instances", cols: "id, name, instance, auth_mode, username, password" },
+  };
+  const def = map[type];
+  if (!def) return jsonResp({ error: "Unknown type" }, 400);
+  let q = supabase.from(def.table).select(def.cols).eq("is_active", true);
+  if (ctx.tokenClientId) q = q.eq("client_id", ctx.tokenClientId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return jsonResp(data || []);
+}
+
+// ---------------------------------------------------------------- servidor
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  try {
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body.type !== "string") return jsonResp({ error: "type required" }, 400);
+    const type: string = body.type;
+
+    const auth = await authenticateAgent(req, supabase, type, { requireToken: type.startsWith("list-") });
+    if (!auth.ok) return jsonResp({ error: auth.error }, auth.status);
+
+    const ctx: Ctx = { supabase, cfg: await loadMonitorConfig(supabase), body, tokenClientId: auth.clientId };
+
+    if (type.startsWith("list-")) return await handleList(ctx, type);
+    switch (type) {
+      case "windows": return await handleWindows(ctx);
+      case "linux": return await handleLinux(ctx);
+      case "sqlserver": return await handleSqlServer(ctx);
+      case "vmware": return await handleVmware(ctx);
+      case "proxmox": return await handleProxmox(ctx);
+      case "proxmox-net": return await handleProxmoxNet(ctx);
+      case "ilo": return await handleIlo(ctx);
+      default: return jsonResp({ error: "Unknown type" }, 400);
     }
-
-
-    return new Response(JSON.stringify({ error: "Unknown type" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     console.error(err);
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return jsonResp({ error: err instanceof Error ? err.message : String(err) }, 500);
   }
 });
