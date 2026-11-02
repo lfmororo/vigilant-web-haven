@@ -7,7 +7,7 @@
  * Edge Function `server-monitor-ingest`.
  *
  * Uso:
- *   node proxmox-collector.js --url "https://<projeto>.supabase.co" --key "ANON_KEY" [--intervalo 300] [--uma-vez] [--seguro]
+ *   node proxmox-collector.js --url "https://<projeto>.supabase.co" --token "MONITOR_TOKEN" [--intervalo 300] [--uma-vez] [--seguro]
  *
  * Autenticação suportada no Proxmox:
  *   - API Token (recomendado): usuário `root@pam` + token name + secret
@@ -25,24 +25,36 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === "--url") args.url = argv[++i];
     else if (a === "--key") args.key = argv[++i];
+    else if (a === "--token") args.token = argv[++i];
     else if (a === "--intervalo") args.intervalo = Number(argv[++i]) || 300;
     else if (a === "--uma-vez" || a === "--once") args.umaVez = true;
     else if (a === "--seguro") args.inseguro = false;
     else if (a === "--inseguro") args.inseguro = true;
   }
+  args.url = args.url || process.env.SUPABASE_URL;
+  args.key = args.key || process.env.SUPABASE_ANON_KEY;
+  args.token = args.token || process.env.MONITOR_TOKEN;
   return args;
 }
 
 const ARGS = parseArgs(process.argv);
-if (!ARGS.url || !ARGS.key) {
-  console.error("Uso: node proxmox-collector.js --url <SUPABASE_URL> --key <ANON_KEY> [--intervalo 300] [--uma-vez] [--seguro]");
+if (!ARGS.url || !(ARGS.key || ARGS.token)) {
+  console.error("Uso: node proxmox-collector.js --url <SUPABASE_URL> (--token <MONITOR_TOKEN> | --key <ANON_KEY>) [--intervalo 300] [--uma-vez] [--seguro]");
   process.exit(1);
 }
 
 const INGEST_URL = `${ARGS.url.replace(/\/$/, "")}/functions/v1/server-monitor-ingest`;
 const HEARTBEAT_URL = `${ARGS.url.replace(/\/$/, "")}/functions/v1/agent-heartbeat`;
 // Versao deste coletor. Mantenha igual a src/lib/agentVersions.ts.
-const AGENT_VERSION = "1.1.0";
+const AGENT_VERSION = "1.2.0";
+
+/** Headers de autenticação: x-monitor-token (preferido) e, se informada, a chave pública. */
+function authHeaders() {
+  const h = {};
+  if (ARGS.token) h["x-monitor-token"] = ARGS.token;
+  if (ARGS.key) { h.apikey = ARGS.key; h.Authorization = `Bearer ${ARGS.key}`; }
+  return h;
+}
 
 // ------------------------------------------------------------------ helpers
 const GB = 1024 ** 3;
@@ -250,6 +262,7 @@ async function coletarNo(node) {
     cpu_model: status?.cpuinfo?.model || null,
     cpu_cores: status?.cpuinfo?.cpus ?? null,
     cpu_usage_pct: typeof status?.cpu === "number" ? Number((status.cpu * 100).toFixed(1)) : null,
+    iowait_pct: typeof status?.wait === "number" ? Number((status.wait * 100).toFixed(1)) : null,
     ram_total_gb: toGb(ramTotal),
     ram_used_gb: toGb(ramUsed),
     ram_usage_pct: pct(ramUsed, ramTotal),
@@ -408,8 +421,7 @@ async function enviar(payload) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        apikey: ARGS.key,
-        Authorization: `Bearer ${ARGS.key}`,
+        ...authHeaders(),
         "Content-Length": Buffer.byteLength(body),
       },
       rejectUnauthorized: true,
@@ -432,8 +444,7 @@ async function reportarVersao() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          apikey: ARGS.key,
-          Authorization: `Bearer ${ARGS.key}`,
+          ...authHeaders(),
           "Content-Length": Buffer.byteLength(body),
         },
       },

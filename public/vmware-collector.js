@@ -10,10 +10,12 @@ const https = require("https");
 
 // ---- CONFIGURAÇÃO ----
 const SUPABASE_URL = "https://egbusmegupjfxqswdlxq.supabase.co";
-const SUPABASE_ANON_KEY = "COLE_SUA_ANON_KEY_AQUI";
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "COLE_SUA_ANON_KEY_AQUI";
+// Token do agente (gerado no painel). Obrigatório para listar os hosts.
+const MONITOR_TOKEN = process.env.MONITOR_TOKEN || "COLE_SEU_MONITOR_TOKEN_AQUI";
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
 // Versao deste coletor. Mantenha igual a src/lib/agentVersions.ts.
-const AGENT_VERSION = "1.1.0";
+const AGENT_VERSION = "1.2.0";
 // ---- FIM CONFIGURAÇÃO ----
 
 function log(msg) {
@@ -29,8 +31,10 @@ function supabasePost(path, payload) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        apikey: SUPABASE_ANON_KEY,
+        ...(MONITOR_TOKEN && !MONITOR_TOKEN.startsWith("COLE_") ? { "x-monitor-token": MONITOR_TOKEN } : {}),
+        ...(SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.startsWith("COLE_")
+          ? { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, apikey: SUPABASE_ANON_KEY }
+          : {}),
         "Content-Length": Buffer.byteLength(data),
       },
       timeout: 15000,
@@ -302,8 +306,8 @@ async function collectVmwareHost(hostConfig) {
       await supabasePost("/functions/v1/server-monitor-ingest", {
         type: "vmware",
         host_id: id,
-        vms: [],
-        datastores: [],
+        status: "offline",
+        last_error: String(err.message || err).substring(0, 500),
       });
     } catch {}
   } finally {

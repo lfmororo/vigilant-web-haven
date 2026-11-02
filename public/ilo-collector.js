@@ -46,6 +46,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === "--url") args.url = argv[++i];
     else if (a === "--key") args.key = argv[++i];
+    else if (a === "--token") args.token = argv[++i];
     else if (a === "--intervalo") args.intervalo = Number(argv[++i]) || 300;
     else if (a === "--uma-vez" || a === "--once") args.umaVez = true;
     else if (a === "--inseguro") args.inseguro = true;
@@ -53,13 +54,14 @@ function parseArgs(argv) {
   }
   args.url = args.url || process.env.SUPABASE_URL;
   args.key = args.key || process.env.SUPABASE_ANON_KEY;
+  args.token = args.token || process.env.MONITOR_TOKEN;
   return args;
 }
 
 const CONFIG = parseArgs(process.argv);
 
-if (!CONFIG.url || !CONFIG.key) {
-  console.error("ERRO: informe --url <SUPABASE_URL> e --key <ANON_KEY>.");
+if (!CONFIG.url || !(CONFIG.key || CONFIG.token)) {
+  console.error("ERRO: informe --url <SUPABASE_URL> e --token <MONITOR_TOKEN> (ou --key <ANON_KEY>).");
   process.exit(1);
 }
 
@@ -67,7 +69,15 @@ const INGEST_URL = `${CONFIG.url.replace(/\/+$/, "")}/functions/v1/server-monito
 const TIMEOUT_MS = 20000;
 const HEARTBEAT_URL = `${CONFIG.url.replace(/\/+$/, "")}/functions/v1/agent-heartbeat`;
 // Versao deste coletor. Mantenha igual a src/lib/agentVersions.ts.
-const AGENT_VERSION = "1.1.0";
+const AGENT_VERSION = "1.2.0";
+
+/** Headers de autenticação: x-monitor-token (preferido) e, se informada, a chave pública. */
+function authHeaders() {
+  const h = {};
+  if (CONFIG.token) h["x-monitor-token"] = CONFIG.token;
+  if (CONFIG.key) { h.apikey = CONFIG.key; h.Authorization = `Bearer ${CONFIG.key}`; }
+  return h;
+}
 
 function log(nivel, msg) {
   const ts = new Date().toISOString();
@@ -90,8 +100,7 @@ function postIngest(payload, url = INGEST_URL) {
         timeout: TIMEOUT_MS,
         headers: {
           "Content-Type": "application/json",
-          apikey: CONFIG.key,
-          Authorization: `Bearer ${CONFIG.key}`,
+          ...authHeaders(),
           "Content-Length": Buffer.byteLength(body),
         },
       },
