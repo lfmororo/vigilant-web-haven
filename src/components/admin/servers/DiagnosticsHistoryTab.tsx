@@ -51,19 +51,36 @@ const DiagnosticsHistoryTab = ({ clients }: { clients: { id: string; full_name: 
     });
     return [...byClient.entries()].map(([key, rows]) => {
       const latest = rows[0];
-      const previous = rows[1];
-      const openNow = latest.error_count + latest.warning_count;
-      const openBefore = previous ? previous.error_count + previous.warning_count : null;
+      // Compara cada máquina (escopo + hostname) apenas com o diagnóstico anterior dela mesma.
+      const byMachine = new Map<string, Row[]>();
+      rows.forEach((r) => {
+        const mk = `${r.scope}|${(r.hostname || "").toLowerCase()}`;
+        byMachine.set(mk, [...(byMachine.get(mk) || []), r]);
+      });
+      let openNow = 0;
+      let openBeforeSum = 0;
+      let hasPrevious = false;
+      const resolved: (Finding & { hostname: string })[] = [];
+      byMachine.forEach((mRows) => {
+        const mLatest = mRows[0];
+        const mPrev = mRows[1];
+        const now = mLatest.error_count + mLatest.warning_count;
+        openNow += now;
+        if (mPrev) {
+          hasPrevious = true;
+          openBeforeSum += mPrev.error_count + mPrev.warning_count;
+          const latestChecks = new Set(
+            mLatest.findings.filter((f) => f.status === "error" || f.status === "warning").map((f) => f.check)
+          );
+          mPrev.findings
+            .filter((f) => (f.status === "error" || f.status === "warning") && !latestChecks.has(f.check))
+            .forEach((f) => resolved.push({ ...f, hostname: mLatest.hostname }));
+        } else {
+          openBeforeSum += now;
+        }
+      });
+      const openBefore = hasPrevious ? openBeforeSum : null;
       const totalFixed = rows.reduce((s, r) => s + r.fixed_count, 0);
-      // Problemas do diagnóstico anterior que não aparecem mais no mais recente.
-      const latestChecks = new Set(
-        latest.findings.filter((f) => f.status === "error" || f.status === "warning").map((f) => f.check)
-      );
-      const resolved = previous
-        ? previous.findings.filter(
-            (f) => (f.status === "error" || f.status === "warning") && !latestChecks.has(f.check)
-          )
-        : [];
       return {
         key,
         name: latest.clients?.full_name || "Sem empresa",
