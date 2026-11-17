@@ -134,7 +134,7 @@ function buildHtmlPage(title: string, message: string, detail: string, success: 
 }
 
 function buildRatingForm(token: string, selectedRating: number, ticketId: string): string {
-  const functionUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/submit-rating`;
+  const functionUrl = `${Deno.env.get("SUPABASE_PUBLIC_URL") || Deno.env.get("SUPABASE_URL")}/functions/v1/submit-rating`;
   
   const ratingButtons = Array.from({ length: 10 }, (_, i) => {
     const n = i + 1;

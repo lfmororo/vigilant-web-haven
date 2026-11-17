@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
     }
 
     const baseUrl =
-      settings.app_base_url || "https://vigilant-web-haven.lovable.app";
+      settings.app_base_url || Deno.env.get("APP_BASE_URL") || "https://vigilant-web-haven.lovable.app";
 
     // Fetch all clients that have a whatsapp_group_id or phone
     const { data: clientRecords } = await supabaseAdmin

@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     const smtpUser = settings.smtp_user;
     const smtpPassword = settings.smtp_password;
     const smtpFromName = settings.smtp_from_name || "Sistema";
-    const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
+    const baseUrl = settings.app_base_url || Deno.env.get("APP_BASE_URL") || "https://vigilant-web-haven.lovable.app";
     const smtpConfigured = !!(smtpHost && smtpUser && smtpPassword);
 
     // Telegram config

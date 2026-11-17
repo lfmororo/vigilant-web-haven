@@ -283,7 +283,7 @@ Deno.serve(async (req) => {
     }
 
     // 6. Build and send - using app_base_url from settings
-    const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
+    const baseUrl = settings.app_base_url || Deno.env.get("APP_BASE_URL") || "https://vigilant-web-haven.lovable.app";
     const dashboardUrl = `${baseUrl}/admin/helpdesk`;
 
     const html = buildSummaryHtml(smtpFromName, pending, open, inProgress, dashboardUrl);

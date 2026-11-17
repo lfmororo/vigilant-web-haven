@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { waFetch } from "../_shared/whatsapp.ts";
+import { AI_NOT_CONFIGURED, aiChatUrl, aiKey, aiModel } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -193,13 +194,13 @@ async function findProfileByPhone(supabaseAdmin: any, phone: string) {
 }
 
 async function callAI(systemPrompt: string, userPrompt: string): Promise<string> {
-  const key = Deno.env.get("LOVABLE_API_KEY");
-  if (!key) throw new Error("LOVABLE_API_KEY not configured");
-  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const key = aiKey();
+  if (!key) throw new Error(AI_NOT_CONFIGURED);
+  const resp = await fetch(aiChatUrl(), {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model: aiModel("google/gemini-2.5-flash"),
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },

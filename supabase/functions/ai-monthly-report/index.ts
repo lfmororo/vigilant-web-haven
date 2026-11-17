@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { AI_NOT_CONFIGURED, aiChatUrl, aiKey, aiModel } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,8 +22,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const AI_KEY = aiKey();
+    if (!AI_KEY) throw new Error(AI_NOT_CONFIGURED);
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -154,14 +155,14 @@ Regras:
 - NUNCA invente datas. A data atual de emissão é ${new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}. O período analisado é ${monthNames[month - 1]} de ${year}.
 - NÃO inclua cabeçalho com "Data de Emissão", "Elaborado por" ou similares — isso já consta no documento final.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(aiChatUrl(), {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${AI_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: aiModel("google/gemini-2.5-flash"),
         messages: [
           { role: "system", content: `Você é um analista de suporte técnico especializado em relatórios gerenciais de TI. A data de hoje é ${new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}. Nunca invente datas fora do período informado.` },
           { role: "user", content: prompt },

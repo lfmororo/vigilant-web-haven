@@ -249,7 +249,7 @@ Deno.serve(async (req) => {
     const senderName = sender_name || "Sistema";
 
     // Build ticket link using app_base_url from settings
-    const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
+    const baseUrl = settings.app_base_url || Deno.env.get("APP_BASE_URL") || "https://vigilant-web-haven.lovable.app";
     const ticketLink = `${baseUrl}/helpdesk/tickets/${ticket_id}`;
 
     // Fetch satisfaction survey link for resolved/closed tickets
@@ -262,7 +262,7 @@ Deno.serve(async (req) => {
         .is("rating", null)
         .maybeSingle();
       if (ratingRecord?.rating_token) {
-        surveyLink = `${Deno.env.get("SUPABASE_URL")}/functions/v1/submit-rating?token=${ratingRecord.rating_token}`;
+        surveyLink = `${Deno.env.get("SUPABASE_PUBLIC_URL") || Deno.env.get("SUPABASE_URL")}/functions/v1/submit-rating?token=${ratingRecord.rating_token}`;
       }
     }
 

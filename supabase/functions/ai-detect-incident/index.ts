@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { AI_NOT_CONFIGURED, aiChatUrl, aiKey, aiModel } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,8 +58,8 @@ Deno.serve(async (req) => {
       }
 
       // Use AI to detect if this ticket is similar to a cluster of recent tickets
-      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-      if (!LOVABLE_API_KEY) {
+      const AI_KEY = aiKey();
+      if (!AI_KEY) {
         return new Response(JSON.stringify({ match: false }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -86,14 +87,14 @@ Responda APENAS com JSON:
   "suggested_message": "mensagem curta para informar os clientes"
 }`;
 
-      const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const aiResp = await fetch(aiChatUrl(), {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${AI_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: aiModel("google/gemini-3-flash-preview"),
           messages: [
             { role: "system", content: "Você é um detector de incidentes de TI. Responda apenas JSON válido, sem markdown." },
             { role: "user", content: clusterPrompt },
@@ -140,8 +141,8 @@ Responda APENAS com JSON:
     }
 
     // There are active incidents — check if this ticket matches one
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
+    const AI_KEY = aiKey();
+    if (!AI_KEY) {
       return new Response(JSON.stringify({ match: false }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -166,14 +167,14 @@ Responda APENAS com JSON:
   "incident_id": "UUID do incidente que combina ou null"
 }`;
 
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResp = await fetch(aiChatUrl(), {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${AI_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: aiModel("google/gemini-3-flash-preview"),
         messages: [
           { role: "system", content: "Você é um detector de incidentes de TI. Responda apenas JSON válido, sem markdown." },
           { role: "user", content: matchPrompt },

@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     const { data: settingsData } = await supabaseAdmin.from("system_settings").select("key, value");
     const settings: Record<string, string> = {};
     settingsData?.forEach((s: any) => { settings[s.key] = s.value || ""; });
-    const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
+    const baseUrl = settings.app_base_url || Deno.env.get("APP_BASE_URL") || "https://vigilant-web-haven.lovable.app";
 
     const { data: ticket } = await supabaseAdmin
       .from("tickets")

@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { waFetch } from "../_shared/whatsapp.ts";
+import { AI_NOT_CONFIGURED, aiChatUrl, aiKey, aiModel } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,7 +30,7 @@ Responda em português brasileiro, de forma direta e objetiva. Sem marcadores, s
 
   try {
     const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      aiChatUrl(),
       {
         method: "POST",
         headers: {
@@ -37,7 +38,7 @@ Responda em português brasileiro, de forma direta e objetiva. Sem marcadores, s
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-lite",
+          model: aiModel("google/gemini-2.5-flash-lite"),
           messages: [{ role: "user", content: prompt }],
         }),
       }
@@ -69,8 +70,8 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const AI_KEY = aiKey();
+    if (!AI_KEY) throw new Error(AI_NOT_CONFIGURED);
 
     // Load settings
     const { data: settingsData } = await supabaseAdmin
@@ -94,7 +95,7 @@ Deno.serve(async (req) => {
     }
 
     const baseUrl =
-      settings.app_base_url || "https://vigilant-web-haven.lovable.app";
+      settings.app_base_url || Deno.env.get("APP_BASE_URL") || "https://vigilant-web-haven.lovable.app";
 
     // Get today's date range in BRT (UTC-3)
     const now = new Date();
@@ -171,7 +172,7 @@ Deno.serve(async (req) => {
       ticketSummaries[ticket.id] = await generateAiSummary(
         ticket,
         messages || [],
-        LOVABLE_API_KEY
+        AI_KEY
       );
     }
 
@@ -248,7 +249,7 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error("daily-resolved-report error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

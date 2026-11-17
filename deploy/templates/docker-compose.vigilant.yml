@@ -1,0 +1,19 @@
+# Ajustes do vigilant sobre o docker-compose oficial do Supabase.
+# Gerado por deploy/install.sh — não edite em /opt/vigilant/supabase; edite no repositório.
+services:
+  api-gw:
+    ports: !override
+      - "127.0.0.1:${API_LOCAL_PORT:-54321}:8000/tcp"
+
+  supavisor:
+    ports: !override
+      - "127.0.0.1:${DB_LOCAL_PORT:-54322}:5432"
+      - "127.0.0.1:${POOLER_LOCAL_PORT:-54329}:6543"
+
+  functions:
+    env_file:
+      - ./vigilant-functions.env
+    environment:
+      # verify_jwt por função (lista gerada a partir de supabase/config.toml)
+      VERIFY_JWT: "true"
+      NO_VERIFY_JWT_FUNCTIONS: "${NO_VERIFY_JWT_FUNCTIONS:-}"

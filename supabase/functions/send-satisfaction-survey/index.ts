@@ -80,7 +80,7 @@ function buildSurveyEmail(
   token: string,
   companyName: string
 ): string {
-  const logoUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/email-assets/fm-techflow-logo.png`;
+  const logoUrl = `${Deno.env.get("SUPABASE_PUBLIC_URL") || Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/email-assets/fm-techflow-logo.png`;
 
   // Build rating buttons 1-10
   const ratingButtons = Array.from({ length: 10 }, (_, i) => {
@@ -279,7 +279,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const ratingBaseUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/submit-rating`;
+    const ratingBaseUrl = `${Deno.env.get("SUPABASE_PUBLIC_URL") || Deno.env.get("SUPABASE_URL")}/functions/v1/submit-rating`;
     const subject = `Avalie seu atendimento - Chamado #${ticket.ticket_number}`;
 
     // --- Send WhatsApp poll FIRST (fast) ---

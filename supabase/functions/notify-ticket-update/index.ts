@@ -492,7 +492,7 @@ Deno.serve(async (req) => {
     }
 
     // Use app_base_url from settings, fallback to published URL
-    const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
+    const baseUrl = settings.app_base_url || Deno.env.get("APP_BASE_URL") || "https://vigilant-web-haven.lovable.app";
     const emailType = notification_type || "ticket_updated";
 
     const subjectMap: Record<string, string> = {

@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     const settings: Record<string, string> = {};
     settingsData?.forEach((s: any) => { settings[s.key] = s.value || ""; });
 
-    const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
+    const baseUrl = settings.app_base_url || Deno.env.get("APP_BASE_URL") || "https://vigilant-web-haven.lovable.app";
     const ticketLink = `${baseUrl}/helpdesk/tickets/${ticket_id}`;
 
     // --- Send Email via notify-ticket-update (reuse SMTP infrastructure) ---

@@ -822,7 +822,7 @@ async function processImapAccount(
 
         if (smtpHost && smtpUser && smtpPassword) {
           try {
-            const baseUrl = settings.app_base_url || "https://vigilant-web-haven.lovable.app";
+            const baseUrl = settings.app_base_url || Deno.env.get("APP_BASE_URL") || "https://vigilant-web-haven.lovable.app";
             const welcomeHtml = buildWelcomeEmailHtml(smtpFromName, senderName, senderEmail, tempPassword, `${baseUrl}/auth`);
             await sendSmtpEmail(
               smtpHost, smtpPort, smtpUser, smtpPassword, smtpFromName,
