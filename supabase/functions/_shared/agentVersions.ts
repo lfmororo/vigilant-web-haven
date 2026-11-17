@@ -4,6 +4,7 @@
  */
 
 export const AGENT_VERSIONS: Record<string, { label: string; version: string }> = {
+  "mororo-agent": { label: "Mororo.Tech Agent", version: "1.0.0" },
   proxmox: { label: "Coletor Proxmox VE", version: "1.2.0" },
   vmware: { label: "Coletor VMware", version: "1.2.0" },
   ilo: { label: "Coletor HP iLO4", version: "1.2.0" },

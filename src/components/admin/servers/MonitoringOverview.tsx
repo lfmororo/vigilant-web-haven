@@ -19,6 +19,7 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip as
 import {
   SOURCE_META, SOURCE_ORDER, SeverityBadge, StatusDot, UsageBar, fmtAgo, fmtDuration, isStale,
   type SourceType,
+  type ServerSourceType,
 } from "./monitorUi";
 
 const db = supabase as any;
@@ -29,11 +30,11 @@ interface Props {
 }
 
 interface Src {
-  type: SourceType; id: string; name: string; client_id: string | null; status: string | null;
+  type: ServerSourceType; id: string; name: string; client_id: string | null; status: string | null;
   cpu: number | null; ram: number | null; disk: number | null; last_polled_at: string | null; stale: boolean;
 }
 
-const SOURCE_QUERIES: Record<SourceType, { cols: string; map: (r: any) => Pick<Src, "cpu" | "ram" | "disk"> }> = {
+const SOURCE_QUERIES: Record<ServerSourceType, { cols: string; map: (r: any) => Pick<Src, "cpu" | "ram" | "disk"> }> = {
   windows: { cols: "id,name,client_id,status,cpu_usage,ram_usage_pct,disk_usage_pct,last_polled_at", map: (r) => ({ cpu: r.cpu_usage, ram: r.ram_usage_pct, disk: r.disk_usage_pct }) },
   linux: { cols: "id,name,client_id,status,cpu_usage_pct,ram_usage_pct,disk_usage_pct,last_polled_at", map: (r) => ({ cpu: r.cpu_usage_pct, ram: r.ram_usage_pct, disk: r.disk_usage_pct }) },
   sqlserver: { cols: "id,name,client_id,status,sql_cpu_pct,last_polled_at", map: (r) => ({ cpu: r.sql_cpu_pct, ram: null, disk: null }) },

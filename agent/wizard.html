@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mororo.Tech Agent — Instalação</title>
+<link rel="icon" href="/icon.png">
+<style>
+  :root { --navy:#0b1f44; --blue:#1557c0; --cyan:#00b8d9; --bg:#f3f6fb; --card:#fff; --muted:#5b6678; --line:#e3e8f0; --ok:#12805c; --err:#c62828; --warn:#b26a00; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 "Segoe UI", system-ui, -apple-system, sans-serif; color:var(--navy); background:var(--bg); }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:14px 28px; display:flex; align-items:center; gap:18px; }
+  header img { height:42px; }
+  header .ver { margin-left:auto; color:var(--muted); font-size:13px; }
+  main { max-width:1080px; margin:24px auto 60px; padding:0 20px; }
+  .steps { display:flex; gap:8px; margin-bottom:18px; }
+  .steps div { flex:1; padding:10px 12px; border-radius:10px; background:#e8edf5; color:var(--muted); font-weight:600; font-size:14px; }
+  .steps div.on { background:var(--navy); color:#fff; }
+  .steps div.done { background:#d7f0f5; color:var(--navy); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:24px 26px; box-shadow:0 1px 2px rgba(11,31,68,.04); }
+  h2 { margin:0 0 4px; font-size:21px; }
+  p.sub { margin:0 0 18px; color:var(--muted); }
+  label { display:block; font-weight:600; margin:14px 0 6px; font-size:14px; }
+  input[type=text], input[type=password], input[type=number], select { width:100%; padding:9px 11px; border:1px solid #cfd7e3; border-radius:8px; font:inherit; color:inherit; background:#fff; }
+  input:focus, select:focus { outline:2px solid #9fd8e6; border-color:var(--cyan); }
+  .row { display:flex; gap:14px; flex-wrap:wrap; } .row > * { flex:1; min-width:180px; }
+  button { font:inherit; font-weight:600; border:0; border-radius:9px; padding:10px 18px; cursor:pointer; background:#e8edf5; color:var(--navy); }
+  button.primary { background:var(--blue); color:#fff; } button.primary:hover { background:#0f47a0; }
+  button.small { padding:6px 12px; font-size:13px; }
+  button:disabled { opacity:.55; cursor:default; }
+  .actions { display:flex; justify-content:space-between; margin-top:22px; }
+  .msg { margin-top:12px; padding:10px 12px; border-radius:8px; font-size:14px; }
+  .msg.ok { background:#e5f6ef; color:var(--ok); } .msg.err { background:#fdecea; color:var(--err); } .msg.info { background:#e9f3fd; color:var(--blue); }
+  .roles { display:flex; gap:14px; } .role { flex:1; border:2px solid var(--line); border-radius:12px; padding:16px; cursor:pointer; }
+  .role.sel { border-color:var(--cyan); background:#effafd; } .role b { display:block; font-size:16px; margin-bottom:4px; } .role span { color:var(--muted); font-size:13px; }
+  .check { display:flex; gap:10px; align-items:flex-start; margin:10px 0; font-weight:500; } .check input { margin-top:3px; }
+  .svc { max-height:230px; overflow:auto; border:1px solid var(--line); border-radius:8px; padding:6px 10px; }
+  .svc label { font-weight:400; margin:4px 0; display:flex; gap:8px; font-size:13.5px; } .svc small { color:var(--muted); }
+  table { width:100%; border-collapse:collapse; font-size:13.5px; } th { text-align:left; color:var(--muted); font-weight:600; padding:8px 6px; border-bottom:1px solid var(--line); }
+  td { padding:7px 6px; border-bottom:1px solid #eef1f6; vertical-align:top; } td select { padding:5px 7px; font-size:13px; }
+  tr.cred td { background:#f8fafd; } .cred-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px 12px; align-items:end; }
+  .cred-grid label { margin:0 0 4px; font-size:12.5px; } .cred-grid input, .cred-grid select { padding:7px 9px; font-size:13px; }
+  .tag { display:inline-block; padding:1px 8px; border-radius:20px; background:#e8edf5; font-size:12px; margin:1px 2px 1px 0; }
+  .bar { height:8px; background:#e8edf5; border-radius:8px; overflow:hidden; margin:10px 0; } .bar div { height:100%; background:linear-gradient(90deg,var(--blue),var(--cyan)); width:0; transition:width .3s; }
+  .muted { color:var(--muted); font-size:13px; } .t-ok { color:var(--ok); } .t-err { color:var(--err); }
+  ul.steps-out { padding-left:18px; } ul.steps-out li { margin:4px 0; }
+  .hidden { display:none; }
+  details { margin-top:10px; } summary { cursor:pointer; color:var(--blue); font-weight:600; font-size:14px; }
+</style>
+</head>
+<body>
+<header>
+  <img src="/logo.png" alt="Mororó.Tech">
+  <div><b>Instalação do agente</b><div class="muted">Monitoramento, inventário e suporte</div></div>
+  <div class="ver" id="ver"></div>
+</header>
+<main>
+  <div class="steps" id="steps">
+    <div>1. Conexão</div><div>2. Esta máquina</div><div>3. Rede</div><div>4. Instalar</div>
+  </div>
+
+  <!-- 1 -->
+  <section class="card step" id="s0">
+    <h2>Conectar ao painel</h2>
+    <p class="sub">Cole o token do cliente gerado no vigilant em <b>Monitor de Servidores → Agentes</b> (escopo <i>Agente unificado</i>).</p>
+    <label for="token">Token do agente</label>
+    <input type="password" id="token" placeholder="mt_..." autocomplete="off">
+    <div id="tokenHint" class="muted hidden">Já existe um token salvo nesta máquina — deixe em branco para reaproveitá-lo.</div>
+    <details><summary>Avançado</summary>
+      <label for="url">Endereço do backend</label><input type="text" id="url">
+    </details>
+    <div id="m0"></div>
+    <div class="actions"><span></span><button class="primary" id="b0">Verificar e continuar</button></div>
+  </section>
+
+  <!-- 2 -->
+  <section class="card step hidden" id="s1">
+    <h2>Esta máquina</h2>
+    <p class="sub" id="hostInfo"></p>
+    <div class="roles">
+      <div class="role" data-role="server"><b>🖥️ Servidor</b><span>Alertas completos no WhatsApp (CPU, memória, discos, serviços, eventos). Pode coletar outros equipamentos da rede.</span></div>
+      <div class="role" data-role="workstation"><b>💻 Estação de trabalho</b><span>Inventário, saúde do disco, antivírus e informações de suporte na área de trabalho. Sem alerta de máquina desligada.</span></div>
+    </div>
+    <div class="row">
+      <div><label for="name">Nome no painel</label><input type="text" id="name"></div>
+    </div>
+    <label>Serviços a monitorar <span class="muted">(servidores também avisam sobre serviços automáticos parados)</span></label>
+    <input type="text" id="svcFilter" placeholder="Filtrar serviços…" style="margin-bottom:6px">
+    <div class="svc" id="svcList"></div>
+    <label class="check"><input type="checkbox" id="desktop" checked> <span>Mostrar informações de suporte no papel de parede (nome do computador, IP, usuário, ID do acesso remoto e contato da Mororo.Tech)</span></label>
+    <label class="check"><input type="checkbox" id="insecure" checked> <span>Aceitar certificados autoassinados de iLO, iDRAC e Proxmox (comum nesses equipamentos)</span></label>
+    <div class="actions"><button id="back1">Voltar</button><button class="primary" id="b1">Continuar</button></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="card step hidden" id="s2">
+    <h2>Equipamentos da rede</h2>
+    <p class="sub">Varra a rede, marque o que esta máquina deve monitorar e informe as credenciais quando necessário. Pode pular esta etapa e cadastrar depois.</p>
+    <div class="row" style="align-items:end">
+      <div><label for="cidr">Redes a varrer</label><input type="text" id="cidr" placeholder="padrão: redes locais"></div>
+      <div style="flex:0"><button class="primary" id="scanBtn">🔍 Varrer rede</button></div>
+    </div>
+    <div id="scanProg" class="hidden"><div class="bar"><div id="scanBar"></div></div><div class="muted" id="scanTxt"></div></div>
+    <div id="scanRes" style="margin-top:14px"></div>
+
+    <details id="manual"><summary>➕ Adicionar manualmente (site, instância SQL, equipamento fora da faixa)</summary>
+      <div class="row" style="margin-top:8px;align-items:end">
+        <div><label>Tipo</label><select id="mKind"></select></div>
+        <div><label>Endereço / URL / instância</label><input type="text" id="mHost" placeholder="ex.: https://ecmororo.com.br ou SRV\SQLEXPRESS"></div>
+        <div><label>Nome</label><input type="text" id="mName"></div>
+        <div style="flex:0"><button id="mAdd">Adicionar</button></div>
+      </div>
+    </details>
+    <div id="m2"></div>
+    <div class="actions"><button id="back2">Voltar</button><button class="primary" id="b2">Revisar</button></div>
+  </section>
+
+  <!-- 4 -->
+  <section class="card step hidden" id="s3">
+    <h2>Revisar e instalar</h2>
+    <div id="review"></div>
+    <div id="m3"></div>
+    <ul class="steps-out" id="out"></ul>
+    <div class="actions"><button id="back3">Voltar</button><button class="primary" id="b3">Instalar</button></div>
+  </section>
+</main>
+
+<script>
+const KEY = "__WIZARD_KEY__";
+const $ = (id) => document.getElementById(id);
+const api = async (path, body) => {
+  const r = await fetch(path, { method: body ? "POST" : "GET", headers: { "X-Wizard-Key": KEY, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  return r.json();
+};
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const msg = (el, cls, text) => { $(el).innerHTML = text ? `<div class="msg ${cls}">${text}</div>` : ""; };
+
+const KINDS = {
+  proxmox: { label: "Proxmox VE", creds: ["username", "token_name", "token_secret", "password", "node_name"], port: 8006, collector: true },
+  vmware: { label: "VMware ESXi (SSH)", creds: ["username", "password"], port: 22, collector: true },
+  ilo: { label: "HP iLO", creds: ["username", "password"], port: 443, collector: true },
+  idrac: { label: "Dell iDRAC", creds: ["username", "password"], port: 443, collector: true },
+  sqlserver: { label: "SQL Server", creds: ["instance", "auth_mode", "username", "password"], collector: true },
+  ping: { label: "Ping (disponibilidade)", creds: [] },
+  tcp: { label: "Porta TCP", creds: ["port"] },
+  http: { label: "Site / HTTP + SSL", creds: ["keyword"] },
+};
+const TYPES = { proxmox: "Proxmox", vmware: "VMware ESXi", ilo: "HP iLO", idrac: "Dell iDRAC", bmc: "Controladora (BMC)", sqlserver: "SQL Server", windows: "Windows", linux: "Linux", printer: "Impressora", camera: "Câmera", dvr: "DVR/NVR", router: "Roteador", switch: "Switch", access_point: "Access point", firewall: "Firewall", nas: "NAS/Storage", phone: "Telefone IP", website: "Site", other: "Outro" };
+const CRED_LABEL = { username: "Usuário", password: "Senha", token_name: "Token ID (Proxmox)", token_secret: "Token secret", node_name: "Nome do nó", instance: "Instância (ex.: localhost\\SQLEXPRESS)", auth_mode: "Autenticação", port: "Porta", keyword: "Texto esperado na página (opcional)" };
+
+let S = { step: 0, role: "workstation", devices: [], discovery: [], state: null, client: "" };
+
+function go(n) {
+  S.step = n;
+  document.querySelectorAll(".step").forEach((e, i) => e.classList.toggle("hidden", i !== n));
+  [...$("steps").children].forEach((e, i) => { e.className = i === n ? "on" : i < n ? "done" : ""; });
+  window.scrollTo(0, 0);
+  if (n === 3) renderReview();
+}
+
+async function init() {
+  const st = await api("/api/state");
+  S.state = st;
+  $("ver").textContent = `v${st.version} · ${st.hostname}`;
+  $("url").value = st.config?.url || st.default_url;
+  if (st.config?.has_token) $("tokenHint").classList.remove("hidden");
+  S.role = st.config?.role || st.suggested_role;
+  $("name").value = st.config?.name || st.hostname;
+  if (st.config) $("desktop").checked = !!st.config.desktop_info;
+  $("hostInfo").textContent = `${st.hostname} — ${st.os} — IP ${(st.ips || []).join(", ")}${st.installed && st.installed !== "não instalado" ? ` — agente atual: ${st.installed}` : ""}`;
+  $("cidr").placeholder = "padrão: " + ((st.networks || []).join(", ") || "redes locais");
+  setRole(S.role);
+  renderServices();
+  $("mKind").innerHTML = Object.entries(KINDS).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join("");
+  $("mKind").value = "http";
+  if (!st.is_admin) msg("m0", "err", "Execute o instalador como administrador.");
+}
+
+function setRole(r) {
+  S.role = r;
+  document.querySelectorAll(".role").forEach((e) => e.classList.toggle("sel", e.dataset.role === r));
+}
+document.querySelectorAll(".role").forEach((e) => e.onclick = () => setRole(e.dataset.role));
+
+const SUGGEST = /^(MSSQL|SQLAgent|SQLSERVERAGENT|W3SVC|MySQL|postgresql|Spooler|DNS|NTDS|DHCPServer|Netlogon|TermService|vmms|LanmanServer|Veeam|apache|nginx|docker|sshd|smbd|mariadb|mysql|postgres)/i;
+function renderServices() {
+  const f = $("svcFilter").value.toLowerCase();
+  const chosen = new Set(S.state.config?.services || []);
+  const list = (S.state.services || []).filter((s) => !f || (s.name + " " + (s.display_name || "")).toLowerCase().includes(f));
+  list.sort((a, b) => (SUGGEST.test(b.name) - SUGGEST.test(a.name)) || a.name.localeCompare(b.name));
+  $("svcList").innerHTML = list.slice(0, 400).map((s) => {
+    const on = chosen.has(s.name) || (!S.state.config && SUGGEST.test(s.name) && /running|active/i.test(s.status));
+    return `<label><input type="checkbox" class="svcChk" value="${esc(s.name)}" ${on ? "checked" : ""}> ${esc(s.name)} <small>${esc(s.display_name || "")} · ${esc(s.status)}</small></label>`;
+  }).join("") || '<span class="muted">Nenhum serviço encontrado.</span>';
+}
+$("svcFilter").oninput = () => { const keep = selectedServices(); S.state.config = { ...(S.state.config || {}), services: keep }; renderServices(); };
+const selectedServices = () => {
+  const set = new Set(S.state.config?.services || []);
+  document.querySelectorAll(".svcChk").forEach((c) => c.checked ? set.add(c.value) : set.delete(c.value));
+  return [...set];
+};
+
+$("b0").onclick = async () => {
+  $("b0").disabled = true; msg("m0", "info", "Verificando…");
+  const r = await api("/api/verify", { url: $("url").value.trim(), token: $("token").value.trim() });
+  $("b0").disabled = false;
+  if (!r.ok) return msg("m0", "err", "Token recusado: " + esc(r.error));
+  S.client = r.client;
+  msg("m0", "ok", `Conectado ao cliente <b>${esc(r.client)}</b>.`);
+  setTimeout(() => go(1), 500);
+};
+$("back1").onclick = () => go(0);
+$("b1").onclick = () => { S.services = selectedServices(); go(2); };
+$("back2").onclick = () => go(1);
+$("b2").onclick = () => { collectCreds(); go(3); };
+$("back3").onclick = () => go(2);
+
+// ---------------- varredura
+let poll;
+$("scanBtn").onclick = async () => {
+  const r = await api("/api/scan", { cidr: $("cidr").value.trim() });
+  if (!r.ok) return msg("m2", "err", esc(r.error));
+  msg("m2", "", "");
+  $("scanBtn").disabled = true; $("scanProg").classList.remove("hidden");
+  poll = setInterval(async () => {
+    const s = await api("/api/scan");
+    const pct = s.total ? Math.round((s.done / s.total) * 100) : 0;
+    $("scanBar").style.width = pct + "%";
+    $("scanTxt").textContent = `Varrendo ${(s.nets || []).join(", ")} — ${s.done}/${s.total || "?"}`;
+    if (!s.running && s.total && s.done >= s.total || (!s.running && s.results)) {
+      clearInterval(poll); $("scanBtn").disabled = false;
+      $("scanTxt").textContent = `${(s.results || []).length} equipamento(s) encontrado(s).`;
+      S.discovery = s.results || [];
+      mergeDiscovery();
+      renderDevices();
+    }
+  }, 900);
+};
+
+function mergeDiscovery() {
+  for (const d of S.discovery) {
+    if (S.devices.some((x) => x.ip === d.ip)) continue;
+    const self = d.details && d.details.esta_maquina;
+    S.devices.push({
+      ip: d.ip, name: d.hostname || (TYPES[d.device_type] || "Equipamento") + " " + d.ip, host: d.ip, device_type: d.device_type,
+      kind: d.suggest, selected: !self && ["proxmox", "vmware", "ilo", "idrac"].includes(d.suggest), disc: d, port: KINDS[d.suggest]?.port,
+      instance: d.suggest === "sqlserver" ? d.ip : "", auth_mode: "sql", username: d.suggest === "proxmox" ? "root@pam" : "",
+    });
+  }
+  // Instância SQL local, se houver serviço do SQL Server nesta máquina.
+  const sqlSvc = (S.state.services || []).find((s) => /^MSSQL(\$|SERVER)/i.test(s.name) && /running/i.test(s.status));
+  if (sqlSvc && !S.devices.some((x) => x.kind === "sqlserver" && x.local)) {
+    const inst = sqlSvc.name.toUpperCase() === "MSSQLSERVER" ? "localhost" : "localhost\\" + sqlSvc.name.split("$")[1];
+    S.devices.unshift({ name: "SQL Server " + inst, host: inst, instance: inst, kind: "sqlserver", device_type: "sqlserver", selected: true, local: true, auth_mode: "windows" });
+  }
+}
+
+function renderDevices() {
+  if (!S.devices.length) { $("scanRes").innerHTML = '<p class="muted">Nada para mostrar ainda.</p>'; return; }
+  const rows = S.devices.map((d, i) => {
+    const disc = d.disc || {};
+    const ports = (disc.open_ports || []).map((p) => `<span class="tag">${p}</span>`).join("");
+    const kindSel = `<select data-i="${i}" class="kindSel">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${d.kind === k ? "selected" : ""}>${v.label}</option>`).join("")}</select>`;
+    const typeSel = `<select data-i="${i}" class="typeSel">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${d.device_type === k ? "selected" : ""}>${v}</option>`).join("")}</select>`;
+    let html = `<tr><td><input type="checkbox" class="selChk" data-i="${i}" ${d.selected ? "checked" : ""}></td>
+      <td><b>${esc(d.ip || d.host)}</b>${disc.details?.esta_maquina ? ' <span class="tag">esta máquina</span>' : ""}<div class="muted">${esc(disc.mac || "")} ${esc(disc.vendor || "")}</div></td>
+      <td><input type="text" class="nameIn" data-i="${i}" value="${esc(d.name)}" style="padding:5px 7px;font-size:13px"><div class="muted">${esc(disc.title || "")}</div></td>
+      <td>${typeSel}<div>${ports}</div></td><td>${kindSel}</td></tr>`;
+    if (d.selected) {
+      const k = KINDS[d.kind] || { creds: [] };
+      const fields = k.creds.map((c) => {
+        if (c === "auth_mode") return `<div><label>${CRED_LABEL[c]}</label><select class="credIn" data-i="${i}" data-f="${c}"><option value="windows" ${d.auth_mode === "windows" ? "selected" : ""}>Windows (conta do serviço)</option><option value="sql" ${d.auth_mode === "sql" ? "selected" : ""}>Login SQL</option></select></div>`;
+        const type = /password|secret/.test(c) ? "password" : "text";
+        return `<div><label>${CRED_LABEL[c]}</label><input type="${type}" class="credIn" data-i="${i}" data-f="${c}" value="${esc(d[c] ?? "")}" autocomplete="off"></div>`;
+      }).join("");
+      html += `<tr class="cred"><td></td><td colspan="4"><div class="cred-grid">${fields}<div><button class="small testBtn" data-i="${i}">Testar conexão</button></div></div><div class="muted" id="test${i}" style="margin-top:6px">${d.test ? `<span class="${d.test.ok ? "t-ok" : "t-err"}">${esc(d.test.message)}</span>` : (d.kind === "proxmox" ? "Use API Token (recomendado, função PVEAuditor) ou senha." : d.kind === "vmware" ? "Requer SSH habilitado no ESXi." : d.kind === "sqlserver" ? "Login com VIEW SERVER STATE e leitura no msdb. Autenticação Windows usa a conta do serviço (NT AUTHORITY\\SYSTEM): dê essas permissões a ela ou use um login SQL." : "")}</div></td></tr>`;
+    }
+    return html;
+  }).join("");
+  $("scanRes").innerHTML = `<table><thead><tr><th></th><th>Endereço</th><th>Nome</th><th>Tipo</th><th>Monitorar como</th></tr></thead><tbody>${rows}</tbody></table>`;
+  document.querySelectorAll(".selChk").forEach((c) => c.onchange = () => { collectCreds(); S.devices[c.dataset.i].selected = c.checked; renderDevices(); });
+  document.querySelectorAll(".kindSel").forEach((c) => c.onchange = () => { collectCreds(); const d = S.devices[c.dataset.i]; d.kind = c.value; d.port = KINDS[c.value].port ?? d.port; d.selected = true; renderDevices(); });
+  document.querySelectorAll(".typeSel").forEach((c) => c.onchange = () => { S.devices[c.dataset.i].device_type = c.value; });
+  document.querySelectorAll(".nameIn").forEach((c) => c.oninput = () => { S.devices[c.dataset.i].name = c.value; });
+  document.querySelectorAll(".testBtn").forEach((b) => b.onclick = async () => {
+    collectCreds();
+    const i = b.dataset.i, d = S.devices[i];
+    $("test" + i).textContent = "Testando…"; b.disabled = true;
+    const r = await api("/api/test", payloadOf(d));
+    b.disabled = false; d.test = r;
+    $("test" + i).innerHTML = `<span class="${r.ok ? "t-ok" : "t-err"}">${r.ok ? "✔ " : "✖ "}${esc(r.message)}</span>`;
+  });
+}
+
+function collectCreds() {
+  document.querySelectorAll(".credIn").forEach((c) => { S.devices[c.dataset.i][c.dataset.f] = c.value; });
+}
+
+function payloadOf(d) {
+  const p = { kind: d.kind, name: d.name, host: d.host, device_type: d.device_type };
+  if (["ping", "tcp", "http"].includes(d.kind)) {
+    p.probe_kind = d.kind; p.target = d.kind === "http" && !/^https?:/.test(d.host) ? "https://" + d.host : d.host;
+    if (d.kind === "tcp") p.port = Number(d.port) || 0;
+    if (d.keyword) p.keyword = d.keyword;
+    if (d.kind === "http") p.device_type = d.device_type === "other" ? "website" : d.device_type;
+    return p;
+  }
+  for (const c of KINDS[d.kind].creds) if (d[c] !== undefined && d[c] !== "") p[c] = d[c];
+  if (d.port) p.port = Number(d.port);
+  return p;
+}
+
+$("mAdd").onclick = () => {
+  const kind = $("mKind").value, host = $("mHost").value.trim();
+  if (!host) return;
+  collectCreds();
+  S.devices.unshift({ kind, host, ip: "", name: $("mName").value.trim() || host, device_type: kind === "http" ? "website" : (TYPES[kind] ? kind : "other"),
+    selected: true, port: KINDS[kind].port, instance: kind === "sqlserver" ? host : "", auth_mode: "windows", username: kind === "proxmox" ? "root@pam" : "" });
+  $("mHost").value = ""; $("mName").value = "";
+  renderDevices();
+};
+
+// ---------------- revisão e instalação
+function renderReview() {
+  const sel = S.devices.filter((d) => d.selected);
+  const svc = S.services || [];
+  $("review").innerHTML = `
+    <p><b>Cliente:</b> ${esc(S.client)}<br><b>Máquina:</b> ${esc($("name").value)} — ${S.role === "server" ? "Servidor" : "Estação de trabalho"}<br>
+    <b>Serviços:</b> ${svc.length ? svc.map(esc).join(", ") : "nenhum escolhido"}<br>
+    <b>Papel de parede:</b> ${$("desktop").checked ? "com informações de suporte" : "sem alteração"}</p>
+    <p><b>Equipamentos e checagens (${sel.length}):</b></p>
+    ${sel.length ? "<ul>" + sel.map((d) => `<li>${esc(d.name)} — ${esc(KINDS[d.kind].label)} (${esc(d.host)})${d.test ? (d.test.ok ? ' <span class="t-ok">✔ testado</span>' : ' <span class="t-err">✖ teste falhou</span>') : ""}</li>`).join("") + "</ul>" : '<p class="muted">Nenhum — dá para cadastrar depois pelo painel ou rodando o assistente de novo.</p>'}`;
+}
+
+$("b3").onclick = async () => {
+  if ($("b3").dataset.done) { await api("/api/close", {}); document.body.innerHTML = '<main><div class="card" style="text-align:center"><img src="/logo.png" style="height:60px"><h2>Pronto!</h2><p class="sub">Pode fechar esta janela.</p></div></main>'; return; }
+  $("b3").disabled = true; $("back3").disabled = true; msg("m3", "info", "Instalando…"); $("out").innerHTML = "";
+  const devices = S.devices.filter((d) => d.selected).map(payloadOf);
+  const r = await api("/api/install", {
+    url: $("url").value.trim(), token: $("token").value.trim(), role: S.role, name: $("name").value.trim(), services: S.services || [],
+    desktop_info: $("desktop").checked, insecure_tls: $("insecure").checked, devices, discovery: S.discovery,
+  });
+  $("out").innerHTML = (r.steps || []).map((s) => `<li>${esc(s)}</li>`).join("") +
+    (r.devices || []).filter((d) => !d.ok).map((d) => `<li class="t-err">${esc(d.name)}: ${esc(d.error)}</li>`).join("");
+  $("b3").disabled = false;
+  if (!r.ok) { $("back3").disabled = false; return msg("m3", "err", "Falhou: " + esc(r.error)); }
+  msg("m3", "ok", `Agente instalado para <b>${esc(r.client_name)}</b>. Os dados aparecem no painel em alguns minutos.`);
+  $("b3").textContent = "Concluir"; $("b3").dataset.done = "1";
+};
+
+init();
+</script>
+</body>
+</html>

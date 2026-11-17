@@ -66,6 +66,31 @@ async function watchdog(supabase: SupabaseClient) {
     }
   }
 
+  // Estações que fazem checagens de rede: se pararem, as checagens também param.
+  // (Servidores com agente já entram acima, por windows_servers/linux_servers.)
+  const { data: probeOwners } = await supabase.from("network_probes").select("endpoint_id").eq("is_active", true).not("endpoint_id", "is", null);
+  const ownerIds = [...new Set((probeOwners || []).map((p: { endpoint_id: string }) => p.endpoint_id))];
+  if (ownerIds.length) {
+    const { data: eps } = await supabase.from("agent_endpoints")
+      .select("id, name, client_id, role, last_seen_at, created_at").in("id", ownerIds).eq("role", "workstation").eq("is_active", true);
+    for (const row of eps || []) {
+      checked++;
+      const ref = row.last_seen_at || row.created_at;
+      const isStale = !!ref && Date.now() - new Date(ref).getTime() > Math.max(staleMs, 50 * 60_000);
+      if (isStale) stale++;
+      const src: AlertSource = { type: "endpoint", id: row.id, name: row.name, clientId: row.client_id };
+      const lines = await reconcileAlerts(supabase, src, isStale ? [{
+        key: "stale", category: "availability", severity: "warning",
+        title: `Agente ${row.name}: sem comunicação há ${ago(ref)}`,
+        message: "Esta máquina faz checagens de rede (ping/sites). Enquanto estiver desligada, essas checagens ficam paradas.",
+      }] : [], { managedPrefixes: ["stale"], silent: true });
+      if (lines.length) {
+        const k = row.client_id || "";
+        byClient.set(k, [...(byClient.get(k) || []), ...lines]);
+      }
+    }
+  }
+
   // UMA mensagem por cliente.
   const clientIds = [...byClient.keys()].filter(Boolean);
   const names = new Map<string, string>();
