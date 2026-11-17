@@ -16,6 +16,7 @@ export interface AgentVersionSpec {
 }
 
 export const AGENT_VERSIONS: Record<string, AgentVersionSpec> = {
+  "mororo-agent": { label: "Mororo.Tech Agent", version: "1.0.0" },
   proxmox: { label: "Coletor Proxmox VE", version: "1.2.0", bundle: "proxmox" },
   vmware: { label: "Coletor VMware", version: "1.2.0", bundle: "vmware" },
   ilo: { label: "Coletor HP iLO4", version: "1.2.0", bundle: "ilo" },

@@ -935,6 +935,9 @@ async function handleList(ctx: Ctx, type: string) {
   if (!def) return jsonResp({ error: "Unknown type" }, 400);
   let q = supabase.from(def.table).select(def.cols).eq("is_active", true);
   if (ctx.tokenClientId) q = q.eq("client_id", ctx.tokenClientId);
+  // Agente unificado: só as fontes atribuídas a ele. Coletores avulsos: só as sem agente.
+  const endpointId = typeof ctx.body.endpoint_id === "string" ? ctx.body.endpoint_id : null;
+  q = endpointId ? q.eq("collector_endpoint_id", endpointId) : q.is("collector_endpoint_id", null);
   const { data, error } = await q;
   if (error) throw error;
   return jsonResp(data || []);

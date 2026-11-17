@@ -12,13 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { Copy, KeyRound, Plus, Save, ShieldOff } from "lucide-react";
+import { Copy, Download, KeyRound, Monitor, Plus, Save, ShieldOff } from "lucide-react";
 import { fmtAgo } from "./monitorUi";
 
 const db = supabase as any;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SCOPES = ["windows", "linux", "sqlserver", "vmware", "proxmox", "ilo"] as const;
-const SCOPE_LABEL: Record<string, string> = { windows: "Windows", linux: "Linux", sqlserver: "SQL Server", vmware: "VMware", proxmox: "Proxmox", ilo: "iLO/iDRAC" };
+const SCOPES = ["agent", "windows", "linux", "sqlserver", "vmware", "proxmox", "ilo"] as const;
+const SCOPE_LABEL: Record<string, string> = { agent: "Agente unificado", windows: "Windows", linux: "Linux", sqlserver: "SQL Server", vmware: "VMware", proxmox: "Proxmox", ilo: "iLO/iDRAC" };
+const DOWNLOADS = typeof window !== "undefined" ? `${window.location.origin}/downloads` : "/downloads";
 
 interface Props { clients: { id: string; full_name: string }[] | undefined }
 
@@ -86,6 +87,7 @@ export default function MonitorAgentsTab({ clients }: Props) {
 
   const createToken = async () => {
     if (!tName.trim()) { toast({ title: "Dê um nome ao token", variant: "destructive" }); return; }
+    if (tScopes.includes("agent") && tClient === "all") { toast({ title: "Escolha o cliente", description: "O agente unificado precisa de um token vinculado a um cliente.", variant: "destructive" }); return; }
     setBusy(true);
     try {
       const token = generateMonitorToken();
@@ -114,6 +116,9 @@ export default function MonitorAgentsTab({ clients }: Props) {
   const copy = (t: string) => { navigator.clipboard.writeText(t); toast({ title: "Copiado" }); };
 
   const commands = (tok: string) => [
+    { label: "Mororo.Tech Agent — Windows (assistente)", cmd: `Baixe ${DOWNLOADS}/mororo-agent.exe, dê dois cliques e cole o token:\n${tok}` },
+    { label: "Mororo.Tech Agent — Windows (silencioso, GPO/script)", cmd: `mororo-agent.exe install --token ${tok} --role workstation --quiet` },
+    { label: "Mororo.Tech Agent — Linux", cmd: `curl -fsSL ${DOWNLOADS}/mororo-agent-linux-amd64 -o mororo-agent && chmod +x mororo-agent && sudo ./mororo-agent install --token ${tok} --role server --quiet` },
     { label: "Linux (no servidor)", cmd: `sudo bash linux-agent.sh install --token ${tok} --url "${SUPABASE_URL}"` },
     { label: "Windows Server (teste)", cmd: `powershell -ExecutionPolicy Bypass -File .\\windows-server-collector.ps1 -Token ${tok} -UmaVez` },
     { label: "Windows Server (serviço)", cmd: `.\\instalar-agente-servico.ps1 -Script windows-server-collector.ps1 -Nome "Agente_windows" -Url "${SUPABASE_URL}" -Argumentos '-Token ${tok}'` },
@@ -135,6 +140,28 @@ export default function MonitorAgentsTab({ clients }: Props) {
     const { error } = await db.from("clients").update(patch).eq("id", id);
     if (error) { toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" }); return; }
     qc.invalidateQueries({ queryKey: ["clients-monitor-notify"] });
+  };
+
+  // ===== papel de parede (agente unificado)
+  const [desk, setDesk] = useState({ company: "Mororo.Tech", phone: "", message: "Suporte de TI", position: "bottom-right", enabled: true });
+  const { data: deskRow } = useQuery({
+    queryKey: ["agent-desktop-info"],
+    queryFn: async () => {
+      const { data } = await db.from("system_settings").select("id, value").eq("key", "agent_desktop_info").maybeSingle();
+      return data;
+    },
+  });
+  useEffect(() => {
+    try { if (deskRow?.value) setDesk((d) => ({ ...d, ...JSON.parse(deskRow.value) })); } catch { /* padrão */ }
+  }, [deskRow]);
+  const saveDesk = async () => {
+    const value = JSON.stringify(desk);
+    const { error } = deskRow?.id
+      ? await db.from("system_settings").update({ value }).eq("id", deskRow.id)
+      : await db.from("system_settings").insert({ key: "agent_desktop_info", value, description: "Informações de suporte no papel de parede (mororo-agent)" });
+    if (error) { toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Salvo", description: "Os computadores atualizam o papel de parede em até 20 minutos." });
+    qc.invalidateQueries({ queryKey: ["agent-desktop-info"] });
   };
 
   // ===== monitor_config
@@ -189,6 +216,45 @@ export default function MonitorAgentsTab({ clients }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* Agente unificado */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base"><Monitor className="h-4 w-4" /> Mororo.Tech Agent (servidores e estações)</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Um único instalador para Windows e Linux: métricas, inventário de hardware e software, Proxmox/VMware/iLO/iDRAC/SQL Server,
+            ping/porta/sites e informações de suporte no papel de parede. Gere um token com o escopo <b>Agente unificado</b> vinculado ao cliente.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm"><a href={`${DOWNLOADS}/mororo-agent.exe`} download><Download className="mr-1 h-4 w-4" /> Windows (.exe)</a></Button>
+            <Button asChild size="sm" variant="outline"><a href={`${DOWNLOADS}/mororo-agent-linux-amd64`} download><Download className="mr-1 h-4 w-4" /> Linux x64</a></Button>
+            <Button asChild size="sm" variant="outline"><a href={`${DOWNLOADS}/mororo-agent-linux-arm64`} download><Download className="mr-1 h-4 w-4" /> Linux ARM64</a></Button>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="mb-2 text-sm font-medium">Papel de parede dos computadores</p>
+            <div className="grid gap-3 md:grid-cols-4">
+              <div><Label>Empresa</Label><Input value={desk.company} onChange={(e) => setDesk({ ...desk, company: e.target.value })} /></div>
+              <div><Label>Telefone / WhatsApp do suporte</Label><Input value={desk.phone} onChange={(e) => setDesk({ ...desk, phone: e.target.value })} placeholder="(88) 9...." /></div>
+              <div><Label>Mensagem</Label><Input value={desk.message} onChange={(e) => setDesk({ ...desk, message: e.target.value })} /></div>
+              <div><Label>Posição</Label>
+                <Select value={desk.position} onValueChange={(v) => setDesk({ ...desk, position: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bottom-right">Canto inferior direito</SelectItem><SelectItem value="bottom-left">Canto inferior esquerdo</SelectItem>
+                    <SelectItem value="top-right">Canto superior direito</SelectItem><SelectItem value="top-left">Canto superior esquerdo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <label className="flex items-center gap-2 text-sm"><Switch checked={desk.enabled} onCheckedChange={(v) => setDesk({ ...desk, enabled: v })} /> Ativado em todos os computadores</label>
+              <Button size="sm" onClick={saveDesk}><Save className="mr-1 h-4 w-4" /> Salvar</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Tokens */}
       <Card>
         <CardHeader className="pb-3">

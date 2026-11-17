@@ -19,7 +19,7 @@ import { formatTimeAgo } from "@/lib/formatTimeAgo";
 import {
   Server, Monitor, Plus, RefreshCw, Trash2, Edit, HardDrive,
   Cpu, MemoryStick, Activity, Clock, ChevronDown, ChevronRight,
-  Power, AlertTriangle, CheckCircle, XCircle, Download, ServerCog, Boxes, LayoutDashboard, Terminal, Database, KeyRound
+  Power, AlertTriangle, CheckCircle, XCircle, Download, ServerCog, Boxes, LayoutDashboard, Terminal, Database, KeyRound, Laptop, Wifi
 } from "lucide-react";
 import LinuxServersTab from "@/components/admin/servers/LinuxServersTab";
 import SqlServerTab from "@/components/admin/servers/SqlServerTab";
@@ -31,6 +31,8 @@ import ProxmoxTab from "@/components/admin/servers/ProxmoxTab";
 import DiagnosticsTab from "@/components/admin/servers/DiagnosticsTab";
 import DiagnosticsHistoryTab from "@/components/admin/servers/DiagnosticsHistoryTab";
 import ADHealthTab from "@/components/admin/servers/ADHealthTab";
+import EndpointsTab from "@/components/admin/servers/EndpointsTab";
+import NetworkProbesTab from "@/components/admin/servers/NetworkProbesTab";
 
 
 const statusColor = (status: string) => {
@@ -279,6 +281,8 @@ const ServerMonitor = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="h-auto flex-wrap justify-start">
             <TabsTrigger value="overview"><LayoutDashboard className="w-4 h-4 mr-1" /> Visão geral</TabsTrigger>
+            <TabsTrigger value="endpoints"><Laptop className="w-4 h-4 mr-1" /> Máquinas (agente)</TabsTrigger>
+            <TabsTrigger value="network"><Wifi className="w-4 h-4 mr-1" /> Rede e sites</TabsTrigger>
             <TabsTrigger value="windows"><Server className="w-4 h-4 mr-1" /> Windows</TabsTrigger>
             <TabsTrigger value="linux"><Terminal className="w-4 h-4 mr-1" /> Linux</TabsTrigger>
             <TabsTrigger value="sqlserver"><Database className="w-4 h-4 mr-1" /> SQL Server</TabsTrigger>
@@ -298,6 +302,8 @@ const ServerMonitor = () => {
             <MonitoringOverview clients={clients} onOpenTab={setActiveTab} />
           </TabsContent>
 
+          <TabsContent value="endpoints"><EndpointsTab clients={clients} /></TabsContent>
+          <TabsContent value="network"><NetworkProbesTab clients={clients} /></TabsContent>
           <TabsContent value="linux"><LinuxServersTab clients={clients} /></TabsContent>
           <TabsContent value="sqlserver"><SqlServerTab clients={clients} /></TabsContent>
           <TabsContent value="agents"><MonitorAgentsTab clients={clients} /></TabsContent>

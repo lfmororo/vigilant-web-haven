@@ -1,8 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Server, Terminal, Database, Monitor, Boxes, ServerCog, type LucideIcon } from "lucide-react";
+import { Server, Terminal, Database, Monitor, Boxes, ServerCog, Laptop, Wifi, type LucideIcon } from "lucide-react";
 
-export type SourceType = "windows" | "linux" | "sqlserver" | "vmware" | "proxmox" | "ilo";
+export type SourceType = "windows" | "linux" | "sqlserver" | "vmware" | "proxmox" | "ilo" | "endpoint" | "probe";
 export type Severity = "info" | "warning" | "critical";
 
 export const SOURCE_META: Record<SourceType, { label: string; icon: LucideIcon; tab: string | null; table: string }> = {
@@ -12,9 +12,13 @@ export const SOURCE_META: Record<SourceType, { label: string; icon: LucideIcon; 
   vmware: { label: "VMware", icon: Monitor, tab: "vmware", table: "vmware_hosts" },
   proxmox: { label: "Proxmox", icon: Boxes, tab: "proxmox", table: "proxmox_nodes" },
   ilo: { label: "iLO / iDRAC", icon: ServerCog, tab: "ilo", table: "ilo_servers" },
+  // Agente unificado (fora de SOURCE_ORDER: não entram nos quadros de servidores).
+  endpoint: { label: "Estação", icon: Laptop, tab: "endpoints", table: "agent_endpoints" },
+  probe: { label: "Rede", icon: Wifi, tab: "network", table: "network_probes" },
 };
 
 export const SOURCE_ORDER: SourceType[] = ["windows", "linux", "sqlserver", "vmware", "proxmox", "ilo"];
+export type ServerSourceType = Exclude<SourceType, "endpoint" | "probe">;
 
 export const STALE_MINUTES = 15;
 

@@ -9,7 +9,7 @@ import { getEvolutionConfig, toEvolutionNumber } from "./whatsapp.ts";
 // ---------------------------------------------------------------- tipos
 
 export type Severity = "info" | "warning" | "critical";
-export type SourceType = "windows" | "linux" | "sqlserver" | "vmware" | "proxmox" | "ilo";
+export type SourceType = "windows" | "linux" | "sqlserver" | "vmware" | "proxmox" | "ilo" | "endpoint" | "probe";
 
 export interface PctLimit { warn: number; crit: number; sustain?: number }
 
@@ -198,7 +198,8 @@ export async function authenticateAgent(
   if (!data) return { ok: false, status: 401, error: "Token inválido ou revogado" };
   const token = data as MonitorToken;
 
-  if (token.scopes?.length && !token.scopes.includes(needed)) {
+  // O escopo "agent" (agente unificado mororo-agent) vale para todos os tipos.
+  if (token.scopes?.length && !token.scopes.includes(needed) && !token.scopes.includes("agent")) {
     return { ok: false, status: 403, error: `Token sem permissão para '${scope}'` };
   }
 
@@ -378,6 +379,7 @@ export async function reconcileAlerts(
 const SOURCE_ICON: Record<string, string> = {
   windows: "🪟 Windows", linux: "🐧 Linux", sqlserver: "🗄️ SQL Server",
   vmware: "☁️ VMware", proxmox: "🖥️ Proxmox", ilo: "🧰 iLO/iDRAC",
+  endpoint: "💻 Estação", probe: "📶 Rede",
 };
 
 export function sourceHeader(src: AlertSource): string {

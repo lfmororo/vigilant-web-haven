@@ -50,6 +50,13 @@
       "when": 1794622133455,
       "tag": "0006_tighten_storage_and_quotes_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795464000000,
+      "tag": "0007_mororo_agent_endpoints",
+      "breakpoints": true
     }
   ]
 }
