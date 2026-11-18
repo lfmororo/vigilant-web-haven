@@ -17,4 +17,3 @@ proteja-a com `_shared/caller.ts` e acrescente-a aqui.
 | `inventory-sync` | scripts de inventário do cliente | chave de API do cliente (`inventory_api_keys`) |
 | `server-monitor-ingest`, `endpoint-agent` | coletores e Mororo.Tech Agent | token do agente (`x-monitor-token`) |
 | `agent-heartbeat` | coletores antigos | chave pública (só registra que o coletor está vivo) |
-| `dvr-import`, `dvr-list`, `dvr-vps-ingest` | coletor de DVR | **sem proteção — saem na etapa 2 (módulo DVR removido)** |

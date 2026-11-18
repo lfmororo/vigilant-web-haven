@@ -12,7 +12,6 @@ export const AGENT_VERSIONS: Record<string, { label: string; version: string }> 
   windows: { label: "Coletor Windows Server", version: "2.0.0" },
   linux: { label: "Coletor Linux", version: "1.0.0" },
   sqlserver: { label: "Coletor SQL Server", version: "1.0.0" },
-  dvr: { label: "Coletor DVR Intelbras", version: "1.1.0" },
   mikrotik: { label: "Coletor MikroTik/SNMP", version: "1.1.0" },
   "backup-nuvem": { label: "Agente de Backup em Nuvem", version: "1.1.0" },
   "backup-local": { label: "Agente de Backup Local/Rede", version: "1.1.0" },

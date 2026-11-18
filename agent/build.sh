@@ -30,10 +30,10 @@ if command -v makensis >/dev/null; then
   ( cd packaging/nsis && makensis -V2 -DVERSION="$VERSION" -DURL="$URL" -DSRC="$ABS_OUT" \
       -DOUT="$ABS_OUT/mororo-agent-setup.exe" agent-setup.nsi ) && ARTS+=(mororo-agent-setup.exe)
 
-  # Coletores avulsos: empacota ssh2/axios/ping (VMware e DVR) junto.
+  # Coletores avulsos: empacota o ssh2 (usado pelo coletor VMware) junto.
   if command -v npm >/dev/null; then
     NM="$(mktemp -d)"
-    ( cd "$NM" && npm init -y >/dev/null && npm install --omit=optional --no-audit --no-fund ssh2 axios ping >/dev/null )
+    ( cd "$NM" && npm init -y >/dev/null && npm install --omit=optional --no-audit --no-fund ssh2 >/dev/null )
     ( cd packaging/nsis && makensis -V2 -DVERSION="$VERSION" -DURL="$URL" -DANONKEY="$ANON_KEY" -DSRC="$PUB" \
         -DNODEMODS="$NM/node_modules" -DOUT="$ABS_OUT/mororo-coletores-setup.exe" coletores-setup.nsi ) \
       && ARTS+=(mororo-coletores-setup.exe)

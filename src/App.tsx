@@ -29,9 +29,7 @@ import CreateQuote from "./pages/admin/CreateQuote";
 import QuoteDetail from "./pages/admin/QuoteDetail";
 import MikrotikMonitor from "./pages/admin/MikrotikMonitor";
 import GdmsTutorial from "./pages/admin/GdmsTutorial";
-import DvrMonitor from "./pages/admin/DvrMonitor";
 import ServerMonitor from "./pages/admin/ServerMonitor";
-import SophosMonitor from "./pages/admin/SophosMonitor";
 import AdminBackup from "./pages/admin/AdminBackup";
 import UserProvisioning from "./pages/admin/UserProvisioning";
 import HelpdeskDashboard from "./pages/helpdesk/HelpdeskDashboard";
@@ -68,9 +66,7 @@ const App = () => (
               <Route path="/admin/inventory/:id" element={<AuthGuard requireAdmin><EquipmentDetail /></AuthGuard>} />
               <Route path="/admin/mikrotik" element={<AuthGuard requireAdmin><MikrotikMonitor /></AuthGuard>} />
               <Route path="/admin/gdms-tutorial" element={<AuthGuard requireAdmin><GdmsTutorial /></AuthGuard>} />
-              <Route path="/admin/dvr" element={<AuthGuard requireAdmin><DvrMonitor /></AuthGuard>} />
               <Route path="/admin/servers" element={<AuthGuard requireAdmin><ServerMonitor /></AuthGuard>} />
-              <Route path="/admin/sophos" element={<AuthGuard requireAdmin><SophosMonitor /></AuthGuard>} />
               <Route path="/admin/helpdesk" element={<AuthGuard requireAdminOrTechnician><AdminHelpdeskDashboard /></AuthGuard>} />
               <Route path="/admin/tickets" element={<AuthGuard requireAdminOrTechnician><AdminTicketsManagement /></AuthGuard>} />
               <Route path="/admin/tickets/:id" element={<AuthGuard requireAdminOrTechnician><AdminTicketDetail /></AuthGuard>} />

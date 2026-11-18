@@ -121,18 +121,6 @@ export const AGENT_BUNDLES: Record<string, AgentBundleDefinition> = {
       "Desinstalar: sudo mororo-linux-agent uninstall",
     ],
   },
-  dvr: {
-    id: "dvr",
-    label: "Coletor DVR Intelbras",
-    zipName: "agente-dvr",
-    files: ["/dvr-collector.py", "/dvr-vps-collector.js", "/simplay-importer.js"],
-    mainScript: "dvr-vps-collector.js",
-    runtime: "node",
-    notes: [
-      "dvr-collector.py é a alternativa em Python (requer Python 3.8+ e a biblioteca requests).",
-      "simplay-importer.js importa a base SQLite do SIMPlay para o painel.",
-    ],
-  },
   cloudBackup: {
     id: "cloudBackup",
     label: "Agente de Backup em Nuvem",

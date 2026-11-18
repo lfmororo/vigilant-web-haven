@@ -51,12 +51,6 @@ verify_jwt = false
 [functions.whatsapp-webhook]
 verify_jwt = false
 
-[functions.dvr-vps-ingest]
-verify_jwt = false
-
-[functions.dvr-import]
-verify_jwt = false
-
 [functions.agent-heartbeat]
 verify_jwt = false
 

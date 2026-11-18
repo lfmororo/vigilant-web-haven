@@ -15,7 +15,6 @@ import { StatusDot, UsageBar, fmtAgo, fmtUptime, isStale } from "./monitorUi";
 
 const db = supabase as any;
 const arr = (v: any): any[] => (Array.isArray(v) ? v : []);
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 interface Props { clients: { id: string; full_name: string }[] | undefined }
 
@@ -59,12 +58,13 @@ export default function LinuxServersTab({ clients }: Props) {
   };
 
   const copy = (t: string) => { navigator.clipboard.writeText(t); toast({ title: "Copiado" }); };
-  const installCmd = `sudo bash linux-agent.sh install --token <TOKEN> --url "${SUPABASE_URL}" --services "nginx postgresql"`;
+  const downloads = `${window.location.origin}/downloads`;
+  const installCmd = `curl -fsSL ${downloads}/mororo-agent-linux-amd64 -o mororo-agent && chmod +x mororo-agent && sudo ./mororo-agent install --token <TOKEN> --role server --quiet`;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Servidores Linux com o agente <code>mororo-linux-agent</code>. Sem --server-id, o agente se cadastra pelo hostname.</p>
+        <p className="text-sm text-muted-foreground">Servidores Linux com o Mororo.Tech Agent (ou o agente Linux antigo). O servidor se cadastra sozinho pelo hostname.</p>
         <Button size="sm" onClick={() => setForm({ ...empty })}><Plus className="mr-1 h-4 w-4" /> Novo servidor</Button>
       </div>
 
@@ -72,7 +72,7 @@ export default function LinuxServersTab({ clients }: Props) {
         <Card>
           <CardContent className="space-y-3 p-6 text-sm">
             <p className="flex items-center gap-2 font-medium"><Terminal className="h-4 w-4" /> Nenhum servidor Linux ainda</p>
-            <p className="text-muted-foreground">Gere um token na aba "Agentes & Alertas", baixe o pacote do agente Linux e rode no servidor:</p>
+            <p className="text-muted-foreground">Gere um token na aba "Agentes & Alertas" (ou o instalador do cliente) e rode no servidor — também há pacotes .deb/.rpm na mesma aba:</p>
             <div className="flex items-start gap-2">
               <pre className="flex-1 overflow-x-auto rounded bg-muted p-3 text-xs">{installCmd}</pre>
               <Button size="icon" variant="outline" onClick={() => copy(installCmd)}><Copy className="h-4 w-4" /></Button>

@@ -1,7 +1,7 @@
 ; Mororo.Tech Coletores — instala os coletores avulsos (Node/PowerShell) como serviços do Windows.
 ;
 ; Para máquinas novas prefira o Mororo.Tech Agent (faz tudo isso num serviço só).
-; Este instalador existe para quem já usa os coletores antigos ou precisa do DVR.
+; Este instalador existe para quem já usa os coletores antigos.
 ;
 ; Interativo: escolhe os coletores, informa o token do agente.
 ; Silencioso: mororo-coletores-setup.exe /S /TOKEN=mt_xxx /COLETORES=proxmox,ilo,sqlserver [/INTERVALO=300]
@@ -31,7 +31,7 @@ Unicode true
 !ifndef OUT
   !define OUT "mororo-coletores-setup.exe"
 !endif
-; Pasta com node_modules (ssh2, axios, ping) para os coletores VMware e DVR — gerada pelo build.sh.
+; Pasta com node_modules (ssh2) para o coletor VMware — gerada pelo build.sh.
 !ifndef NODEMODS
   !define NODEMODS "node_modules"
 !endif
@@ -60,7 +60,7 @@ VIAddVersionKey /LANG=1046 "LegalCopyright" "© Mororo.Tech"
 !define MUI_COMPONENTSPAGE_SMALLDESC
 
 !define MUI_WELCOMEPAGE_TITLE "Mororo.Tech Coletores ${VERSION}"
-!define MUI_WELCOMEPAGE_TEXT "Instala os coletores de monitoramento como serviços do Windows (Proxmox, VMware, iLO, iDRAC, Windows Server, SQL Server e DVR).$\r$\n$\r$\nDica: para máquinas novas, o Mororo.Tech Agent faz o trabalho de todos eles num serviço só.$\r$\n$\r$\nVocê vai precisar do token do agente gerado no painel."
+!define MUI_WELCOMEPAGE_TEXT "Instala os coletores de monitoramento como serviços do Windows (Proxmox, VMware, iLO, iDRAC, Windows Server e SQL Server).$\r$\n$\r$\nDica: para máquinas novas, o Mororo.Tech Agent faz o trabalho de todos eles num serviço só.$\r$\n$\r$\nVocê vai precisar do token do agente gerado no painel."
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_COMPONENTS
 Page custom TokenPage TokenLeave
@@ -134,11 +134,6 @@ SectionGroup /e "Coletores (Node.js)" GrpNode
     File "${SRC}\idrac-collector.js"
     StrCpy $NeedNode "1"
   SectionEnd
-  Section /o "DVR Intelbras" SecDvr
-    SetOutPath "$INSTDIR\dvr"
-    File "${SRC}\dvr-vps-collector.js"
-    StrCpy $NeedNode "1"
-  SectionEnd
 SectionGroupEnd
 
 SectionGroup /e "Coletores (PowerShell)" GrpPs
@@ -155,8 +150,7 @@ SectionGroupEnd
 ; Node.js portátil (baixado na instalação, só se algum coletor Node foi escolhido e não houver Node no PATH).
 Section "-Node" SecNodeRuntime
   ${If} ${SectionIsSelected} ${SecVmware}
-  ${OrIf} ${SectionIsSelected} ${SecDvr}
-    DetailPrint "Copiando as dependências (ssh2, axios, ping)…"
+    DetailPrint "Copiando as dependências (ssh2)…"
     SetOutPath "$INSTDIR\node_modules"
     File /r "${NODEMODS}\*.*"
   ${EndIf}
@@ -192,9 +186,6 @@ Section "-Services" SecServices
   ${If} ${SectionIsSelected} ${SecIdrac}
     !insertmacro InstallCollector "idrac" "idrac-collector.js" "Coletor_iDRAC" "--token $Token"
   ${EndIf}
-  ${If} ${SectionIsSelected} ${SecDvr}
-    !insertmacro InstallCollector "dvr" "dvr-vps-collector.js" "Coletor_DVR" ""
-  ${EndIf}
   ${If} ${SectionIsSelected} ${SecWindows}
     !insertmacro InstallCollector "windows" "windows-server-collector.ps1" "Coletor_WindowsServer" "-Token $Token"
   ${EndIf}
@@ -222,7 +213,6 @@ LangString DESC_Proxmox ${LANG_PORTUGUESEBR} "Nós, storages e VMs/contêineres 
 LangString DESC_Vmware ${LANG_PORTUGUESEBR} "Hosts ESXi standalone por SSH: VMs, datastores e saúde."
 LangString DESC_Ilo ${LANG_PORTUGUESEBR} "Saúde de hardware dos servidores HP pelo iLO (Redfish)."
 LangString DESC_Idrac ${LANG_PORTUGUESEBR} "Saúde de hardware dos servidores Dell pelo iDRAC (Redfish)."
-LangString DESC_Dvr ${LANG_PORTUGUESEBR} "Status dos DVRs/NVRs Intelbras e das câmeras."
 LangString DESC_Windows ${LANG_PORTUGUESEBR} "Servidores Windows remotos via WinRM (use o Mororo.Tech Agent nos próprios servidores, se puder)."
 LangString DESC_Sql ${LANG_PORTUGUESEBR} "Instâncias SQL Server: bloqueios, backups, jobs, PLE e latência."
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
@@ -230,7 +220,6 @@ LangString DESC_Sql ${LANG_PORTUGUESEBR} "Instâncias SQL Server: bloqueios, bac
   !insertmacro MUI_DESCRIPTION_TEXT ${SecVmware} $(DESC_Vmware)
   !insertmacro MUI_DESCRIPTION_TEXT ${SecIlo} $(DESC_Ilo)
   !insertmacro MUI_DESCRIPTION_TEXT ${SecIdrac} $(DESC_Idrac)
-  !insertmacro MUI_DESCRIPTION_TEXT ${SecDvr} $(DESC_Dvr)
   !insertmacro MUI_DESCRIPTION_TEXT ${SecWindows} $(DESC_Windows)
   !insertmacro MUI_DESCRIPTION_TEXT ${SecSql} $(DESC_Sql)
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
@@ -268,7 +257,6 @@ Function .onInit
     !insertmacro SelectIfListed "vmware" ${SecVmware}
     !insertmacro SelectIfListed "ilo" ${SecIlo}
     !insertmacro SelectIfListed "idrac" ${SecIdrac}
-    !insertmacro SelectIfListed "dvr" ${SecDvr}
     !insertmacro SelectIfListed "windows" ${SecWindows}
     !insertmacro SelectIfListed "sqlserver" ${SecSql}
   ${EndIf}
@@ -284,7 +272,7 @@ Function TokenPage
   ${NSD_CreateLabel} 0 36u 60% 12u "Intervalo de coleta (segundos):"
   ${NSD_CreateNumber} 62% 34u 20% 13u "$Intervalo"
   Pop $hIntervalo
-  ${NSD_CreateLabel} 0 58u 100% 40u "O coletor de DVR usa a chave pública do painel e não precisa de token. Os demais exigem um token com o escopo do coletor (ou Agente unificado)."
+  ${NSD_CreateLabel} 0 58u 100% 40u "Use um token com o escopo do coletor (ou Agente unificado)."
   Pop $0
   nsDialogs::Show
 FunctionEnd
@@ -311,7 +299,7 @@ Section "Uninstall"
   !insertmacro UninstallCollector "vmware"
   !insertmacro UninstallCollector "ilo"
   !insertmacro UninstallCollector "idrac"
-  !insertmacro UninstallCollector "dvr"
+  !insertmacro UninstallCollector "dvr" ; versões antigas instalavam o coletor de DVR
   !insertmacro UninstallCollector "windows"
   !insertmacro UninstallCollector "sqlserver"
   RMDir /r "$INSTDIR\node"

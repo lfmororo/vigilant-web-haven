@@ -72,7 +72,7 @@ Para evitar isso, assine com um certificado de assinatura de código (`signtool 
 | `mororo-agent-setup.exe` | makensis | Setup tradicional. Silencioso: `/S /TOKEN=mt_… /ROLE=server [/NODESKTOP]` |
 | `mororo-agent.msi` | wixl | GPO: `msiexec /i mororo-agent.msi /qn TOKEN=mt_… ROLE=workstation [DESKTOP=0]` |
 | `mororo-agent_{amd64,arm64}.deb` / `mororo-agent.{x86_64,aarch64}.rpm` | dpkg-deb / rpmbuild | `sudo MORORO_TOKEN=mt_… MORORO_ROLE=server apt install ./mororo-agent_amd64.deb` |
-| `mororo-coletores-setup.exe` | makensis + npm | Coletores avulsos (Proxmox, VMware, iLO, iDRAC, Windows Server, SQL Server, DVR) como serviços. `/S /TOKEN=mt_… /COLETORES=proxmox,ilo` |
+| `mororo-coletores-setup.exe` | makensis + npm | Coletores avulsos (Proxmox, VMware, iLO, iDRAC, Windows Server, SQL Server) como serviços. `/S /TOKEN=mt_… /COLETORES=proxmox,ilo` |
 
 **Instalador por cliente:** o painel (Monitor de Servidores → Agentes & Alertas → *Gerar instalador do cliente*) cria um token do
 cliente e anexa ao fim do executável o bloco `\n#MORORO-CFG#<base64 json>#END#\n` (ver `embedded.go`). Executado sem argumentos,

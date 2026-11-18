@@ -32,7 +32,7 @@ const DOWNLOAD_ITEMS = [
   { file: "mororo-agent.aarch64.rpm", label: ".rpm ARM64" },
   { file: "mororo-agent-linux-amd64", label: "Linux x64 (binário)" },
   { file: "mororo-agent-linux-arm64", label: "Linux ARM64 (binário)" },
-  { file: "mororo-coletores-setup.exe", label: "Coletores avulsos (Proxmox, VMware, iLO, iDRAC, SQL, DVR)" },
+  { file: "mororo-coletores-setup.exe", label: "Coletores avulsos (Proxmox, VMware, iLO, iDRAC, SQL)" },
 ];
 
 interface Props { clients: { id: string; full_name: string }[] | undefined }
@@ -138,12 +138,8 @@ export default function MonitorAgentsTab({ clients }: Props) {
     { label: "Mororo.Tech Agent — RHEL/Rocky/Alma", cmd: `sudo MORORO_TOKEN=${tok} MORORO_ROLE=server dnf install ./mororo-agent.x86_64.rpm` },
     { label: "Coletores avulsos (Windows, silencioso)", cmd: `mororo-coletores-setup.exe /S /TOKEN=${tok} /COLETORES=proxmox,vmware,ilo,idrac,windows,sqlserver` },
     { label: "Mororo.Tech Agent — Linux", cmd: `curl -fsSL ${DOWNLOADS}/mororo-agent-linux-amd64 -o mororo-agent && chmod +x mororo-agent && sudo ./mororo-agent install --token ${tok} --role server --quiet` },
-    { label: "Linux (no servidor)", cmd: `sudo bash linux-agent.sh install --token ${tok} --url "${SUPABASE_URL}"` },
-    { label: "Windows Server (teste)", cmd: `powershell -ExecutionPolicy Bypass -File .\\windows-server-collector.ps1 -Token ${tok} -UmaVez` },
-    { label: "Windows Server (serviço)", cmd: `.\\instalar-agente-servico.ps1 -Script windows-server-collector.ps1 -Nome "Agente_windows" -Url "${SUPABASE_URL}" -Argumentos '-Token ${tok}'` },
-    { label: "SQL Server (serviço)", cmd: `.\\instalar-agente-servico.ps1 -Script sqlserver-collector.ps1 -Nome "Agente_sqlserver" -Url "${SUPABASE_URL}" -Argumentos '-Token ${tok}'` },
-    { label: "Proxmox / iLO / iDRAC", cmd: `node proxmox-collector.js --url "${SUPABASE_URL}" --token ${tok}\nnode ilo-collector.js --url "${SUPABASE_URL}" --token ${tok}\nnode idrac-collector.js --url "${SUPABASE_URL}" --token ${tok}` },
-    { label: "VMware", cmd: `set MONITOR_TOKEN=${tok}\nnode vmware-collector.js` },
+    { label: "Coletores avulsos em Linux — Proxmox / iLO / iDRAC (Node)", cmd: `node proxmox-collector.js --url "${SUPABASE_URL}" --token ${tok}\nnode ilo-collector.js --url "${SUPABASE_URL}" --token ${tok}\nnode idrac-collector.js --url "${SUPABASE_URL}" --token ${tok}` },
+    { label: "Coletores avulsos em Linux — VMware (Node)", cmd: `node vmware-collector.js --url "${SUPABASE_URL}" --token ${tok}` },
   ];
 
   // ===== grupos dos clientes

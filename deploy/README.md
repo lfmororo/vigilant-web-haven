@@ -81,7 +81,7 @@ Os tokens dos agentes vieram no backup e continuam valendo — só o endereço m
 | **mororo-agent** (novo) | Rode o instalador de novo (baixe em *Agentes & Alertas*) **ou** troque `"url"` em `C:\ProgramData\MororoAgent\config.json` (Linux: `/etc/mororo-agent/config.json`) e reinicie o serviço *Mororo.Tech Agent*. |
 | Agente Linux (`linux-agent.sh`) | `MONITOR_URL=` em `/etc/mororo-monitor.conf` (o agente lê o arquivo a cada 5 min; não precisa reiniciar). |
 | Coletores Windows/SQL/Proxmox/iLO/iDRAC/VMware (serviços) | Reinstale com `instalar-agente-servico.ps1 -Url "https://api.mororo.tech"` (os pacotes baixados do painel novo já vêm com o endereço certo). |
-| Coletores que usam `--key`/anon key (DVR, MikroTik VPS) | Endereço novo **e** a chave anon nova (`ANON_KEY` em `/opt/vigilant/supabase/.env`). |
+| Coletores que usam `--key`/anon key (MikroTik VPS) | Endereço novo **e** a chave anon nova (`ANON_KEY` em `/opt/vigilant/supabase/.env`). |
 | Webhook da Evolution API | `https://api.mororo.tech/functions/v1/whatsapp-webhook` |
 | Google Drive (backup em nuvem) | No Google Cloud Console, adicione o novo endereço de retorno OAuth mostrado em *Backup*. |
 | E-mails de recuperação de senha | Preencha `SMTP_*` no `deploy/vigilant.env` e rode o `install.sh` de novo. |

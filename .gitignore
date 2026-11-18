@@ -25,3 +25,7 @@ dist-ssr
 
 # Gerados por agent/build.sh (o deploy/install.sh compila na VPS)
 /public/downloads/
+
+# Gerado no build (deploy/install.sh); use .env.example como modelo
+.env
+.lovable/
