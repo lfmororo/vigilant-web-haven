@@ -9,11 +9,17 @@ const { Client } = require("ssh2");
 const https = require("https");
 
 // ---- CONFIGURAÇÃO ----
-const SUPABASE_URL = "https://egbusmegupjfxqswdlxq.supabase.co";
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "COLE_SUA_ANON_KEY_AQUI";
+// Aceita --url, --key, --token e --intervalo (segundos) na linha de comando,
+// variáveis de ambiente, ou os valores abaixo.
+function cliArg(name) {
+  const i = process.argv.indexOf(name);
+  return i > 1 && i + 1 < process.argv.length ? process.argv[i + 1] : undefined;
+}
+const SUPABASE_URL = cliArg("--url") || process.env.SUPABASE_URL || "https://egbusmegupjfxqswdlxq.supabase.co";
+const SUPABASE_ANON_KEY = cliArg("--key") || process.env.SUPABASE_ANON_KEY || "COLE_SUA_ANON_KEY_AQUI";
 // Token do agente (gerado no painel). Obrigatório para listar os hosts.
-const MONITOR_TOKEN = process.env.MONITOR_TOKEN || "COLE_SEU_MONITOR_TOKEN_AQUI";
-const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
+const MONITOR_TOKEN = cliArg("--token") || process.env.MONITOR_TOKEN || "COLE_SEU_MONITOR_TOKEN_AQUI";
+const POLL_INTERVAL_MS = (Number(cliArg("--intervalo")) || 300) * 1000; // padrão 5 minutos
 // Versao deste coletor. Mantenha igual a src/lib/agentVersions.ts.
 const AGENT_VERSION = "1.2.0";
 // ---- FIM CONFIGURAÇÃO ----

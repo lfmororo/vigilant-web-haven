@@ -12,14 +12,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { Copy, Download, KeyRound, Monitor, Plus, Save, ShieldOff } from "lucide-react";
+import { Copy, Download, KeyRound, Monitor, Package, Plus, Save, ShieldOff } from "lucide-react";
 import { fmtAgo } from "./monitorUi";
+import ClientInstallerDialog from "./ClientInstallerDialog";
 
 const db = supabase as any;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SCOPES = ["agent", "windows", "linux", "sqlserver", "vmware", "proxmox", "ilo"] as const;
 const SCOPE_LABEL: Record<string, string> = { agent: "Agente unificado", windows: "Windows", linux: "Linux", sqlserver: "SQL Server", vmware: "VMware", proxmox: "Proxmox", ilo: "iLO/iDRAC" };
 const DOWNLOADS = typeof window !== "undefined" ? `${window.location.origin}/downloads` : "/downloads";
+
+const DOWNLOAD_ITEMS = [
+  { file: "mororo-agent-setup.exe", label: "Windows Setup.exe" },
+  { file: "mororo-agent.msi", label: "Windows MSI (GPO)" },
+  { file: "mororo-agent.exe", label: "Windows (executável)" },
+  { file: "mororo-agent_amd64.deb", label: ".deb x64" },
+  { file: "mororo-agent_arm64.deb", label: ".deb ARM64" },
+  { file: "mororo-agent.x86_64.rpm", label: ".rpm x64" },
+  { file: "mororo-agent.aarch64.rpm", label: ".rpm ARM64" },
+  { file: "mororo-agent-linux-amd64", label: "Linux x64 (binário)" },
+  { file: "mororo-agent-linux-arm64", label: "Linux ARM64 (binário)" },
+  { file: "mororo-coletores-setup.exe", label: "Coletores avulsos (Proxmox, VMware, iLO, iDRAC, SQL, DVR)" },
+];
 
 interface Props { clients: { id: string; full_name: string }[] | undefined }
 
@@ -29,7 +43,7 @@ function base64url(bytes: Uint8Array) {
   bytes.forEach((b) => (s += String.fromCharCode(b)));
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
-async function sha256Hex(v: string) {
+export async function sha256Hex(v: string) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -73,6 +87,7 @@ export default function MonitorAgentsTab({ clients }: Props) {
   const [tScopes, setTScopes] = useState<string[]>([]);
   const [created, setCreated] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [instOpen, setInstOpen] = useState(false);
 
   const { data: tokens = [] } = useQuery({
     queryKey: ["monitor-agent-tokens"],
@@ -117,7 +132,11 @@ export default function MonitorAgentsTab({ clients }: Props) {
 
   const commands = (tok: string) => [
     { label: "Mororo.Tech Agent — Windows (assistente)", cmd: `Baixe ${DOWNLOADS}/mororo-agent.exe, dê dois cliques e cole o token:\n${tok}` },
-    { label: "Mororo.Tech Agent — Windows (silencioso, GPO/script)", cmd: `mororo-agent.exe install --token ${tok} --role workstation --quiet` },
+    { label: "Mororo.Tech Agent — Windows Setup.exe (silencioso)", cmd: `mororo-agent-setup.exe /S /TOKEN=${tok} /ROLE=workstation` },
+    { label: "Mororo.Tech Agent — Windows MSI (GPO)", cmd: `msiexec /i mororo-agent.msi /qn TOKEN=${tok} ROLE=workstation` },
+    { label: "Mororo.Tech Agent — Debian/Ubuntu", cmd: `sudo MORORO_TOKEN=${tok} MORORO_ROLE=server apt install ./mororo-agent_amd64.deb` },
+    { label: "Mororo.Tech Agent — RHEL/Rocky/Alma", cmd: `sudo MORORO_TOKEN=${tok} MORORO_ROLE=server dnf install ./mororo-agent.x86_64.rpm` },
+    { label: "Coletores avulsos (Windows, silencioso)", cmd: `mororo-coletores-setup.exe /S /TOKEN=${tok} /COLETORES=proxmox,vmware,ilo,idrac,windows,sqlserver` },
     { label: "Mororo.Tech Agent — Linux", cmd: `curl -fsSL ${DOWNLOADS}/mororo-agent-linux-amd64 -o mororo-agent && chmod +x mororo-agent && sudo ./mororo-agent install --token ${tok} --role server --quiet` },
     { label: "Linux (no servidor)", cmd: `sudo bash linux-agent.sh install --token ${tok} --url "${SUPABASE_URL}"` },
     { label: "Windows Server (teste)", cmd: `powershell -ExecutionPolicy Bypass -File .\\windows-server-collector.ps1 -Token ${tok} -UmaVez` },
@@ -226,10 +245,24 @@ export default function MonitorAgentsTab({ clients }: Props) {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <Button asChild size="sm"><a href={`${DOWNLOADS}/mororo-agent.exe`} download><Download className="mr-1 h-4 w-4" /> Windows (.exe)</a></Button>
-            <Button asChild size="sm" variant="outline"><a href={`${DOWNLOADS}/mororo-agent-linux-amd64`} download><Download className="mr-1 h-4 w-4" /> Linux x64</a></Button>
-            <Button asChild size="sm" variant="outline"><a href={`${DOWNLOADS}/mororo-agent-linux-arm64`} download><Download className="mr-1 h-4 w-4" /> Linux ARM64</a></Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" onClick={() => setInstOpen(true)}><Package className="mr-1 h-4 w-4" /> Gerar instalador do cliente</Button>
+            <span className="text-xs text-muted-foreground">executável com o token do cliente embutido — é só executar na máquina</span>
+          </div>
+          <div className="space-y-2 rounded-md border p-3">
+            <p className="text-sm font-medium">Instaladores genéricos (pedem o token)</p>
+            <div className="flex flex-wrap gap-2">
+              {DOWNLOAD_ITEMS.map((d) => (
+                <Button key={d.file} asChild size="sm" variant="outline"><a href={`${DOWNLOADS}/${d.file}`} download><Download className="mr-1 h-4 w-4" /> {d.label}</a></Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Setup.exe silencioso: <code>mororo-agent-setup.exe /S /TOKEN=mt_… /ROLE=workstation</code> · MSI (GPO):{" "}
+              <code>msiexec /i mororo-agent.msi /qn TOKEN=mt_… ROLE=server</code> · Debian/Ubuntu:{" "}
+              <code>sudo MORORO_TOKEN=mt_… MORORO_ROLE=server apt install ./mororo-agent_amd64.deb</code> · RHEL/Rocky:{" "}
+              <code>sudo MORORO_TOKEN=mt_… dnf install ./mororo-agent.x86_64.rpm</code> · Coletores avulsos:{" "}
+              <code>mororo-coletores-setup.exe /S /TOKEN=mt_… /COLETORES=proxmox,ilo,sqlserver</code>
+            </p>
           </div>
           <div className="rounded-md border p-3">
             <p className="mb-2 text-sm font-medium">Papel de parede dos computadores</p>
@@ -369,6 +402,8 @@ export default function MonitorAgentsTab({ clients }: Props) {
           </CardContent>
         </Card>
       )}
+
+      <ClientInstallerDialog open={instOpen} onOpenChange={setInstOpen} clients={clients} />
 
       {/* Diálogo novo token */}
       <Dialog open={newOpen} onOpenChange={(o) => !o && closeNew()}>

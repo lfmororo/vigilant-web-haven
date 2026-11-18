@@ -204,9 +204,13 @@ VITE_SUPABASE_PUBLISHABLE_KEY="$ANON"
 VITE_SUPABASE_PROJECT_ID="vigilant"
 EOF
 if [ -d "$BUILD/agent" ]; then
-  docker run --rm -v "$BUILD:/src" -w /src/agent -e MONITOR_URL="$API_URL" -e GOFLAGS=-mod=mod golang:1.24 \
-    bash -c 'git config --global --add safe.directory "*" >/dev/null 2>&1; ./build.sh >/dev/null' \
-    && ok "Agente mororo-agent recompilado para $API_URL" || warn "Não consegui recompilar o mororo-agent (os downloads antigos continuam)."
+  # Além dos binários, gera os instaladores: Setup.exe e coletores (NSIS), MSI (wixl) e .deb/.rpm.
+  docker run --rm -v "$BUILD:/src" -w /src/agent -e MONITOR_URL="$API_URL" -e ANON_KEY="$ANON" -e GOFLAGS=-mod=mod golang:1.24 \
+    bash -c 'git config --global --add safe.directory "*" >/dev/null 2>&1
+             (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nsis wixl rpm npm >/dev/null 2>&1) \
+               || echo "aviso: não consegui instalar nsis/wixl/rpm/npm — só os binários serão gerados"
+             ./build.sh >/dev/null' \
+    && ok "Agente e instaladores recompilados para $API_URL" || warn "Não consegui recompilar o mororo-agent (os downloads antigos continuam)."
 fi
 docker run --rm -v "$BUILD:/app" -w /app node:22 bash -c "npm install --no-audit --no-fund --loglevel=error >/dev/null && npm run build" >/dev/null \
   || die "O build do painel falhou. Rode manualmente: cd $BUILD && docker run --rm -it -v \$PWD:/app -w /app node:22 bash"

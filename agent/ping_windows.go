@@ -14,10 +14,10 @@ import (
 
 // Windows: IcmpSendEcho (iphlpapi), o mesmo mecanismo do ping.exe — não depende de socket bruto nem do firewall.
 var (
-	iphlpapi        = windows.NewLazySystemDLL("iphlpapi.dll")
-	procIcmpCreate  = iphlpapi.NewProc("IcmpCreateFile")
-	procIcmpClose   = iphlpapi.NewProc("IcmpCloseHandle")
-	procIcmpSend    = iphlpapi.NewProc("IcmpSendEcho")
+	iphlpapi       = windows.NewLazySystemDLL("iphlpapi.dll")
+	procIcmpCreate = iphlpapi.NewProc("IcmpCreateFile")
+	procIcmpClose  = iphlpapi.NewProc("IcmpCloseHandle")
+	procIcmpSend   = iphlpapi.NewProc("IcmpSendEcho")
 )
 
 func osPing(ip net.IP, count int, timeout time.Duration) (float64, float64, error) {

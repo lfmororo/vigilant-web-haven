@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Gerados por agent/build.sh (o deploy/install.sh compila na VPS)
+/public/downloads/

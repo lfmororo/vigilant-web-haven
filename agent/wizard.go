@@ -88,6 +88,9 @@ func runWizard(listen, defaultURL string) {
 			}
 			st["networks"] = s
 		}
+		if e := readEmbedded(); e != nil {
+			st["embedded"] = map[string]any{"client": e.Client, "role": e.Role, "url": e.URL}
+		}
 		if c, err := loadConfig(); err == nil {
 			st["config"] = map[string]any{"url": c.URL, "role": c.Role, "name": c.Name, "client_name": c.ClientName,
 				"services": c.Services, "desktop_info": c.DesktopInfo, "has_token": c.Token != ""}
@@ -98,9 +101,7 @@ func runWizard(listen, defaultURL string) {
 		var req struct{ URL, Token string }
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if strings.TrimSpace(req.Token) == "" {
-			if c, err := loadConfig(); err == nil {
-				req.Token = c.Token // reinstalação: reaproveita o token salvo
-			}
+			req.Token, req.URL = fallbackToken(req.URL, defaultURL)
 		}
 		var who whoamiResp
 		if err := newAPI(firstNonEmpty(req.URL, defaultURL), req.Token).Agent("whoami", nil, &who); err != nil {
@@ -161,9 +162,7 @@ func runWizard(listen, defaultURL string) {
 			return
 		}
 		if strings.TrimSpace(req.Token) == "" {
-			if c, err := loadConfig(); err == nil {
-				req.Token = c.Token
-			}
+			req.Token, req.URL = fallbackToken(req.URL, defaultURL)
 		}
 		writeJSON(w, doInstall(req))
 	}))
@@ -267,4 +266,15 @@ func testDevice(d map[string]any) (bool, string) {
 		return true, msg
 	}
 	return false, "tipo desconhecido"
+}
+
+// fallbackToken: token embutido (instalador por cliente) ou o já salvo nesta máquina.
+func fallbackToken(url, defaultURL string) (string, string) {
+	if e := readEmbedded(); e != nil {
+		return e.Token, firstNonEmpty(url, e.URL)
+	}
+	if c, err := loadConfig(); err == nil {
+		return c.Token, firstNonEmpty(url, c.URL)
+	}
+	return "", firstNonEmpty(url, defaultURL)
 }

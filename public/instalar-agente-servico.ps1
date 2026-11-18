@@ -91,7 +91,9 @@ $CANDIDATOS = @(
     "cloud-backup.js",
     "ad-provisioning-agent.ps1",
     "windows-server-collector.ps1",
-    "windows-server-agent.ps1"
+    "windows-server-agent.ps1",
+    "idrac-collector.js",
+    "sqlserver-collector.ps1"
 )
 
 if (-not $Script) {
@@ -125,6 +127,7 @@ $COLETORES_BACKEND = @(
     "proxmox-collector.js",
     "ilo-collector.js",
     "vmware-collector.js",
+    "idrac-collector.js",
     "mikrotik-vps-collector.js",
     "ad-provisioning-agent.ps1"
 )
@@ -173,12 +176,19 @@ if ($Desinstalar) {
 $ehNode = $Script.ToLower().EndsWith(".js")
 
 if ($ehNode) {
-    $node = (Get-Command node.exe -ErrorAction SilentlyContinue)
-    if (-not $node) {
-        Write-Erro "Node.js não encontrado no PATH. Instale em https://nodejs.org (LTS) e execute novamente."
-        exit 1
+    # Node portátil do instalador "Mororo.Tech Coletores" (..\node\node.exe) ou o do PATH.
+    $Executavel = $null
+    foreach ($cand in @($env:MORORO_NODE, (Join-Path $Pasta "node.exe"), (Join-Path (Split-Path -Parent $Pasta) "node\node.exe"))) {
+        if ($cand -and (Test-Path $cand)) { $Executavel = (Resolve-Path $cand).Path; break }
     }
-    $Executavel = $node.Source
+    if (-not $Executavel) {
+        $node = (Get-Command node.exe -ErrorAction SilentlyContinue)
+        if (-not $node) {
+            Write-Erro "Node.js não encontrado no PATH. Instale em https://nodejs.org (LTS) e execute novamente."
+            exit 1
+        }
+        $Executavel = $node.Source
+    }
     $linha = "`"$CaminhoScript`""
     if ($Url)        { $linha += " --url `"$Url`"" }
     if ($Key)        { $linha += " --key `"$Key`"" }

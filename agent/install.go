@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -52,7 +53,11 @@ func doInstall(req InstallRequest) (res InstallResult) {
 	api := newAPI(req.URL, req.Token)
 	var who whoamiResp
 	if err := api.Agent("whoami", nil, &who); err != nil {
-		return fail(fmt.Errorf("token recusado pelo painel: %w", err))
+		var ae *apiError
+		if errors.As(err, &ae) && (ae.Status == 401 || ae.Status == 403) {
+			return fail(fmt.Errorf("token recusado pelo painel: %w", err))
+		}
+		return fail(fmt.Errorf("não foi possível falar com o painel em %s: %w", req.URL, err))
 	}
 	res.ClientName = who.Client.Name
 	step("Token válido — cliente %s", who.Client.Name)
@@ -123,11 +128,48 @@ func cmdInstall(args []string) {
 	name := fs.String("name", "", "nome exibido no painel (padrão: hostname)")
 	services := fs.String("services", "", "serviços a monitorar, separados por vírgula")
 	noDesktop := fs.Bool("no-desktop", false, "não mostrar informações no papel de parede")
+	desktopOpt := fs.String("desktop", "", "1 ou 0 (alternativa a --no-desktop, usada pelo MSI)")
 	secure := fs.Bool("secure-tls", false, "exigir certificado válido em iLO/Proxmox")
 	quiet := fs.Bool("quiet", false, "instala sem abrir o assistente")
 	listen := fs.String("listen", "127.0.0.1:0", "endereço do assistente (use túnel SSH em servidores sem tela)")
+	embedded := fs.Bool("embedded", false, "usa a configuração embutida no executável (instalador por cliente)")
+	_ = fs.Bool("reuse", false, "reinstala usando a configuração já salva (atualização)")
+	fs.BoolVar(&noARP, "no-arp", false, "não criar a entrada em Aplicativos instalados (Setup/MSI já criam)")
 	if args != nil {
 		_ = fs.Parse(args)
+	}
+	if strings.TrimSpace(*desktopOpt) == "0" {
+		*noDesktop = true
+	}
+
+	if *embedded {
+		if e := readEmbedded(); e != nil && e.Mode != "wizard" {
+			quickInstall(e)
+			return
+		}
+	}
+	if *token == "" && *quiet {
+		if e := readEmbedded(); e != nil {
+			*token, *url = e.Token, e.URL
+			if *role == "" {
+				*role = e.Role
+			}
+		} else if c, err := loadConfig(); err == nil && c.Token != "" {
+			// Atualização pelo Setup/MSI/pacote: mantém tudo como estava.
+			*token, *url = c.Token, c.URL
+			if *role == "" {
+				*role = c.role()
+			}
+			if *name == "" {
+				*name = c.Name
+			}
+			if *services == "" {
+				*services = strings.Join(c.Services, ",")
+			}
+			if !c.DesktopInfo {
+				*noDesktop = true
+			}
+		}
 	}
 
 	if !*quiet {
@@ -171,7 +213,14 @@ func guessRole() string {
 	return "workstation"
 }
 
+// noARP: instalado por Setup/MSI/pacote — eles cuidam da entrada em "Aplicativos instalados".
+var noARP bool
+
 func cmdUninstall(args []string) {
+	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
+	quiet := fs.Bool("quiet", false, "sem mensagens")
+	keepFiles := fs.Bool("keep-files", false, "não apagar o executável (usado pelo Setup/MSI/pacote)")
+	_ = fs.Parse(args)
 	setupLog(false)
 	if !isAdmin() {
 		if relaunchElevated(append([]string{"uninstall"}, args...)) {
@@ -182,8 +231,12 @@ func cmdUninstall(args []string) {
 	if err := uninstallService(); err != nil {
 		log.Printf("serviço: %v", err)
 	}
-	uninstallOS()
+	uninstallOS(*keepFiles)
 	_ = os.Remove(configPath())
 	_ = os.Remove(desktopStatePath())
-	fmt.Println("Mororo.Tech Agent removido. A máquina continua listada no painel até ser excluída lá.")
+	msg := "Mororo.Tech Agent removido. A máquina continua listada no painel até ser excluída lá."
+	fmt.Println(msg)
+	if !*quiet && isWindowsGUI() {
+		infoBox(msg)
+	}
 }

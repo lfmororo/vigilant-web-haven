@@ -82,6 +82,9 @@ func postInstallOS(c *Config) string {
 		}
 		k.Close()
 	}
+	if noARP {
+		return msg
+	}
 	if k, _, err := registry.CreateKey(registry.LOCAL_MACHINE, uninstallKey, registry.SET_VALUE|registry.WOW64_64KEY); err == nil {
 		_ = k.SetStringValue("DisplayName", ServiceDisplayName)
 		_ = k.SetStringValue("DisplayVersion", Version)
@@ -97,7 +100,7 @@ func postInstallOS(c *Config) string {
 	return msg
 }
 
-func uninstallOS() {
+func uninstallOS(keepFiles bool) {
 	if k, err := registry.OpenKey(registry.LOCAL_MACHINE, runKey, registry.SET_VALUE|registry.WOW64_64KEY); err == nil {
 		_ = k.DeleteValue(runValue)
 		k.Close()
@@ -106,7 +109,17 @@ func uninstallOS() {
 	// Fecha o helper do papel de parede e restaura o fundo do usuário atual.
 	_ = hiddenCmd("taskkill", "/F", "/IM", "mororo-agent.exe", "/FI", "PID ne "+strconv.Itoa(os.Getpid())).Run()
 	restoreWallpaper()
+	if keepFiles {
+		return
+	}
 	// Apaga o executável instalado depois que este processo terminar.
 	exe := installedExe()
 	_ = hiddenCmd("cmd", "/C", "ping -n 3 127.0.0.1 >nul & del /F /Q \""+exe+"\" \""+exe+".old\" & rmdir \""+strings.TrimSuffix(exe, `\mororo-agent.exe`)+"\"").Start()
+}
+
+// isWindowsGUI: sem console de quem chamou (duplo clique / Aplicativos instalados).
+func isWindowsGUI() bool {
+	k32 := windows.NewLazySystemDLL("kernel32.dll")
+	h, _, _ := k32.NewProc("GetConsoleWindow").Call()
+	return h == 0
 }

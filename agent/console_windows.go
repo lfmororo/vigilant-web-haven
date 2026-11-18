@@ -47,3 +47,8 @@ func wizardWindow(url string, closeFn func()) {
 func fatalBox(msg string) {
 	messageBox("Mororo.Tech Agent", msg, 0x10)
 }
+
+func infoBox(msg string) { messageBox("Mororo.Tech Agent", msg, 0x40) }
+
+// confirmBox: Sim/Não (MB_YESNO | MB_ICONQUESTION); IDYES = 6.
+func confirmBox(msg string) bool { return messageBox("Mororo.Tech Agent", msg, 0x04|0x20) == 6 }

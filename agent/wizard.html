@@ -164,7 +164,15 @@ async function init() {
   $("ver").textContent = `v${st.version} · ${st.hostname}`;
   $("url").value = st.config?.url || st.default_url;
   if (st.config?.has_token) $("tokenHint").classList.remove("hidden");
-  S.role = st.config?.role || st.suggested_role;
+  if (st.embedded) {
+    // Instalador do cliente: token já embutido.
+    $("token").classList.add("hidden");
+    document.querySelector('label[for=token]').classList.add("hidden");
+    $("tokenHint").textContent = `Instalador do cliente ${st.embedded.client || ""} — o token já está embutido. Clique em continuar.`;
+    $("tokenHint").classList.remove("hidden");
+    $("url").value = st.embedded.url || $("url").value;
+  }
+  S.role = st.embedded?.role || st.config?.role || st.suggested_role;
   $("name").value = st.config?.name || st.hostname;
   if (st.config) $("desktop").checked = !!st.config.desktop_info;
   $("hostInfo").textContent = `${st.hostname} — ${st.os} — IP ${(st.ips || []).join(", ")}${st.installed && st.installed !== "não instalado" ? ` — agente atual: ${st.installed}` : ""}`;

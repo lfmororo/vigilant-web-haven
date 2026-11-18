@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Mororo.Tech Agent — MSI para instalação em massa (GPO, Intune, RMM).
+
+    msiexec /i mororo-agent.msi /qn TOKEN=mt_xxx ROLE=workstation
+    msiexec /i mororo-agent.msi /qn TOKEN=mt_xxx ROLE=server DESKTOP=0
+    msiexec /x mororo-agent.msi /qn
+
+  Sem TOKEN, só copia os arquivos (atualização mantém a configuração existente).
+  Compilado com wixl (msitools): wixl -D Version=1.0.0 -D Url=https://api.mororo.tech -D Src=<pasta> -o mororo-agent.msi agent.wxs
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Mororo.Tech Agent" Language="1046" Codepage="1252" Version="$(var.Version)"
+           Manufacturer="Mororo.Tech" UpgradeCode="7F3C2B9A-4E61-4D2B-9C8E-5A1D0B6E2F41">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"
+             Description="Mororo.Tech Agent $(var.Version)" Manufacturer="Mororo.Tech" Comments="Monitoramento, inventário e suporte" />
+    <Media Id="1" Cabinet="agent.cab" EmbedCab="yes" />
+    <MajorUpgrade DowngradeErrorMessage="Uma versão mais nova do Mororo.Tech Agent já está instalada." />
+
+    <Icon Id="AgentIcon" SourceFile="mororo-agent.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AgentIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://mororo.tech" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <Property Id="TOKEN" Secure="yes" />
+    <Property Id="ROLE" Value="workstation" Secure="yes" />
+    <Property Id="URL" Value="$(var.Url)" Secure="yes" />
+    <Property Id="DESKTOP" Value="1" Secure="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="MororoTechDir" Name="MororoTech">
+          <Directory Id="INSTALLDIR" Name="Agent">
+            <Component Id="AgentExe" Guid="3B8E1F6C-2A74-4F0D-8D1E-9C5B7A2E4D10" Win64="yes">
+              <File Id="AgentExeFile" Name="mororo-agent.exe" Source="$(var.Src)/mororo-agent.exe" KeyPath="yes" />
+              <!-- O serviço é criado pelo próprio agente; o MSI só o para antes de trocar/remover o executável. -->
+              <ServiceControl Id="StopAgent" Name="MororoAgent" Stop="both" Wait="yes" />
+            </Component>
+          </Directory>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <Feature Id="Main" Title="Mororo.Tech Agent" Level="1">
+      <ComponentRef Id="AgentExe" />
+    </Feature>
+
+    <!-- Configura e inicia o serviço (roda como SYSTEM, depois de copiar os arquivos). -->
+    <CustomAction Id="AgentConfigure" FileKey="AgentExeFile" Execute="deferred" Impersonate="no" Return="check"
+                  ExeCommand='install --token "[TOKEN]" --role "[ROLE]" --url "[URL]" --quiet --no-arp --desktop "[DESKTOP]"' />
+    <CustomAction Id="AgentReuse" FileKey="AgentExeFile" Execute="deferred" Impersonate="no" Return="ignore"
+                  ExeCommand="install --quiet --no-arp --reuse" />
+    <CustomAction Id="AgentUninstall" FileKey="AgentExeFile" Execute="deferred" Impersonate="no" Return="ignore"
+                  ExeCommand="uninstall --quiet --keep-files" />
+
+    <InstallExecuteSequence>
+      <Custom Action="AgentUninstall" Sequence="3400">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+      <Custom Action="AgentConfigure" Sequence="4010">NOT REMOVE AND TOKEN</Custom>
+      <Custom Action="AgentReuse" Sequence="4011">NOT REMOVE AND NOT TOKEN</Custom>
+    </InstallExecuteSequence>
+  </Product>
+</Wix>

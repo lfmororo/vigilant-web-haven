@@ -39,17 +39,17 @@ func collectInventory(m *HostMetrics) *Inventory {
 // endpointMetrics: formato de `metrics` no report do endpoint-agent.
 func endpointMetrics(m *HostMetrics) map[string]any {
 	out := map[string]any{
-		"cpu_usage_pct":   m.CPUPct,
-		"ram_usage_pct":   m.RAMPct,
-		"disks":           m.Disks,
-		"top_processes":   m.TopProcs,
-		"pending_reboot":  m.PendingReboot,
-		"uptime_seconds":  m.UptimeSeconds,
-		"logged_user":     m.LoggedUser,
-		"ip_addresses":    m.IPs,
+		"cpu_usage_pct":    m.CPUPct,
+		"ram_usage_pct":    m.RAMPct,
+		"disks":            m.Disks,
+		"top_processes":    m.TopProcs,
+		"pending_reboot":   m.PendingReboot,
+		"uptime_seconds":   m.UptimeSeconds,
+		"logged_user":      m.LoggedUser,
+		"ip_addresses":     m.IPs,
 		"remote_access_id": m.RemoteID,
-		"physical_disks":  nonNil(m.PhysicalDisks),
-		"antivirus":       nonNil(m.Antivirus),
+		"physical_disks":   nonNil(m.PhysicalDisks),
+		"antivirus":        nonNil(m.Antivirus),
 	}
 	if !m.BootTime.IsZero() {
 		out["last_boot_time"] = m.BootTime.UTC().Format(time.RFC3339)

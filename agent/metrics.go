@@ -17,15 +17,15 @@ import (
 )
 
 type DiskInfo struct {
-	Mount     string  `json:"mount"`
-	Label     string  `json:"label,omitempty"`
-	FSType    string  `json:"fstype,omitempty"`
-	TotalGB   float64 `json:"total_gb"`
-	UsedGB    float64 `json:"used_gb"`
-	FreeGB    float64 `json:"free_gb"`
-	UsagePct  float64 `json:"usage_pct"`
-	InodePct  *float64 `json:"inode_pct,omitempty"`
-	Predict   bool    `json:"predict_failure,omitempty"`
+	Mount    string   `json:"mount"`
+	Label    string   `json:"label,omitempty"`
+	FSType   string   `json:"fstype,omitempty"`
+	TotalGB  float64  `json:"total_gb"`
+	UsedGB   float64  `json:"used_gb"`
+	FreeGB   float64  `json:"free_gb"`
+	UsagePct float64  `json:"usage_pct"`
+	InodePct *float64 `json:"inode_pct,omitempty"`
+	Predict  bool     `json:"predict_failure,omitempty"`
 }
 
 type ProcInfo struct {
@@ -52,13 +52,13 @@ type EventInfo struct {
 }
 
 type PhysDisk struct {
-	Name     string `json:"name"`
-	Model    string `json:"model,omitempty"`
-	Serial   string `json:"serial,omitempty"`
-	Media    string `json:"media,omitempty"`
-	SizeGB   float64 `json:"size_gb,omitempty"`
-	Health   string `json:"health,omitempty"`
-	Predict  bool   `json:"predict_failure"`
+	Name    string  `json:"name"`
+	Model   string  `json:"model,omitempty"`
+	Serial  string  `json:"serial,omitempty"`
+	Media   string  `json:"media,omitempty"`
+	SizeGB  float64 `json:"size_gb,omitempty"`
+	Health  string  `json:"health,omitempty"`
+	Predict bool    `json:"predict_failure"`
 }
 
 type Antivirus struct {
@@ -68,37 +68,37 @@ type Antivirus struct {
 }
 
 type HostMetrics struct {
-	Hostname        string
-	OSName          string
-	OSVersion       string
-	CPUPct          *float64
-	IOWaitPct       *float64
-	CPUModel        string
-	Cores           int
-	RAMTotalGB      float64
-	RAMUsedGB       float64
-	RAMPct          float64
-	SwapTotalGB     float64
-	SwapUsedGB      float64
+	Hostname             string
+	OSName               string
+	OSVersion            string
+	CPUPct               *float64
+	IOWaitPct            *float64
+	CPUModel             string
+	Cores                int
+	RAMTotalGB           float64
+	RAMUsedGB            float64
+	RAMPct               float64
+	SwapTotalGB          float64
+	SwapUsedGB           float64
 	Load1, Load5, Load15 *float64
-	UptimeSeconds   uint64
-	BootTime        time.Time
-	Disks           []DiskInfo
-	TopProcs        []ProcInfo
-	Services        []ServiceInfo
-	FailedUnits     []string
-	Events          []EventInfo
-	PendingReboot   bool
-	PendingUpdates  *int
-	SecurityUpdates *int
-	PhysicalDisks   []PhysDisk
-	Antivirus       []Antivirus
-	LoggedUser      string
-	IPs             []string
-	RemoteID        string
-	RAID            []map[string]any
-	ZFS             []map[string]any
-	SMART           []map[string]any
+	UptimeSeconds        uint64
+	BootTime             time.Time
+	Disks                []DiskInfo
+	TopProcs             []ProcInfo
+	Services             []ServiceInfo
+	FailedUnits          []string
+	Events               []EventInfo
+	PendingReboot        bool
+	PendingUpdates       *int
+	SecurityUpdates      *int
+	PhysicalDisks        []PhysDisk
+	Antivirus            []Antivirus
+	LoggedUser           string
+	IPs                  []string
+	RemoteID             string
+	RAID                 []map[string]any
+	ZFS                  []map[string]any
+	SMART                []map[string]any
 }
 
 func round1(v float64) float64 { return math.Round(v*10) / 10 }

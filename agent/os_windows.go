@@ -75,20 +75,20 @@ func powershellJSON(script string, out any) error {
 // ---------------------------------------------------------------- métricas
 
 type win32Service struct {
-	Name        string
-	DisplayName string
-	State       string
-	StartMode   string
+	Name             string
+	DisplayName      string
+	State            string
+	StartMode        string
 	DelayedAutoStart *bool
 }
 
 type win32CS struct {
-	UserName     *string
-	Manufacturer string
-	Model        string
-	Domain       string
-	PartOfDomain bool
-	PCSystemType uint16
+	UserName            *string
+	Manufacturer        string
+	Model               string
+	Domain              string
+	PartOfDomain        bool
+	PCSystemType        uint16
 	TotalPhysicalMemory uint64
 }
 
@@ -273,7 +273,7 @@ func windowsAntivirus() []Antivirus {
 	}
 	// Windows Server não tem SecurityCenter2: consulta o Defender.
 	var mp []struct {
-		AntivirusEnabled     bool
+		AntivirusEnabled      bool
 		AntivirusSignatureAge uint32
 	}
 	if err := wmi.QueryNamespace("SELECT AntivirusEnabled, AntivirusSignatureAge FROM MSFT_MpComputerStatus", &mp, `root\Microsoft\Windows\Defender`); err == nil && len(mp) > 0 {

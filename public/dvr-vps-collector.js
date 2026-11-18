@@ -14,10 +14,15 @@ const ping = require("ping");
 const { exec } = require("child_process");
 
 // ================= CONFIG =================
-const SUPABASE_URL = "https://egbusmegupjfxqswdlxq.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVnYnVzbWVndXBqZnhxc3dkbHhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY0MDUxMDYsImV4cCI6MjA4MTk4MTEwNn0.SPh-z2s1UEyacv5ucviiMwWO58JifVKQ8NIYYYcfuQw";
+// Aceita --url, --key e --intervalo (segundos) na linha de comando ou variáveis de ambiente.
+function cliArg(name) {
+  const i = process.argv.indexOf(name);
+  return i > 1 && i + 1 < process.argv.length ? process.argv[i + 1] : undefined;
+}
+const SUPABASE_URL = cliArg("--url") || process.env.SUPABASE_URL || "https://egbusmegupjfxqswdlxq.supabase.co";
+const SUPABASE_ANON_KEY = cliArg("--key") || process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVnYnVzbWVndXBqZnhxc3dkbHhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY0MDUxMDYsImV4cCI6MjA4MTk4MTEwNn0.SPh-z2s1UEyacv5ucviiMwWO58JifVKQ8NIYYYcfuQw";
 
-const POLL_INTERVAL = 60000; // 60 segundos
+const POLL_INTERVAL = (Number(cliArg("--intervalo")) || 60) * 1000; // padrão 60 segundos
 // Versao deste coletor. Mantenha igual a src/lib/agentVersions.ts.
 const AGENT_VERSION = "1.1.0";
 

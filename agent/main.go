@@ -67,20 +67,20 @@ type Config struct {
 
 // RemoteConfig é a configuração devolvida por endpoint-agent (action=config).
 type RemoteConfig struct {
-	EndpointID       string          `json:"endpoint_id"`
-	Name             string          `json:"name"`
-	Role             string          `json:"role"`
-	ClientName       string          `json:"client_name"`
-	WindowsServerID  string          `json:"windows_server_id"`
-	LinuxServerID    string          `json:"linux_server_id"`
-	MetricsInterval  int             `json:"metrics_interval_seconds"`
-	InventoryHours   int             `json:"inventory_interval_hours"`
-	DevicesInterval  int             `json:"devices_interval_seconds"`
-	Services         []string        `json:"services"`
-	Desktop          DesktopSettings `json:"desktop"`
-	Probes           []Probe         `json:"probes"`
-	Collect          map[string]bool `json:"collect"`
-	LatestVersion    string          `json:"latest_version"`
+	EndpointID      string          `json:"endpoint_id"`
+	Name            string          `json:"name"`
+	Role            string          `json:"role"`
+	ClientName      string          `json:"client_name"`
+	WindowsServerID string          `json:"windows_server_id"`
+	LinuxServerID   string          `json:"linux_server_id"`
+	MetricsInterval int             `json:"metrics_interval_seconds"`
+	InventoryHours  int             `json:"inventory_interval_hours"`
+	DevicesInterval int             `json:"devices_interval_seconds"`
+	Services        []string        `json:"services"`
+	Desktop         DesktopSettings `json:"desktop"`
+	Probes          []Probe         `json:"probes"`
+	Collect         map[string]bool `json:"collect"`
+	LatestVersion   string          `json:"latest_version"`
 }
 
 type DesktopSettings struct {
@@ -185,6 +185,18 @@ func main() {
 	if len(os.Args) < 2 {
 		if isWindowsService() {
 			runService()
+			return
+		}
+		// Instalador por cliente (token embutido) no modo direto.
+		if e := readEmbedded(); e != nil && e.Mode != "wizard" {
+			if !isAdmin() {
+				if relaunchElevated([]string{"install", "--embedded"}) {
+					return
+				}
+				fatalBox("O instalador precisa de privilégios de administrador (no Linux, use sudo).")
+				os.Exit(1)
+			}
+			quickInstall(e)
 			return
 		}
 		// Duplo clique no .exe: abre o assistente.

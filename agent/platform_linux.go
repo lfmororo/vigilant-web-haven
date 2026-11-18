@@ -23,9 +23,13 @@ func postInstallOS(c *Config) string {
 	return fmt.Sprintf("Logs em %s/logs/agent.log — teste com: sudo mororo-agent once", stateDir())
 }
 
-func uninstallOS() {
-	_ = os.Remove(installedExe())
+func uninstallOS(keepFiles bool) {
+	if !keepFiles {
+		_ = os.Remove(installedExe())
+	}
 }
+
+func isWindowsGUI() bool { return false }
 
 // Papel de parede: só no Windows.
 func cmdDesktop(args []string) {

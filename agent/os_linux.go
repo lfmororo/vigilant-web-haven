@@ -112,9 +112,9 @@ func osPrettyName() string {
 }
 
 var updatesCache struct {
-	at        time.Time
-	pending   *int
-	security  *int
+	at       time.Time
+	pending  *int
+	security *int
 }
 
 // Atualizações pendentes (apt/dnf), no máximo 1 consulta a cada 6 h.

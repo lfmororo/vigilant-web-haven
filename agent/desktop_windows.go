@@ -215,4 +215,3 @@ func restoreWallpaper() {
 		_ = setWallpaper(orig) // vazio = cor sólida
 	}
 }
-

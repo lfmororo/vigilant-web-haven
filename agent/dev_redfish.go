@@ -424,7 +424,7 @@ func redfishEvents(r *redfish, sysPath string, mgr map[string]any) []map[string]
 			key := firstNonEmpty(js(em["Id"]), odataID(em), js(em["Created"]))
 			out = append(out, map[string]any{
 				"event_key": key, "severity": level, "category": nilIfEmpty(firstNonEmpty(js(em["EntryType"]), js(oemHP(em)["Class"]))),
-				"message": firstNonEmpty(js(em["Message"]), js(em["Name"]), "Evento de hardware"),
+				"message":     firstNonEmpty(js(em["Message"]), js(em["Name"]), "Evento de hardware"),
 				"recorded_at": firstNonEmpty(js(em["Created"]), time.Now().UTC().Format(time.RFC3339)),
 			})
 		}
