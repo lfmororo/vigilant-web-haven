@@ -25,12 +25,15 @@ const AuthGuard = ({ children, requireAdmin = false, requireAdminOrTechnician = 
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
+  // Sem permissão: volta para a tela inicial do próprio perfil (a rota /dashboard não existe).
+  const home = role === "admin" ? "/admin" : role === "technician" ? "/admin/helpdesk" : "/helpdesk";
+
   if (requireAdmin && role !== "admin") {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={home} replace />;
   }
 
   if (requireAdminOrTechnician && role !== "admin" && role !== "technician") {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={home} replace />;
   }
 
   return <>{children}</>;

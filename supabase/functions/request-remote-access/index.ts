@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { isServiceRole, getCaller, canSeeTicket, denied } from "../_shared/caller.ts";
 import { waFetch } from "../_shared/whatsapp.ts";
 
 const corsHeaders = {
@@ -28,7 +29,16 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { ticket_id, sender_id } = await req.json();
+    const body = await req.json();
+    const ticket_id = body.ticket_id;
+    let sender_id = body.sender_id;
+    // Usuário logado que enxerga o chamado; o remetente é sempre quem está logado.
+    if (!isServiceRole(req)) {
+      const caller = await getCaller(req);
+      if (!caller) return denied(corsHeaders);
+      if (!(await canSeeTicket(caller, ticket_id))) return denied(corsHeaders, 403, "Chamado não encontrado");
+      sender_id = caller.userId;
+    }
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,

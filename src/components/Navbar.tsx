@@ -1,7 +1,7 @@
 import { useState } from "react";
+import { LOGO_URL } from "@/lib/brand";
 import { Button } from "@/components/ui/button";
 import { Menu, X, Headphones } from "lucide-react";
-import fmLogo from "@/assets/mororo-tech-logo.png.asset.json";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -23,7 +23,7 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <a href="#inicio" className="flex items-center gap-3 group">
-            <img alt="Mororo.tech" className="h-14" src={fmLogo.url} />
+            <img alt="Mororo.tech" className="h-14" src={LOGO_URL} />
           </a>
 
           {/* Desktop Navigation */}

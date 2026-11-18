@@ -38,7 +38,7 @@ interface Article {
 
 const KnowledgeBase = () => {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
 
   // Categories
   const [categories, setCategories] = useState<Category[]>([]);
@@ -194,7 +194,7 @@ const KnowledgeBase = () => {
             <h1 className="text-2xl font-bold">Base de Conhecimento</h1>
             <p className="text-muted-foreground">Artigos e tutoriais passo a passo</p>
           </div>
-          <div className="flex gap-2">
+          {isAdmin && <div className="flex gap-2">
             {/* Category management dialog */}
             <Dialog open={catDialogOpen} onOpenChange={(open) => { setCatDialogOpen(open); if (!open) setShowCatForm(false); }}>
               <DialogTrigger asChild>
@@ -258,7 +258,7 @@ const KnowledgeBase = () => {
             <Button onClick={openCreateArt}>
               <Plus className="w-4 h-4 mr-2" /> Novo Artigo
             </Button>
-          </div>
+          </div>}
         </div>
 
         {/* Filters */}
@@ -345,7 +345,7 @@ const KnowledgeBase = () => {
                       )}
                       <CardTitle className="text-base line-clamp-2">{a.title}</CardTitle>
                     </div>
-                    <div className="flex gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+                    {isAdmin && <div className="flex gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditArt(a)}>
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
@@ -366,7 +366,7 @@ const KnowledgeBase = () => {
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
-                    </div>
+                    </div>}
                   </div>
                 </CardHeader>
                 <CardContent>

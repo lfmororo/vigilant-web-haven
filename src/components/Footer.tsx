@@ -1,6 +1,5 @@
 import { Instagram, Facebook, Linkedin } from "lucide-react";
-import fmLogo from "@/assets/mororo-tech-logo.png.asset.json";
-import mororoLogo from "@/assets/mororo-tech-logo.png.asset.json";
+import { LOGO_URL } from "@/lib/brand";
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -12,7 +11,7 @@ const Footer = () => {
           {/* Logo & Description */}
           <div className="md:col-span-2">
             <a href="#inicio" className="flex items-center gap-3 mb-4">
-              <img src={fmLogo.url} alt="Mororo.tech" className="h-10" />
+              <img src={LOGO_URL} alt="Mororo.tech" className="h-10" />
             </a>
             <p className="text-muted-foreground leading-relaxed max-w-sm">
               Soluções completas em segurança eletrônica para empresas e 
@@ -61,7 +60,7 @@ const Footer = () => {
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-sm text-muted-foreground flex items-center gap-2">
-            <img src={mororoLogo.url} alt="Mororo.Tech" className="h-5 w-auto" />
+            <img src={LOGO_URL} alt="Mororo.Tech" className="h-5 w-auto" />
             <span>© {currentYear} Mororo.Tech. Todos os direitos reservados.</span>
           </p>
           <div className="flex gap-6 text-sm">

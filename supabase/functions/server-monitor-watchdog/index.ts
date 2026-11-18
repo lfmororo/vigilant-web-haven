@@ -1,3 +1,4 @@
+import { isServiceRole, denied } from "../_shared/caller.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import {
   type AlertLine,
@@ -180,6 +181,8 @@ async function digest(supabase: SupabaseClient) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  // Só o próprio servidor (cron com a service_role) pode chamar.
+  if (!isServiceRole(req)) return denied(corsHeaders);
   try {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const body = await req.json().catch(() => ({}));

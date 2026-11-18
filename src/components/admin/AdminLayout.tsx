@@ -1,4 +1,5 @@
 import { ReactNode, useState } from "react";
+import { LOGO_URL } from "@/lib/brand";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,6 @@ import {
   UserPlus,
   Shield } from
 "lucide-react";
-import fmLogo from "@/assets/mororo-tech-logo.png.asset.json";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -89,11 +89,11 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="px-4 py-6 border-b border-border bg-card">
-            <Link to="/admin" className="flex items-center justify-center w-full">
+            <Link to={role === "technician" ? "/admin/helpdesk" : "/admin"} className="flex items-center justify-center w-full">
               <img
                 alt="Mororo.tech"
                 className="h-16 max-w-[200px] object-contain drop-shadow-sm"
-                src={fmLogo.url} />
+                src={LOGO_URL} />
 
             </Link>
           </div>
@@ -101,7 +101,10 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-2">
             {navItems.map((item) => {
-              const isActive = location.pathname === item.href;
+              // Ativo também nas subpáginas (/admin/tickets/123 → Chamados); o Dashboard (/admin) só na própria rota.
+              const isActive = item.href === "/admin"
+                ? location.pathname === "/admin"
+                : location.pathname === item.href || location.pathname.startsWith(item.href + "/");
               return (
                 <Link
                   key={item.href}
@@ -146,7 +149,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
 
               <Menu className="w-6 h-6" />
             </button>
-            <img alt="Mororo.tech" className="h-8" src={fmLogo.url} />
+            <img alt="Mororo.tech" className="h-8" src={LOGO_URL} />
             <div className="w-10" />
           </div>
         </header>

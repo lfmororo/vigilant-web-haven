@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { isServiceRole, getCaller, canSeeTicket, denied } from "../_shared/caller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -365,6 +366,13 @@ Deno.serve(async (req) => {
       ticket_id, sender_id, message, is_internal,
       notification_type, priority_label, resolution_summary, pdf_url,
     } = body;
+
+    // Servidor ou usuário logado que enxerga o chamado.
+    if (!isServiceRole(req)) {
+      const caller = await getCaller(req);
+      if (!caller) return denied(corsHeaders);
+      if (!(await canSeeTicket(caller, ticket_id))) return denied(corsHeaders, 403, "Chamado não encontrado");
+    }
 
     // Don't notify for internal notes
     if (is_internal) {

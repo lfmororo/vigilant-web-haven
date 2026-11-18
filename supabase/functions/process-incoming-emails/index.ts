@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { isServiceRole, getCaller, denied } from "../_shared/caller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -938,6 +939,12 @@ async function processImapAccount(
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Servidor (cron) ou equipe logada no painel.
+  if (!isServiceRole(req)) {
+    const caller = await getCaller(req);
+    if (!caller || (caller.role !== "admin" && caller.role !== "technician")) return denied(corsHeaders);
   }
 
   try {

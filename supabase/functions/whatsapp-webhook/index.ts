@@ -426,6 +426,19 @@ async function handleTextMessage(supabaseAdmin: any, phone: string, text: string
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  // Com WHATSAPP_WEBHOOK_SECRET definido, só aceita quem conhece o segredo
+  // (Evolution: webhook .../whatsapp-webhook?secret=<segredo>). Sem ele, qualquer um
+  // poderia simular mensagens, abrir chamados e disparar respostas.
+  const secret = Deno.env.get("WHATSAPP_WEBHOOK_SECRET");
+  if (secret) {
+    const got = new URL(req.url).searchParams.get("secret") || req.headers.get("x-webhook-secret") || "";
+    if (got !== secret) {
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
+
   try {
     const body = await req.json();
     const { eventType } = normalizeEvent(body);

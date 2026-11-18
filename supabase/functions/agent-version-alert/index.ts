@@ -1,3 +1,4 @@
+import { isServiceRole, denied } from "../_shared/caller.ts";
 /**
  * Alerta diário (08:00 BRT) por WhatsApp quando algum agente coletor estiver
  * rodando uma versão anterior à publicada no painel.
@@ -19,6 +20,8 @@ const json = (body: unknown, status = 200) =>
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  // Só o próprio servidor (cron com a service_role) pode chamar.
+  if (!isServiceRole(req)) return denied(corsHeaders);
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { isServiceRole, denied } from "../_shared/caller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,6 +23,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Só o próprio servidor (outras funções/crons com a service_role) pode chamar.
+  if (!isServiceRole(req)) return denied(corsHeaders);
 
   try {
     const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");

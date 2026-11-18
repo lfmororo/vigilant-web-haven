@@ -1,10 +1,10 @@
 import { ReactNode, useState } from "react";
+import { LOGO_URL } from "@/lib/brand";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { TicketCheck, FileText, LayoutDashboard, LogOut, Menu, ArrowLeft } from "lucide-react";
-import fmLogo from "@/assets/mororo-tech-logo.png.asset.json";
+import { TicketCheck, FileText, LayoutDashboard, LogOut, Menu } from "lucide-react";
 
 interface HelpdeskLayoutProps {
   children: ReactNode;
@@ -34,7 +34,7 @@ const HelpdeskLayout = ({ children }: HelpdeskLayoutProps) => {
         <div className="flex flex-col h-full">
           <div className="p-6 border-b border-border">
             <Link to="/helpdesk" className="flex items-center gap-3">
-              <img src={fmLogo.url} alt="Mororo.tech" className="h-9" />
+              <img src={LOGO_URL} alt="Mororo.tech" className="h-9" />
               <p className="text-xs text-muted-foreground">Central de Suporte</p>
             </Link>
           </div>
@@ -56,12 +56,6 @@ const HelpdeskLayout = ({ children }: HelpdeskLayoutProps) => {
           </nav>
 
           <div className="p-4 border-t border-border space-y-2">
-            <Link to="/dashboard">
-              <Button variant="ghost" className="w-full justify-start">
-                <ArrowLeft className="w-5 h-5 mr-3" />
-                Voltar às Câmeras
-              </Button>
-            </Link>
             <Button variant="ghost" className="w-full justify-start" onClick={() => signOut()}>
               <LogOut className="w-5 h-5 mr-3" />
               Sair
@@ -76,7 +70,7 @@ const HelpdeskLayout = ({ children }: HelpdeskLayoutProps) => {
             <button onClick={() => setSidebarOpen(true)} className="p-2 hover:bg-muted rounded-lg">
               <Menu className="w-6 h-6" />
             </button>
-            <img src={fmLogo.url} alt="Mororo.tech" className="h-8" />
+            <img src={LOGO_URL} alt="Mororo.tech" className="h-8" />
             <div className="w-10" />
           </div>
         </header>

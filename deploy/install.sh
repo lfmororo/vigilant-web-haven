@@ -117,11 +117,16 @@ CF=$(env_get "$E" COMPOSE_FILE); [ -n "$CF" ] || CF="docker-compose.yml"
 case ":$CF:" in *":docker-compose.vigilant.yml:"*) ;; *) env_set "$E" COMPOSE_FILE "$CF:docker-compose.vigilant.yml" ;; esac
 
 # Segredos das funções
+# Segredo do webhook do WhatsApp: gerado uma vez e guardado no vigilant.env.
+if [ -z "${WHATSAPP_WEBHOOK_SECRET:-}" ]; then
+  WHATSAPP_WEBHOOK_SECRET=$(openssl rand -hex 24)
+  printf '\n# Gerado pelo install.sh: vai na URL do webhook da Evolution (?secret=...)\nWHATSAPP_WEBHOOK_SECRET=%s\n' "$WHATSAPP_WEBHOOK_SECRET" >> "$DEPLOY/vigilant.env"
+fi
 FENV="$SB/vigilant-functions.env"
 {
   echo "# gerado por deploy/install.sh a partir de deploy/vigilant.env"
   echo "APP_BASE_URL=$PAINEL_URL"
-  for k in GEMINI_API_KEY AI_MODEL TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID EVOLUTION_API_KEY EVOLUTION_INSTANCE MONITOR_REQUIRE_TOKEN PARALLEL_API_KEY; do
+  for k in GEMINI_API_KEY AI_MODEL TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID EVOLUTION_API_KEY EVOLUTION_INSTANCE MONITOR_REQUIRE_TOKEN PARALLEL_API_KEY WHATSAPP_WEBHOOK_SECRET; do
     [ -n "${!k:-}" ] && echo "$k=${!k}"
   done
 } > "$FENV"; chmod 600 "$FENV"
@@ -279,6 +284,7 @@ cat <<EOF
              usuário $DASH_USER / senha $DASH_PASS
    Chaves:   $E   (guarde uma cópia em local seguro)
    Relatório da restauração: $INSTALL_DIR/restore-report.json
- Atualizar depois de mudanças no GitHub:  cd $REPO && git pull && sudo bash deploy/install.sh
+   Webhook WhatsApp (Evolution): $API_URL/functions/v1/whatsapp-webhook?secret=$WHATSAPP_WEBHOOK_SECRET
+ Atualizar depois de mudanças no GitHub:  cd $REPO && git pull && sudo bash deploy/install.sh --skip-proxy --skip-storage
 ────────────────────────────────────────────────────────────
 EOF

@@ -60,7 +60,7 @@ const App = () => (
               <Route path="/helpdesk/tickets/new" element={<AuthGuard><NewTicket /></AuthGuard>} />
               <Route path="/helpdesk/tickets/:id" element={<AuthGuard><ClientTicketDetail /></AuthGuard>} />
               <Route path="/helpdesk/orders" element={<AuthGuard><ClientServiceOrders /></AuthGuard>} />
-              <Route path="/admin" element={<AuthGuard requireAdminOrTechnician><AdminDashboard /></AuthGuard>} />
+              <Route path="/admin" element={<AuthGuard requireAdmin><AdminDashboard /></AuthGuard>} />
               <Route path="/admin/users" element={<AuthGuard requireAdmin><UsersManagement /></AuthGuard>} />
               <Route path="/admin/provisioning" element={<AuthGuard requireAdmin><UserProvisioning /></AuthGuard>} />
               <Route path="/admin/clients" element={<AuthGuard requireAdmin><ClientsManagement /></AuthGuard>} />
@@ -78,7 +78,7 @@ const App = () => (
               <Route path="/admin/service-orders/:id" element={<AuthGuard requireAdminOrTechnician><AdminServiceOrderDetail /></AuthGuard>} />
               <Route path="/admin/reports" element={<AuthGuard requireAdminOrTechnician><TicketReports /></AuthGuard>} />
               <Route path="/admin/checklists" element={<AuthGuard requireAdmin><ChecklistManagement /></AuthGuard>} />
-              <Route path="/admin/knowledge-base" element={<AuthGuard requireAdmin><KnowledgeBase /></AuthGuard>} />
+              <Route path="/admin/knowledge-base" element={<AuthGuard requireAdminOrTechnician><KnowledgeBase /></AuthGuard>} />
               <Route path="/admin/whatsapp-logs" element={<AuthGuard requireAdmin><WhatsAppNotificationsLog /></AuthGuard>} />
               <Route path="/admin/quotes" element={<AuthGuard requireAdmin><QuoteSenderProfiles /></AuthGuard>} />
               <Route path="/admin/quotes/new" element={<AuthGuard requireAdmin><CreateQuote /></AuthGuard>} />
