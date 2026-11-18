@@ -152,7 +152,13 @@ ok "$(ls -d "$FN"/*/ | grep -vc -e /main/ -e /hello/) funções sincronizadas ($
 
 # ------------------------------------------------------------------ 4. subir
 say "Subindo os containers (a primeira vez demora alguns minutos)"
-(cd "$SB" && docker compose pull -q && docker compose up -d --remove-orphans)
+# Baixa só as imagens que ainda não existem (o Docker Hub às vezes estoura o tempo):
+# em atualizações nada é baixado; numa instalação nova, tenta até 3 vezes, 2 por vez.
+for t in 1 2 3; do
+  (cd "$SB" && COMPOSE_PARALLEL_LIMIT=2 docker compose up -d --remove-orphans --pull missing) && break
+  [ $t = 3 ] && die "Não consegui subir os containers (falha ao baixar imagens do Docker Hub). Rode o comando de novo em alguns minutos."
+  warn "Falha ao subir/baixar imagens (tentativa $t de 3) — tentando de novo em 15 s"; sleep 15
+done
 for i in $(seq 1 90); do
   if docker exec supabase-db pg_isready -U postgres -h localhost >/dev/null 2>&1 && \
      curl -fs -o /dev/null "http://127.0.0.1:$API_LOCAL_PORT/auth/v1/health" -H "apikey: $ANON"; then break; fi
