@@ -48,7 +48,8 @@ export function AgentVersionAlert({ types, className }: AgentVersionAlertProps) 
     };
 
     carregar();
-    const timer = window.setInterval(carregar, 60_000);
+    // Não consulta com a aba do navegador escondida.
+    const timer = window.setInterval(() => { if (!document.hidden) carregar(); }, 60_000);
     return () => {
       cancelado = true;
       window.clearInterval(timer);

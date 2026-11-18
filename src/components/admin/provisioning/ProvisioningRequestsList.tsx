@@ -51,7 +51,7 @@ const ProvisioningRequestsList = ({ refreshToken }: ProvisioningRequestsListProp
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, 15000);
+    const timer = setInterval(() => { if (!document.hidden) load(); }, 15000);
     return () => clearInterval(timer);
   }, [refreshToken]);
 

@@ -6,40 +6,47 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { AuthProvider } from "@/hooks/useAuth";
 import AuthGuard from "@/components/auth/AuthGuard";
-import Index from "./pages/Index";
+import { Suspense } from "react";
+import { lazyPage, PageLoader } from "@/components/PageLoader";
+const Index = lazyPage(() => import("./pages/Index"));
 import Auth from "./pages/Auth";
 
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import UsersManagement from "./pages/admin/UsersManagement";
-import ClientsManagement from "./pages/admin/ClientsManagement";
-import EquipmentInventory from "./pages/admin/EquipmentInventory";
-import EquipmentDetail from "./pages/admin/EquipmentDetail";
-import AdminHelpdeskDashboard from "./pages/admin/AdminHelpdeskDashboard";
-import AdminTicketsManagement from "./pages/admin/AdminTicketsManagement";
-import AdminTicketDetail from "./pages/admin/AdminTicketDetail";
-import AdminServiceOrders from "./pages/admin/AdminServiceOrders";
-import AdminServiceOrderDetail from "./pages/admin/AdminServiceOrderDetail";
-import SystemSettings from "./pages/admin/SystemSettings";
-import TicketReports from "./pages/admin/TicketReports";
-import ChecklistManagement from "./pages/admin/ChecklistManagement";
-import KnowledgeBase from "./pages/admin/KnowledgeBase";
-import WhatsAppNotificationsLog from "./pages/admin/WhatsAppNotificationsLog";
-import QuoteSenderProfiles from "./pages/admin/QuoteSenderProfiles";
-import CreateQuote from "./pages/admin/CreateQuote";
-import QuoteDetail from "./pages/admin/QuoteDetail";
-import MikrotikMonitor from "./pages/admin/MikrotikMonitor";
-import GdmsTutorial from "./pages/admin/GdmsTutorial";
-import ServerMonitor from "./pages/admin/ServerMonitor";
-import AdminBackup from "./pages/admin/AdminBackup";
-import UserProvisioning from "./pages/admin/UserProvisioning";
-import HelpdeskDashboard from "./pages/helpdesk/HelpdeskDashboard";
-import ClientTicketsList from "./pages/helpdesk/ClientTicketsList";
-import NewTicket from "./pages/helpdesk/NewTicket";
-import ClientTicketDetail from "./pages/helpdesk/ClientTicketDetail";
-import ClientServiceOrders from "./pages/helpdesk/ClientServiceOrders";
+const AdminDashboard = lazyPage(() => import("./pages/admin/AdminDashboard"));
+const UsersManagement = lazyPage(() => import("./pages/admin/UsersManagement"));
+const ClientsManagement = lazyPage(() => import("./pages/admin/ClientsManagement"));
+const EquipmentInventory = lazyPage(() => import("./pages/admin/EquipmentInventory"));
+const EquipmentDetail = lazyPage(() => import("./pages/admin/EquipmentDetail"));
+const AdminHelpdeskDashboard = lazyPage(() => import("./pages/admin/AdminHelpdeskDashboard"));
+const AdminTicketsManagement = lazyPage(() => import("./pages/admin/AdminTicketsManagement"));
+const AdminTicketDetail = lazyPage(() => import("./pages/admin/AdminTicketDetail"));
+const AdminServiceOrders = lazyPage(() => import("./pages/admin/AdminServiceOrders"));
+const AdminServiceOrderDetail = lazyPage(() => import("./pages/admin/AdminServiceOrderDetail"));
+const SystemSettings = lazyPage(() => import("./pages/admin/SystemSettings"));
+const TicketReports = lazyPage(() => import("./pages/admin/TicketReports"));
+const ChecklistManagement = lazyPage(() => import("./pages/admin/ChecklistManagement"));
+const KnowledgeBase = lazyPage(() => import("./pages/admin/KnowledgeBase"));
+const WhatsAppNotificationsLog = lazyPage(() => import("./pages/admin/WhatsAppNotificationsLog"));
+const QuoteSenderProfiles = lazyPage(() => import("./pages/admin/QuoteSenderProfiles"));
+const CreateQuote = lazyPage(() => import("./pages/admin/CreateQuote"));
+const QuoteDetail = lazyPage(() => import("./pages/admin/QuoteDetail"));
+const MikrotikMonitor = lazyPage(() => import("./pages/admin/MikrotikMonitor"));
+const GdmsTutorial = lazyPage(() => import("./pages/admin/GdmsTutorial"));
+const ServerMonitor = lazyPage(() => import("./pages/admin/ServerMonitor"));
+const AdminBackup = lazyPage(() => import("./pages/admin/AdminBackup"));
+const UserProvisioning = lazyPage(() => import("./pages/admin/UserProvisioning"));
+const HelpdeskDashboard = lazyPage(() => import("./pages/helpdesk/HelpdeskDashboard"));
+const ClientTicketsList = lazyPage(() => import("./pages/helpdesk/ClientTicketsList"));
+const NewTicket = lazyPage(() => import("./pages/helpdesk/NewTicket"));
+const ClientTicketDetail = lazyPage(() => import("./pages/helpdesk/ClientTicketDetail"));
+const ClientServiceOrders = lazyPage(() => import("./pages/helpdesk/ClientServiceOrders"));
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    // Evita rebuscar tudo a cada troca de aba do navegador; telas que precisam de dado fresco usam refetchInterval.
+    queries: { staleTime: 30_000, refetchOnWindowFocus: false },
+  },
+});
 
 const App = () => (
   <HelmetProvider>
@@ -49,6 +56,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
@@ -84,6 +92,7 @@ const App = () => (
               <Route path="/admin/settings" element={<AuthGuard requireAdmin><SystemSettings /></AuthGuard>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </Suspense>
           </BrowserRouter>
         </AuthProvider>
       </TooltipProvider>

@@ -40,11 +40,32 @@ const RESOLUTION_COLORS = [
   "hsl(0, 84%, 60%)",
 ];
 
+// Relógio separado: só ele se redesenha a cada segundo, não o painel inteiro.
+function LiveClock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <>
+      <span className="text-3xl font-bold font-mono tabular-nums text-foreground">
+        {format(now, "HH:mm:ss")}
+      </span>
+      <span className="text-sm text-muted-foreground capitalize">
+        {format(now, "EEEE", { locale: ptBR })}
+      </span>
+      <span className="text-xs text-muted-foreground">
+        {format(now, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+      </span>
+    </>
+  );
+}
+
 const AdminHelpdeskDashboard = () => {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [now, setNow] = useState(new Date());
   const ticketCountRef = useRef<number | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
 
@@ -105,10 +126,6 @@ const AdminHelpdeskDashboard = () => {
     }
   }, []);
 
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   const fetchTickets = () => {
     supabase
@@ -245,15 +262,7 @@ const AdminHelpdeskDashboard = () => {
           {/* Clock */}
           <Card>
             <CardContent className="p-4 flex flex-col items-center justify-center gap-1">
-              <span className="text-3xl font-bold font-mono tabular-nums text-foreground">
-                {format(now, "HH:mm:ss")}
-              </span>
-              <span className="text-sm text-muted-foreground capitalize">
-                {format(now, "EEEE", { locale: ptBR })}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {format(now, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-              </span>
+              <LiveClock />
             </CardContent>
           </Card>
 
